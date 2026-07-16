@@ -1,0 +1,26 @@
+{
+  "name": "agent-micro",
+  "version": "1.0.0",
+  "description": "Agent Micro — floating macropad for AI agent control",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "ELECTRON_RUN_AS_NODE= ./node_modules/.bin/electron .",
+    "dev": "ELECTRON_RUN_AS_NODE= ./node_modules/.bin/electron .",
+    "postinstall": "node scripts/ensure-electron.js"
+  },
+  "keywords": [
+    "agent",
+    "codex",
+    "macropad",
+    "electron"
+  ],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "devDependencies": {
+    "electron": "^37.2.0"
+  },
+  "dependencies": {
+    "@openai/codex": "^0.144.5"
+  }
+}

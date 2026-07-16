@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+
+# logs / debug
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# electron / build
+dist/
+out/
+release/
+*.dmg
+*.zip
+*.AppImage
+
+# editor / local
+.idea/
+.vscode/
+*.swp
+*.swo
+.cursor/
+
+# temp / screenshots
+/tmp/
+*.png.tmp
