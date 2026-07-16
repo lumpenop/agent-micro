@@ -25,6 +25,8 @@ contextBridge.exposeInMainWorld('codexDesktop', {
   login: () => ipcRenderer.invoke('codex:login'),
   requestMic: () => ipcRenderer.invoke('mic:request'),
   micStatus: () => ipcRenderer.invoke('mic:status'),
+  whisperReady: () => ipcRenderer.invoke('mic:whisperReady'),
+  transcribe: (payload) => ipcRenderer.invoke('mic:transcribe', payload),
 
   listProviders: () => ipcRenderer.invoke('provider:list'),
   getProvider: () => ipcRenderer.invoke('provider:get'),

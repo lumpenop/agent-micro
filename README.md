@@ -5,6 +5,17 @@ Work Louder × OpenAI **Codex Micro** 스타일 플로팅 맥로패드.
 지금은 **Codex 전용**으로 맞춰 두었습니다 (마이크 = Codex 음성, 키 = Continue/승인/Plan 등).  
 ↻ 길게 누르면 Claude / Cursor / Gemini로 바꿀 수 있습니다.
 
+### 음성 (Mic)
+
+Electron Web Speech(Google) 대신 **OpenAI Whisper**를 씁니다.
+
+```bash
+export OPENAI_API_KEY=sk-...
+pnpm start
+```
+
+홀드=녹음 → 떼면 Whisper 인식 → Codex 앱+스레드로 전송.
+
 ## Run (pnpm)
 
 ```bash

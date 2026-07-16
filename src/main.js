@@ -3,6 +3,7 @@ const path = require('path');
 const { createBridge, focusProviderApp } = require('./providers/create-bridge');
 const providerConfig = require('./providers/config');
 const { listProviders, getProviderMeta } = require('./providers/registry');
+const { transcribeWithWhisper, hasWhisperAuth } = require('./voice-transcribe');
 
 let mainWindow = null;
 let bridge = null;
@@ -164,11 +165,23 @@ ipcMain.handle('mic:status', () => {
   if (process.platform !== 'darwin') return { granted: true, status: 'granted' };
   try {
     const status = systemPreferences.getMediaAccessStatus('microphone');
-    return { granted: status === 'granted', status };
+    return { granted: status === 'granted', status, whisper: hasWhisperAuth() };
   } catch {
-    return { granted: false, status: 'unknown' };
+    return { granted: false, status: 'unknown', whisper: hasWhisperAuth() };
   }
 });
+ipcMain.handle('mic:transcribe', async (_e, payload) => {
+  const { base64, mimeType } = payload || {};
+  if (!base64) return { ok: false, error: 'empty audio' };
+  try {
+    const bytes = Buffer.from(base64, 'base64');
+    const result = await transcribeWithWhisper(bytes, mimeType || 'audio/webm');
+    return { ok: true, text: result.text };
+  } catch (e) {
+    return { ok: false, error: e.message, code: e.code || 'TRANSCRIBE' };
+  }
+});
+ipcMain.handle('mic:whisperReady', () => ({ ok: hasWhisperAuth() }));
 
 ipcMain.handle('provider:list', () => listProviders());
 ipcMain.handle('provider:get', () => ({

@@ -157,19 +157,43 @@ function statusLabel(s) {
 }
 
 let micLatched = false;
-let recognition = null;
-let micTranscript = '';
 let micGranted = null;
 let micWarmPromise = null;
+let micStream = null;
+let mediaRecorder = null;
+let micChunks = [];
+let micMime = 'audio/webm';
+let micFinishing = false;
 
-function getSpeechRecognition() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) return null;
-  const r = new SR();
-  r.lang = 'ko-KR';
-  r.interimResults = true;
-  r.continuous = true;
-  return r;
+function stopMicStream() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    try {
+      mediaRecorder.stop();
+    } catch {
+      /* ignore */
+    }
+  }
+  mediaRecorder = null;
+  if (!micStream) return;
+  try {
+    micStream.getTracks().forEach((t) => t.stop());
+  } catch {
+    /* ignore */
+  }
+  micStream = null;
+}
+
+function pickRecorderMime() {
+  const candidates = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/mp4',
+    'audio/ogg;codecs=opus',
+  ];
+  for (const t of candidates) {
+    if (window.MediaRecorder?.isTypeSupported?.(t)) return t;
+  }
+  return '';
 }
 
 /** Native macOS dialog via main + getUserMedia warm-up for Chromium */
@@ -202,6 +226,19 @@ async function ensureMicPermission({ silent = false } = {}) {
   return ok;
 }
 
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const s = String(reader.result || '');
+      const i = s.indexOf(',');
+      resolve(i >= 0 ? s.slice(i + 1) : s);
+    };
+    reader.onerror = () => reject(reader.error || new Error('read failed'));
+    reader.readAsDataURL(blob);
+  });
+}
+
 async function startRecording({ latched = false } = {}) {
   const ok = await ensureMicPermission({ silent: true });
   if (!ok) {
@@ -209,77 +246,133 @@ async function startRecording({ latched = false } = {}) {
     return;
   }
 
+  micFinishing = false;
+  stopMicStream();
+  micChunks = [];
+
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true },
+    });
+  } catch {
+    flashAction('mic stream failed');
+    return;
+  }
+
+  micMime = pickRecorderMime();
+  try {
+    mediaRecorder = micMime
+      ? new MediaRecorder(micStream, { mimeType: micMime })
+      : new MediaRecorder(micStream);
+    micMime = mediaRecorder.mimeType || micMime || 'audio/webm';
+  } catch {
+    flashAction('MediaRecorder 불가');
+    stopMicStream();
+    return;
+  }
+
+  mediaRecorder.ondataavailable = (ev) => {
+    if (ev.data && ev.data.size > 0) micChunks.push(ev.data);
+  };
+
   state.recording = true;
   state.processing = false;
   micLatched = latched;
-  micTranscript = '';
   padEl.classList.add('recording');
   padEl.classList.remove('processing');
   pad3d?.setRecording(true);
-  flashAction(latched ? 'Codex 음성 (hands-free)' : 'Codex에 말하는 중…');
+  flashAction(latched ? 'Codex 녹음 (hands-free)' : 'Codex에 말하는 중…');
 
-  recognition?.abort?.();
-  recognition = getSpeechRecognition();
-  if (!recognition) {
-    flashAction('speech API unavailable');
-    return;
-  }
   try {
-    recognition.lang = 'ko-KR';
-    recognition.continuous = true;
-    recognition.interimResults = true;
+    mediaRecorder.start(250);
   } catch {
-    /* ignore */
-  }
-  recognition.onresult = (ev) => {
-    let text = '';
-    for (let i = 0; i < ev.results.length; i++) {
-      text += ev.results[i][0].transcript;
-    }
-    micTranscript = text.trim();
-    if (micTranscript) flashAction(`🎤 ${micTranscript.slice(0, 48)}`);
-  };
-  recognition.onerror = (ev) => {
-    flashAction(`mic · ${ev.error || 'error'}`);
-  };
-  try {
-    recognition.start();
-  } catch {
-    flashAction('mic busy');
+    flashAction('녹음 시작 실패');
+    stopMicStream();
+    state.recording = false;
+    padEl.classList.remove('recording');
+    pad3d?.setRecording(false);
   }
 }
 
+async function finishVoiceToCodexFromAudio() {
+  if (micFinishing) return;
+  micFinishing = true;
+
+  padEl.classList.remove('processing');
+  state.processing = false;
+
+  if (!micChunks.length) {
+    flashAction('녹음 없음 · 더 길게 홀드');
+    micFinishing = false;
+    stopMicStream();
+    return;
+  }
+
+  const blob = new Blob(micChunks, { type: micMime || 'audio/webm' });
+  micChunks = [];
+  stopMicStream();
+
+  if (blob.size < 800) {
+    flashAction('너무 짧음 · 1–2초 말하기');
+    micFinishing = false;
+    return;
+  }
+
+  flashAction('Whisper 인식 중…');
+  try {
+    const base64 = await blobToBase64(blob);
+    const result = await api?.transcribe?.({ base64, mimeType: blob.type || micMime });
+    if (!result?.ok) {
+      if (result?.code === 'NO_API_KEY') {
+        flashAction('OPENAI_API_KEY 필요 (Whisper)');
+      } else {
+        flashAction(result?.error || '인식 실패');
+      }
+      micFinishing = false;
+      return;
+    }
+    const text = String(result.text || '').trim();
+    flashAction(`🎤 ${text.slice(0, 48)}`);
+    flashAction(`→ Codex · ${text.slice(0, 36)}`);
+    await api?.voiceToCodex?.(text);
+  } catch (e) {
+    flashAction(e?.message || 'voice failed');
+  }
+  micFinishing = false;
+}
+
 function stopRecording({ process = true } = {}) {
-  if (!state.recording) return;
+  if (!state.recording && !mediaRecorder) return;
   state.recording = false;
   micLatched = false;
   padEl.classList.remove('recording');
   pad3d?.setRecording(false);
-  try {
-    recognition?.stop?.();
-  } catch {}
-  recognition = null;
 
   if (!process) {
+    stopMicStream();
+    micChunks = [];
     flashAction('mic off');
     return;
   }
+
   state.processing = true;
   padEl.classList.add('processing');
-  flashAction('Codex로 전송 중…');
-  setTimeout(async () => {
-    if (!state.processing) return;
-    padEl.classList.remove('processing');
-    state.processing = false;
-    const text = micTranscript;
-    if (!text) {
-      flashAction('음성 인식 없음 · 다시 홀드');
-      return;
-    }
-    flashAction(`→ Codex · ${text.slice(0, 36)}`);
-    // Desktop composer paste+Enter + app-server turn
-    await api?.voiceToCodex?.(text);
-  }, 450);
+  flashAction('녹음 저장 중…');
+
+  const rec = mediaRecorder;
+  if (!rec || rec.state === 'inactive') {
+    finishVoiceToCodexFromAudio();
+    return;
+  }
+
+  rec.onstop = () => {
+    finishVoiceToCodexFromAudio();
+  };
+  try {
+    rec.stop();
+  } catch {
+    finishVoiceToCodexFromAudio();
+  }
 }
 
 function applyKeyIcons() {
@@ -397,7 +490,7 @@ const GUIDE_ITEMS = [
   {
     key: 'Mic',
     title: 'Codex 음성',
-    text: '홀드 = 말하기 · 떼면 Codex 앱+스레드로 전송',
+    text: '홀드=녹음 · Whisper 인식 · Codex 전송 (OPENAI_API_KEY)',
   },
   {
     key: '우클릭',
@@ -792,7 +885,9 @@ api?.getProvider?.().then((info) => {
 });
 api?.getState?.().then(applyBridgeState);
 
-ensureMicPermission({ silent: true }).then((ok) => {
-  if (ok) flashAction('Codex mic ready');
+ensureMicPermission({ silent: true }).then(async (ok) => {
+  const w = await api?.whisperReady?.();
+  if (ok && w?.ok) flashAction('Codex mic · Whisper ready');
+  else if (ok) flashAction('mic ok · OPENAI_API_KEY 필요');
 });
 flashAction('Codex mode');
