@@ -127,22 +127,14 @@ app.whenReady().then(async () => {
   ensureMicAccess();
   createWindow();
 
-  const chosen = providerConfig.hasProviderChoice();
-  currentProvider = providerConfig.resolveProvider();
-  bridge = createBridge(currentProvider);
-  bindBridge(bridge);
-  // Wait for picker on first run; otherwise connect
-  if (chosen) {
-    setTimeout(() => bridge.start(), 400);
-  } else {
-    setTimeout(() => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('provider:needPick');
-      }
-      bridge._seedDemo?.();
-      bridge.emitState?.('choose provider');
-    }, 500);
+  // Codex-first mode for now — always boot on Codex
+  if (providerConfig.getProvider() !== 'codex') {
+    providerConfig.setProvider('codex');
   }
+  currentProvider = 'codex';
+  bridge = createBridge('codex');
+  bindBridge(bridge);
+  setTimeout(() => bridge.start(), 400);
 
   globalShortcut.register('CommandOrControl+Shift+M', () => {
     if (!mainWindow) return;
@@ -211,6 +203,16 @@ ipcMain.handle('codex:desktop', async (_e, action) => {
   const r = await bridge?.desktopAction(action);
   // desktop shortcuts activate Codex briefly — return focus to pad
   refocusPad(220);
+  return r;
+});
+ipcMain.handle('codex:voice', async (_e, text) => {
+  if (!bridge?.voiceToCodex) {
+    // fallback: send only
+    await bridge?.send?.(text);
+    return { ok: true, mode: 'send-only' };
+  }
+  const r = await bridge.voiceToCodex(text);
+  refocusPad(500);
   return r;
 });
 ipcMain.handle('codex:focusApp', () => {

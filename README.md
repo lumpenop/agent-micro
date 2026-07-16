@@ -2,7 +2,8 @@
 
 Work Louder × OpenAI **Codex Micro** 스타일 플로팅 맥로패드.
 
-Codex / Claude / Cursor / Gemini 중 하나를 골라 에이전트 상태·승인·전송·reasoning을 제어합니다.
+지금은 **Codex 전용**으로 맞춰 두었습니다 (마이크 = Codex 음성, 키 = Continue/승인/Plan 등).  
+↻ 길게 누르면 Claude / Cursor / Gemini로 바꿀 수 있습니다.
 
 ## Run (pnpm)
 

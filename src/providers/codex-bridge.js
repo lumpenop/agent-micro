@@ -716,6 +716,28 @@ class CodexBridge extends EventEmitter {
       this.emit('log', e.message);
     }
   }
+
+  /** Push spoken text into Codex desktop composer + app-server thread. */
+  async voiceToCodex(text) {
+    const body = String(text || '').trim();
+    if (!body) {
+      this.emitState('empty voice');
+      return { ok: false, reason: 'empty' };
+    }
+    try {
+      await mac.submitToCodex(body);
+      this.emitState('voice → Codex app');
+    } catch (e) {
+      this.emit('log', `voice desktop: ${e.message}`);
+      this.emitState('voice desktop failed · Accessibility?');
+    }
+    try {
+      await this.send(body);
+    } catch (e) {
+      this.emit('log', `voice send: ${e.message}`);
+    }
+    return { ok: true };
+  }
 }
 
 function normalizeThreads(result) {

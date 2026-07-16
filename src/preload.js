@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('codexDesktop', {
   skill: (name) => ipcRenderer.invoke('codex:skill', name),
   newChat: () => ipcRenderer.invoke('codex:newChat'),
   desktop: (action) => ipcRenderer.invoke('codex:desktop', action),
+  voiceToCodex: (text) => ipcRenderer.invoke('codex:voice', text),
   focusApp: () => ipcRenderer.invoke('codex:focusApp'),
   reconnect: () => ipcRenderer.invoke('codex:reconnect'),
   connect: (opts) => ipcRenderer.invoke('codex:connect', opts),

@@ -67,8 +67,33 @@ async function pasteText(text) {
   return osa('tell application "System Events" to keystroke "v" using {command down}');
 }
 
+/** Focus Codex, open composer, paste text, press Return. */
+async function submitToCodex(text) {
+  const body = String(text || '').trim();
+  if (!body) return false;
+  await focusCodexApp();
+  await new Promise((r) => setTimeout(r, 160));
+  try {
+    await osa('tell application "System Events" to keystroke "k" using {command down}');
+  } catch {
+    /* composer shortcut may vary */
+  }
+  await new Promise((r) => setTimeout(r, 140));
+  const escaped = body
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n');
+  await osa(`set the clipboard to "${escaped}"`);
+  await new Promise((r) => setTimeout(r, 60));
+  await osa('tell application "System Events" to keystroke "v" using {command down}');
+  await new Promise((r) => setTimeout(r, 100));
+  await osa('tell application "System Events" to key code 36'); // return
+  return true;
+}
+
 module.exports = {
   focusCodexApp,
   keystroke,
   pasteText,
+  submitToCodex,
 };

@@ -8,7 +8,7 @@ import {
 
 const REASONING = ['minimal', 'low', 'medium', 'high', 'xhigh'];
 const api = window.codexDesktop;
-const STORAGE_KEY = 'codex-micro-key-icons-v3';
+const STORAGE_KEY = 'codex-micro-key-icons-v4-codex';
 
 const PROVIDER_LABELS = {
   codex: 'Codex',
@@ -17,10 +17,10 @@ const PROVIDER_LABELS = {
   gemini: 'Gemini',
 };
 
-/** Layer maps — core / skills / desktop (core name follows active provider) */
+/** Codex-dedicated layers */
 const LAYERS = [
   {
-    name: 'Core',
+    name: 'Codex',
     joy: {
       up: () => api?.togglePlan(),
       down: () => api?.desktop('sidebar'),
@@ -29,7 +29,7 @@ const LAYERS = [
     },
   },
   {
-    name: 'Skills',
+    name: 'Prompts',
     joy: {
       up: () => api?.skill('review'),
       down: () => api?.skill('docs'),
@@ -38,7 +38,7 @@ const LAYERS = [
     },
   },
   {
-    name: 'Desktop',
+    name: 'App',
     joy: {
       up: () => api?.desktop('composer'),
       down: () => api?.desktop('sidebar'),
@@ -49,13 +49,10 @@ const LAYERS = [
 ];
 
 function layerDisplayName(layerIndex) {
-  const layer = LAYERS[layerIndex];
-  if (!layer) return `L${layerIndex + 1}`;
-  if (layerIndex === 0) return PROVIDER_LABELS[state.provider] || 'Core';
-  return layer.name;
+  return LAYERS[layerIndex]?.name || `L${layerIndex + 1}`;
 }
 
-/** Icon → action when that icon is assigned to a command key */
+/** Icon → Codex actions (all brands map to Codex for now) */
 const ICON_ACTIONS = {
   lightning: () => api?.toggleFast(),
   check: () => api?.approve(),
@@ -76,17 +73,17 @@ const ICON_ACTIONS = {
   audio: () => startRecording({ latched: true }),
   mic: () => startRecording({ latched: true }),
   codex: () => api?.send('Continue.'),
-  chatgpt: () => api?.send('Continue with ChatGPT / Codex context.'),
-  claude: () => api?.send('Approach this like Claude: careful, structured, cite tradeoffs.'),
-  anthropic: () => api?.send('Approach this like Claude: careful, structured, cite tradeoffs.'),
-  cursor: () => api?.send('Optimize for Cursor-style agentic coding edits.'),
-  grok: () => api?.send('Be direct and witty like Grok, but stay technical.'),
-  gemini: () => api?.send('Use a Gemini-style multimodal / broad-context approach.'),
-  deepseek: () => api?.send('Prioritize deep reasoning and code correctness.'),
-  mistral: () => api?.send('Be concise and engineering-focused.'),
-  perplexity: () => api?.send('Research carefully and cite assumptions.'),
-  qwen: () => api?.send('Provide a thorough step-by-step coding plan.'),
-  kimi: () => api?.send('Handle long-context carefully; summarize then act.'),
+  chatgpt: () => api?.send('Continue.'),
+  claude: () => api?.send('Continue.'),
+  anthropic: () => api?.send('Continue.'),
+  cursor: () => api?.send('Continue.'),
+  grok: () => api?.send('Continue.'),
+  gemini: () => api?.send('Continue.'),
+  deepseek: () => api?.send('Continue.'),
+  mistral: () => api?.send('Continue.'),
+  perplexity: () => api?.send('Continue.'),
+  qwen: () => api?.send('Continue.'),
+  kimi: () => api?.send('Continue.'),
 };
 
 function loadKeyIcons() {
@@ -219,13 +216,20 @@ async function startRecording({ latched = false } = {}) {
   padEl.classList.add('recording');
   padEl.classList.remove('processing');
   pad3d?.setRecording(true);
-  flashAction(latched ? 'listening (hands-free)' : 'listening…');
+  flashAction(latched ? 'Codex 음성 (hands-free)' : 'Codex에 말하는 중…');
 
   recognition?.abort?.();
   recognition = getSpeechRecognition();
   if (!recognition) {
-    flashAction('speech API unavailable · will send fallback');
+    flashAction('speech API unavailable');
     return;
+  }
+  try {
+    recognition.lang = 'ko-KR';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+  } catch {
+    /* ignore */
   }
   recognition.onresult = (ev) => {
     let text = '';
@@ -262,17 +266,20 @@ function stopRecording({ process = true } = {}) {
   }
   state.processing = true;
   padEl.classList.add('processing');
-  flashAction('processing speech…');
+  flashAction('Codex로 전송 중…');
   setTimeout(async () => {
     if (!state.processing) return;
     padEl.classList.remove('processing');
     state.processing = false;
-    const text =
-      micTranscript ||
-      'Voice prompt from Agent Micro (no transcript — check mic permission).';
-    flashAction(`sending · ${text.slice(0, 40)}`);
-    await api?.send(text);
-  }, 500);
+    const text = micTranscript;
+    if (!text) {
+      flashAction('음성 인식 없음 · 다시 홀드');
+      return;
+    }
+    flashAction(`→ Codex · ${text.slice(0, 36)}`);
+    // Desktop composer paste+Enter + app-server turn
+    await api?.voiceToCodex?.(text);
+  }, 450);
 }
 
 function applyKeyIcons() {
@@ -346,13 +353,13 @@ const GUIDE_ITEMS = [
   },
   {
     icons: ['mic'],
-    title: '마이크',
-    text: '홀드 = 말하기 · 떼면 전송 · 더블탭 = hands-free',
+    title: 'Codex 음성',
+    text: '홀드 = Codex에 말하기 · 떼면 앱+스레드 전송 · 더블탭 = hands-free',
   },
   {
     icons: ['codex'],
     title: 'Send',
-    text: 'Continue 전송 · 더블탭 = 새 채팅 · 아이콘별 프롬프트',
+    text: 'Codex Continue · 더블탭 = 새 채팅',
   },
   { section: '컨트롤' },
   {
@@ -368,39 +375,39 @@ const GUIDE_ITEMS = [
   {
     key: 'Touch',
     title: '터치 패드',
-    text: '탭 = Core → Skills → Desktop 레이어 순환',
+    text: '탭 = Codex → Prompts → App 레이어 순환',
   },
-  { section: '레이어 · Joy' },
+  { section: '레이어 · Joy (Codex)' },
   {
-    key: 'Core',
+    key: 'Codex',
     title: '기본',
     text: '↑ Plan · → 히스토리 → · ↓ 사이드바 · ← 히스토리 ←',
   },
   {
-    key: 'Skills',
-    title: '스킬',
+    key: 'Prompts',
+    title: '프롬프트',
     text: '↑ PR 리뷰 · → 디버그 · ↓ 문서 · ← 리팩터',
   },
   {
-    key: 'Desktop',
-    title: '데스크톱',
+    key: 'App',
+    title: 'Codex 앱',
     text: '↑ Composer · → 새 채팅 · ↓ 사이드바 · ← 히스토리 ←',
   },
   { section: '팁' },
   {
+    key: 'Mic',
+    title: 'Codex 음성',
+    text: '홀드 = 말하기 · 떼면 Codex 앱+스레드로 전송',
+  },
+  {
     key: '우클릭',
     title: '아이콘 변경',
-    text: '커맨드 키 우클릭 또는 ◆ 버튼으로 아이콘·동작 변경',
+    text: '커맨드 키 우클릭 또는 ◆ 버튼으로 아이콘 변경',
   },
   {
     key: '↻ / 점',
-    title: '연결',
-    text: '클릭 = 연결 · 미로그인 시 로그인 · Shift+점 = 강제 로그인',
-  },
-  {
-    key: '↻ 길게',
-    title: '에이전트 선택',
-    text: '새로고침 길게 누르기 · Codex / Claude / Cursor / Gemini',
+    title: 'Codex 연결',
+    text: '클릭 = 연결 · Shift+점 = 강제 로그인 · 길게 = 프로바이더',
   },
 ];
 
@@ -627,15 +634,11 @@ async function onCmd(cmd) {
     state.lastSendTap = now;
     if (dbl) {
       await api?.newChat();
-      return;
-    }
-    // prefer icon-specific action when not the default send/codex
-    const iconId = state.keyIcons.send;
-    if (iconId && iconId !== 'send' && ICON_ACTIONS[iconId]) {
-      await runIconAction('send');
+      flashAction('Codex · new chat');
       return;
     }
     await api?.send('Continue.');
+    flashAction('Codex · Continue');
     return;
   }
 
@@ -780,16 +783,16 @@ api?.onLog?.((m) => {
 api?.onMicStatus?.((s) => {
   if (s?.granted) micGranted = true;
 });
-api?.onNeedProviderPick?.(() => {
-  openProviderPicker();
-});
 api?.getProvider?.().then((info) => {
-  if (info?.resolved) state.provider = info.resolved;
-  if (info?.needsPick) openProviderPicker();
+  state.provider = 'codex';
+  if (info?.resolved && info.resolved !== 'codex') {
+    // stay Codex-first; long-press ↻ can still switch later
+  }
   render();
 });
 api?.getState?.().then(applyBridgeState);
 
 ensureMicPermission({ silent: true }).then((ok) => {
-  if (ok) flashAction('mic ready');
+  if (ok) flashAction('Codex mic ready');
 });
+flashAction('Codex mode');

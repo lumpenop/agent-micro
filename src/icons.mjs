@@ -12,6 +12,7 @@ export const KEYCAP_ICONS = {
   ...LOBE_BRAND_ICONS,
 };
 
+/** Codex-dedicated defaults */
 export const DEFAULT_KEY_ICONS = {
   fast: 'lightning',
   approve: 'check',
