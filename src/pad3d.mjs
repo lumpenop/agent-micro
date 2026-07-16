@@ -4,11 +4,11 @@ import { RoomEnvironment } from './vendor/RoomEnvironment.mjs';
 import { KEYCAP_ICONS, iconSvgBody } from './icons.mjs';
 
 const STATUS_COLOR = {
-  idle: 0x9fb0c8,
-  thinking: 0x4aa3ff,
-  complete: 0x3ecf7a,
-  input: 0xf0c24b,
-  error: 0xef4d4d,
+  idle: 0x7eb0e8,
+  thinking: 0x2b9dff,
+  complete: 0x2edf72,
+  input: 0xffc53d,
+  error: 0xff4545,
   off: 0x000000,
 };
 
@@ -64,9 +64,9 @@ function capTopTexture(frost = false) {
   const g = ctx.createRadialGradient(104, 92, 16, 128, 128, 165);
   if (frost) {
     g.addColorStop(0, '#ffffff');
-    g.addColorStop(0.6, '#f2f6fa');
-    g.addColorStop(0.88, '#dde5ec');
-    g.addColorStop(1, '#c9d3dc');
+    g.addColorStop(0.55, '#e8f2fc');
+    g.addColorStop(0.85, '#c5daf0');
+    g.addColorStop(1, '#a8c6e4');
   } else {
     g.addColorStop(0, '#ffffff');
     g.addColorStop(0.55, '#f6f3ec');
@@ -112,11 +112,11 @@ function keycapMesh({ wide = false, frost = false, iconId = null } = {}) {
 
   if (frost) {
     mat = new THREE.MeshPhysicalMaterial({
-      color: 0xd8e4f0,
+      color: 0xc4daf2,
       roughness: 0.16,
       metalness: 0.02,
       transparent: true,
-      opacity: 0.38,
+      opacity: 0.24,
       clearcoat: 0.65,
       clearcoatRoughness: 0.2,
       transmission: 0,
@@ -139,10 +139,10 @@ function keycapMesh({ wide = false, frost = false, iconId = null } = {}) {
     new RoundedBoxGeometry(w * 0.98, h * 0.55, d * 0.98, 4, 0.12),
     frost
       ? new THREE.MeshPhysicalMaterial({
-          color: 0x8ca4ba,
+          color: 0x6f9bc0,
           roughness: 0.38,
           transparent: true,
-          opacity: 0.38,
+          opacity: 0.26,
         })
       : new THREE.MeshStandardMaterial({
           color: 0xc2bdb1,
@@ -161,7 +161,7 @@ function keycapMesh({ wide = false, frost = false, iconId = null } = {}) {
           color: 0xffffff,
           roughness: 0.12,
           transparent: true,
-          opacity: 0.22,
+          opacity: 0.12,
           side: THREE.BackSide,
         })
       : new THREE.MeshStandardMaterial({
@@ -181,7 +181,7 @@ function keycapMesh({ wide = false, frost = false, iconId = null } = {}) {
         map: capTopTexture(true),
         roughness: 0.14,
         transparent: true,
-        opacity: 0.32,
+        opacity: 0.16,
         clearcoat: 0.5,
       })
     : new THREE.MeshStandardMaterial({
@@ -452,22 +452,22 @@ export function createPad3D(container, handlers = {}) {
   dialKnob.add(ring);
 
   dialGroup.add(dialBase, dialKnob);
-  dialGroup.position.set(originX, 0.28, originZ);
+  // slightly left of the agent column
+  dialGroup.position.set(originX - 0.02, 0.28, originZ);
   dialGroup.userData = { type: 'dial', knob: dialKnob };
   dialBase.userData = { type: 'dial' };
   dialKnob.userData = { type: 'dial' };
   scene.add(dialGroup);
   interactives.push(dialBase, dialKnob);
 
-  // joystick — outer Ø ≈ 0.90, matches dial / keycap scale
+  // joystick — midway between soft gray and touch-pad charcoal
   const joyGroup = new THREE.Group();
-  // deeper contact shadow under the socket floor
   const joyWell = new THREE.Mesh(
     new THREE.CircleGeometry(0.44, 48),
     new THREE.MeshBasicMaterial({
       color: 0x000000,
       transparent: true,
-      opacity: 0.62,
+      opacity: 0.33,
       depthWrite: false,
     })
   );
@@ -475,10 +475,9 @@ export function createPad3D(container, handlers = {}) {
   joyWell.position.y = 0.015;
   joyGroup.add(joyWell);
 
-  // recessed floor plate — darker so the pit reads
   const joyFloor = new THREE.Mesh(
     new THREE.CircleGeometry(0.33, 48),
-    new THREE.MeshStandardMaterial({ color: 0x0c1014, roughness: 0.85, metalness: 0.08 })
+    new THREE.MeshStandardMaterial({ color: 0x252a30, roughness: 0.88, metalness: 0.04 })
   );
   joyFloor.rotation.x = -Math.PI / 2;
   joyFloor.position.y = 0.055;
@@ -486,11 +485,11 @@ export function createPad3D(container, handlers = {}) {
 
   const joyBase = new THREE.Mesh(
     new THREE.CylinderGeometry(0.37, 0.39, 0.1, 48),
-    new THREE.MeshStandardMaterial({ color: 0x12171c, roughness: 0.75, metalness: 0.15 })
+    new THREE.MeshStandardMaterial({ color: 0x2f363c, roughness: 0.82, metalness: 0.05 })
   );
   const joyGate = new THREE.Mesh(
     new THREE.TorusGeometry(0.32, 0.024, 10, 48),
-    new THREE.MeshStandardMaterial({ color: 0x4a525a, roughness: 0.45, metalness: 0.3 })
+    new THREE.MeshStandardMaterial({ color: 0x5a636c, roughness: 0.72, metalness: 0.08 })
   );
   joyGate.rotation.x = Math.PI / 2;
   joyGate.position.y = 0.06;
@@ -498,28 +497,26 @@ export function createPad3D(container, handlers = {}) {
   const joyStick = new THREE.Group();
   const joyBoot = new THREE.Mesh(
     new THREE.SphereGeometry(0.155, 28, 20),
-    new THREE.MeshStandardMaterial({ color: 0x1a1f24, roughness: 0.85 })
+    new THREE.MeshStandardMaterial({ color: 0x3a424a, roughness: 0.9, metalness: 0.03 })
   );
   joyBoot.scale.set(1, 0.55, 1);
   joyBoot.position.y = 0.065;
-  // shaft: lighter, less contrast — avoid heavy side shadow look
   const joyShaft = new THREE.Mesh(
     new THREE.CylinderGeometry(0.058, 0.072, 0.24, 24),
-    new THREE.MeshStandardMaterial({ color: 0x4a525a, roughness: 0.55, metalness: 0.12 })
+    new THREE.MeshStandardMaterial({ color: 0x5a646e, roughness: 0.78, metalness: 0.04 })
   );
   joyShaft.position.y = 0.18;
   joyShaft.castShadow = false;
   const joyCap = new THREE.Mesh(
     new THREE.SphereGeometry(0.145, 32, 24),
-    new THREE.MeshStandardMaterial({ color: 0x394048, roughness: 0.55, metalness: 0.1 })
+    new THREE.MeshStandardMaterial({ color: 0x454e56, roughness: 0.8, metalness: 0.04 })
   );
   joyCap.scale.set(1, 0.72, 1);
   joyCap.position.y = 0.32;
   joyCap.castShadow = true;
-  // concave thumb dimple
   const joyDimple = new THREE.Mesh(
     new THREE.SphereGeometry(0.1, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.45),
-    new THREE.MeshStandardMaterial({ color: 0x272d33, roughness: 0.65, side: THREE.BackSide })
+    new THREE.MeshStandardMaterial({ color: 0x2e343a, roughness: 0.85, side: THREE.BackSide })
   );
   joyDimple.rotation.x = Math.PI;
   joyDimple.scale.set(1, 0.4, 1);
@@ -665,7 +662,22 @@ export function createPad3D(container, handlers = {}) {
   let dialDragging = false;
   let dialLastAngle = 0;
   let joyDragging = false;
+  let joyTx = 0;
+  let joyTz = 0;
+  let joyCx = 0;
+  let joyCz = 0;
   let raf = 0;
+
+  function applyJoyPose(x, z) {
+    // light, snappy tilt — more throw, less drag feel
+    const max = 0.2;
+    const nx = x / max;
+    const nz = z / max;
+    joyStick.position.x = x * 0.55;
+    joyStick.position.z = z * 0.55;
+    joyStick.rotation.z = -nx * 0.62;
+    joyStick.rotation.x = nz * 0.62;
+  }
 
   function ndc(e) {
     const rect = renderer.domElement.getBoundingClientRect();
@@ -743,6 +755,10 @@ export function createPad3D(container, handlers = {}) {
       return;
     }
     pressVisual(obj, true);
+    // Mic: press-to-talk starts on down
+    if (obj.userData.type === 'cmd' && obj.userData.cmd === 'mic') {
+      handlers.onCmdPress?.('mic');
+    }
   });
 
   renderer.domElement.addEventListener('pointermove', (e) => {
@@ -757,26 +773,24 @@ export function createPad3D(container, handlers = {}) {
     }
     if (joyDragging) {
       const rect = renderer.domElement.getBoundingClientRect();
-      // joy is top-right in top-down view
       _dialScreen.set(0, 0.35, 0);
       joyGroup.localToWorld(_dialScreen);
       _dialScreen.project(camera);
       const cx = rect.left + ((_dialScreen.x + 1) / 2) * rect.width;
       const cy = rect.top + ((-_dialScreen.y + 1) / 2) * rect.height;
-      let dx = (e.clientX - cx) / 50;
-      let dy = (e.clientY - cy) / 50;
+      // smaller divisor = more throw per pixel (lighter feel)
+      let dx = (e.clientX - cx) / 36;
+      let dy = (e.clientY - cy) / 36;
       const len = Math.hypot(dx, dy) || 1;
-      const max = 0.18;
+      const max = 0.2;
       if (len > max) {
         dx = (dx / len) * max;
         dy = (dy / len) * max;
       }
-      joyStick.position.x = dx;
-      joyStick.position.z = dy;
-      joyStick.rotation.z = -dx * 1.4;
-      joyStick.rotation.x = dy * 1.4;
+      joyTx = dx;
+      joyTz = dy;
       const dist = Math.hypot(dx, dy);
-      if (dist > 0.12) {
+      if (dist > 0.07) {
         const dir =
           Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
         handlers.onJoy?.(dir);
@@ -792,10 +806,8 @@ export function createPad3D(container, handlers = {}) {
     }
     if (joyDragging) {
       joyDragging = false;
-      joyStick.position.x = 0;
-      joyStick.position.z = 0;
-      joyStick.rotation.x = 0;
-      joyStick.rotation.z = 0;
+      joyTx = 0;
+      joyTz = 0;
       pressed = null;
       return;
     }
@@ -805,20 +817,25 @@ export function createPad3D(container, handlers = {}) {
     const obj = pick(e) || downObj;
     const t = obj.userData?.type || downObj.userData?.type;
     if (t === 'agent') handlers.onAgent?.(obj.userData.index ?? downObj.userData.index);
-    if (t === 'cmd') handlers.onCmd?.(obj.userData.cmd ?? downObj.userData.cmd);
+    if (t === 'cmd') {
+      const cmd = obj.userData.cmd ?? downObj.userData.cmd;
+      if (cmd === 'mic') handlers.onCmdRelease?.('mic');
+      else handlers.onCmd?.(cmd);
+    }
     if (t === 'touch') handlers.onTouch?.();
     pressed = null;
   });
 
   renderer.domElement.addEventListener('pointercancel', () => {
+    if (pressed?.userData?.type === 'cmd' && pressed.userData.cmd === 'mic') {
+      handlers.onCmdRelease?.('mic');
+    }
     if (pressed) pressVisual(pressed, false);
     pressed = null;
     dialDragging = false;
     joyDragging = false;
-    joyStick.position.x = 0;
-    joyStick.position.z = 0;
-    joyStick.rotation.x = 0;
-    joyStick.rotation.z = 0;
+    joyTx = 0;
+    joyTz = 0;
   });
 
   renderer.domElement.addEventListener('contextmenu', (e) => {
@@ -839,20 +856,19 @@ export function createPad3D(container, handlers = {}) {
     { passive: false }
   );
 
-  let pulseT = 0;
   function animate() {
     raf = requestAnimationFrame(animate);
-    pulseT += 0.05;
+    // LEDs stay fixed size — no breathing animation
     agents.forEach((a) => {
-      if (!a.userData.glow) return;
-      // only the selected agent breathes; all others stay fixed
-      if (!a.userData.selected) {
-        a.userData.glow.scale.setScalar(1);
-        return;
-      }
-      const s = 1 + Math.sin(pulseT) * 0.12;
-      a.userData.glow.scale.setScalar(s);
+      if (a.userData.glow) a.userData.glow.scale.setScalar(1);
     });
+    // snappy follow + quick spring return
+    const ease = joyDragging ? 0.58 : 0.42;
+    joyCx += (joyTx - joyCx) * ease;
+    joyCz += (joyTz - joyCz) * ease;
+    if (Math.abs(joyCx) < 0.0008) joyCx = 0;
+    if (Math.abs(joyCz) < 0.0008) joyCz = 0;
+    applyJoyPose(joyCx, joyCz);
     renderer.render(scene, camera);
   }
   animate();
@@ -873,14 +889,22 @@ export function createPad3D(container, handlers = {}) {
       a.userData.selected = selected;
       const color = STATUS_COLOR[status] ?? STATUS_COLOR.idle;
       const off = status === 'off';
+      const lit = new THREE.Color(color);
+      if (selected && !off) lit.lerp(new THREE.Color(0xffffff), 0.22);
       if (a.userData.glow) {
-        a.userData.glow.material.color.setHex(color);
-        a.userData.glow.material.opacity = off ? 0 : selected ? 0.9 : 0.65;
+        a.userData.glow.material.color.copy(lit);
+        a.userData.glow.material.opacity = off ? 0 : selected ? 1 : 0.72;
         a.userData.glow.visible = !off;
       }
       if (a.userData.light) {
-        a.userData.light.color.setHex(color);
-        a.userData.light.intensity = off ? 0 : selected ? 2.0 : status === 'thinking' ? 1.3 : 0.5;
+        a.userData.light.color.copy(lit);
+        a.userData.light.intensity = off
+          ? 0
+          : selected
+            ? 2.85
+            : status === 'thinking'
+              ? 1.45
+              : 0.7;
       }
       // selection reads via glow/halo/light only — scaling made the last
       // clicked key look stuck in a pressed/enlarged state

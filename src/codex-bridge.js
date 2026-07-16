@@ -3,8 +3,20 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const EventEmitter = require('events');
+const mac = require('./platform/mac');
 
 const REASONING = ['minimal', 'low', 'medium', 'high', 'xhigh'];
+
+const SKILLS = {
+  review: 'Review the current changes / open PR. Summarize risks, bugs, and suggested fixes.',
+  debug: 'Debug the latest error. Identify root cause and propose a concrete fix.',
+  refactor: 'Refactor the relevant code for clarity and maintainability without changing behavior.',
+  docs: 'Write or update documentation for the current work. Be concise and accurate.',
+  continue: 'Continue.',
+  ship: 'Prepare this work to ship: check tests, summarize the diff, and list remaining risks.',
+  test: 'Add or run relevant tests for the current change. Report failures with fixes.',
+  explain: 'Explain the current code path simply: what it does, why, and key risks.',
+};
 
 function findCodexNative() {
   const root = path.join(__dirname, '..', 'node_modules', '@openai');
@@ -460,14 +472,75 @@ class CodexBridge extends EventEmitter {
   toggleFast() {
     this.fastMode = !this.fastMode;
     if (this.fastMode) this.setReasoning(0);
+    else if (this.reasoningIndex === 0) this.setReasoning(2);
     this.emitState(this.fastMode ? 'fast mode on' : 'fast mode off');
     return this.fastMode;
   }
 
-  togglePlan() {
+  async togglePlan() {
     this.planMode = !this.planMode;
+    if (this.connected) {
+      try {
+        await this.request('config/set', {
+          key: 'plan_mode',
+          value: this.planMode,
+        });
+      } catch {
+        try {
+          await this.request('config/set', {
+            key: 'model_reasoning_effort',
+            value: this.planMode ? 'high' : REASONING[this.reasoningIndex],
+          });
+        } catch {}
+      }
+    }
     this.emitState(this.planMode ? 'plan mode on' : 'plan mode off');
     return this.planMode;
+  }
+
+  async skill(name) {
+    const text = SKILLS[name] || SKILLS.continue;
+    await this.send(text);
+    this.emitState(`skill · ${name}`);
+  }
+
+  async newChat() {
+    const empty = this.agents.findIndex((a) => a.status === 'off');
+    const slot = empty === -1 ? this.selected : empty;
+    if (this.connected) {
+      await this.startThread(slot);
+      this.emitState(`new chat · Agent ${slot + 1}`);
+      return;
+    }
+    this.agents[slot] = demo('New task', 'idle');
+    this.selected = slot;
+    this.emitState(`new chat (demo) · Agent ${slot + 1}`);
+  }
+
+  async desktopAction(action) {
+    try {
+      if (action === 'historyBack') {
+        await mac.keystroke('[', ['command']);
+        this.emitState('history ←');
+      } else if (action === 'historyForward') {
+        await mac.keystroke(']', ['command']);
+        this.emitState('history →');
+      } else if (action === 'sidebar') {
+        await mac.keystroke('b', ['command']);
+        this.emitState('sidebar');
+      } else if (action === 'composer') {
+        await mac.keystroke('k', ['command']);
+        this.emitState('composer');
+      } else if (action === 'newDesktopChat') {
+        await mac.keystroke('n', ['command']);
+        this.emitState('desktop new chat');
+      } else {
+        this.emitState(`unknown desktop · ${action}`);
+      }
+    } catch (e) {
+      this.emitState(`mac shortcut failed · grant Accessibility?`);
+      this.emit('log', e.message);
+    }
   }
 }
 
@@ -522,7 +595,9 @@ function truncate(s, n) {
 }
 
 function focusChatGPT() {
-  execFile('open', ['-b', 'com.openai.codex'], () => {});
+  mac.focusCodexApp().catch(() => {
+    execFile('open', ['-b', 'com.openai.codex'], () => {});
+  });
 }
 
-module.exports = { CodexBridge, REASONING, focusChatGPT };
+module.exports = { CodexBridge, REASONING, SKILLS, focusChatGPT };

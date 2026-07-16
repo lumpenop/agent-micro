@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, globalShortcut, session } = require('electron');
 const path = require('path');
 const { CodexBridge, focusChatGPT } = require('./codex-bridge');
 
@@ -57,18 +57,25 @@ function pushState(state) {
   }
 }
 
-app.whenReady().then(async () => {
-  createWindow();
-
-  bridge = new CodexBridge();
-  bridge.on('state', (s) => pushState(s));
-  bridge.on('log', (m) => {
+function bindBridge(b) {
+  b.on('state', (s) => pushState(s));
+  b.on('log', (m) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('codex:log', m);
     }
   });
+}
 
-  // Start after UI loads a beat
+app.whenReady().then(async () => {
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+    if (permission === 'media' || permission === 'microphone') callback(true);
+    else callback(false);
+  });
+
+  createWindow();
+
+  bridge = new CodexBridge();
+  bindBridge(bridge);
   setTimeout(() => bridge.start(), 400);
 
   globalShortcut.register('CommandOrControl+Shift+M', () => {
@@ -104,6 +111,9 @@ ipcMain.handle('codex:send', (_e, text) => bridge?.send(text));
 ipcMain.handle('codex:setReasoning', (_e, index) => bridge?.setReasoning(index));
 ipcMain.handle('codex:toggleFast', () => bridge?.toggleFast());
 ipcMain.handle('codex:togglePlan', () => bridge?.togglePlan());
+ipcMain.handle('codex:skill', (_e, name) => bridge?.skill(name));
+ipcMain.handle('codex:newChat', () => bridge?.newChat());
+ipcMain.handle('codex:desktop', (_e, action) => bridge?.desktopAction(action));
 ipcMain.handle('codex:focusApp', () => {
   focusChatGPT();
   return true;
@@ -111,6 +121,6 @@ ipcMain.handle('codex:focusApp', () => {
 ipcMain.handle('codex:reconnect', async () => {
   bridge?.stop();
   bridge = new CodexBridge();
-  bridge.on('state', (s) => pushState(s));
+  bindBridge(bridge);
   return bridge.start();
 });

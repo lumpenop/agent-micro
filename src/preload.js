@@ -13,6 +13,9 @@ contextBridge.exposeInMainWorld('codexDesktop', {
   setReasoning: (index) => ipcRenderer.invoke('codex:setReasoning', index),
   toggleFast: () => ipcRenderer.invoke('codex:toggleFast'),
   togglePlan: () => ipcRenderer.invoke('codex:togglePlan'),
+  skill: (name) => ipcRenderer.invoke('codex:skill', name),
+  newChat: () => ipcRenderer.invoke('codex:newChat'),
+  desktop: (action) => ipcRenderer.invoke('codex:desktop', action),
   focusApp: () => ipcRenderer.invoke('codex:focusApp'),
   reconnect: () => ipcRenderer.invoke('codex:reconnect'),
 
