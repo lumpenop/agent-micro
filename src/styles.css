@@ -564,6 +564,238 @@ button {
   text-align: center;
 }
 
+/* ——— Guide overlay ——— */
+.guide-card {
+  width: min(348px, calc(100% - 28px));
+  max-height: min(480px, calc(100% - 32px));
+  padding: 14px 12px 12px;
+  background:
+    linear-gradient(165deg, rgba(255, 255, 255, 0.92), rgba(246, 248, 251, 0.86));
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 22px 48px rgba(18, 24, 32, 0.28);
+}
+
+.guide-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 0 4px 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.guide-head-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.guide-kicker {
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.38);
+}
+
+.guide-title {
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: rgba(16, 20, 26, 0.9);
+}
+
+.guide-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 0 2px;
+}
+
+.guide-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.guide-section {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.34);
+  padding: 0 2px 2px;
+}
+
+.guide-item {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 8px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.42);
+  border: 1px solid rgba(0, 0, 0, 0.035);
+  transition: background 0.12s ease;
+}
+
+.guide-item:hover {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.guide-item-key {
+  min-height: 34px;
+  display: grid;
+  place-items: center;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: rgba(20, 24, 30, 0.78);
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f3f1eb 55%, #e6e3da 100%);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 9px;
+  padding: 5px 4px;
+  text-align: center;
+  line-height: 1.2;
+  white-space: pre-line;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.04),
+    0 2px 5px rgba(0, 0, 0, 0.06);
+}
+
+.guide-item-key--icons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 5px;
+  white-space: normal;
+}
+
+.guide-item-key--agents {
+  padding: 5px 4px;
+  white-space: normal;
+  background:
+    linear-gradient(180deg, #2a323a 0%, #1c2228 100%);
+  border-color: rgba(0, 0, 0, 0.2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 2px 5px rgba(0, 0, 0, 0.12);
+}
+
+.guide-agent-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  width: 100%;
+}
+
+.guide-agent-slot.empty {
+  aspect-ratio: 1;
+  visibility: hidden;
+}
+
+.guide-agent-cap {
+  aspect-ratio: 1;
+  border-radius: 3px;
+  display: grid;
+  place-items: center;
+  background:
+    linear-gradient(160deg, rgba(210, 230, 248, 0.55), rgba(140, 180, 220, 0.28));
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    0 1px 2px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(1px);
+}
+
+.guide-agent-led {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #9fd0ff, #2b9dff 70%);
+  box-shadow: 0 0 4px rgba(43, 157, 255, 0.7);
+  opacity: 0.85;
+}
+
+.guide-agent-cap:nth-child(2) .guide-agent-led {
+  background: radial-gradient(circle at 35% 30%, #fff, #7eb0e8 75%);
+  box-shadow: 0 0 3px rgba(126, 176, 232, 0.55);
+}
+
+.guide-ico {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  color: rgba(20, 24, 30, 0.78);
+}
+
+.guide-ico svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.guide-ico-sep {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.22);
+  margin: 0 1px;
+  flex-shrink: 0;
+}
+
+.guide-item-text {
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(20, 24, 30, 0.58);
+}
+
+.guide-item-text strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: rgba(16, 20, 26, 0.88);
+  margin-bottom: 1px;
+}
+
+.guide-foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  font-size: 10px;
+  color: rgba(0, 0, 0, 0.42);
+}
+
+.guide-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #d0d4d8;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.guide-dot.on {
+  background: #3ecf7a;
+  box-shadow: 0 0 0 2px rgba(62, 207, 122, 0.22);
+}
+
+.guide-dot.demo {
+  background: #f0c24b;
+  box-shadow: 0 0 0 2px rgba(240, 194, 75, 0.22);
+}
+
 .keycap.picking .cap-top {
   box-shadow:
     inset 0 1px 0 #fff,

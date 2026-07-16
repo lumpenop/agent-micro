@@ -18,6 +18,9 @@
           <i class="link-dot" id="link-dot" title="Connection"></i>
         </span>
         <div class="chrome-actions no-drag">
+          <button type="button" class="chrome-btn" id="btn-help" title="Guide">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+          </button>
           <button type="button" class="chrome-btn" id="btn-icons" title="Icon picker">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41l-7.59-7.59a2.41 2.41 0 0 0-3.41 0Z"/></svg>
           </button>
@@ -48,6 +51,28 @@
           </div>
           <div class="icon-picker-grid" id="icon-picker-grid"></div>
           <p class="icon-picker-hint">아이콘이 키 동작에 연결됩니다 · 우클릭으로 변경</p>
+        </div>
+      </div>
+
+      <div class="icon-picker" id="guide-panel" hidden>
+        <div class="icon-picker-card guide-card">
+          <div class="guide-head">
+            <div class="guide-head-copy">
+              <span class="guide-kicker">Agent Micro</span>
+              <span class="guide-title">사용 설명서</span>
+            </div>
+            <button type="button" class="chrome-btn" id="guide-close" title="Close">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+          <div class="guide-body" id="guide-body"></div>
+          <div class="guide-foot">
+            <span>⌘⇧M 숨기기</span>
+            <span class="guide-dot on"></span>
+            <span>연결</span>
+            <span class="guide-dot demo"></span>
+            <span>demo</span>
+          </div>
         </div>
       </div>
 

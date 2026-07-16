@@ -302,7 +302,153 @@ document.getElementById('icon-picker-close')?.addEventListener('click', closeIco
 picker?.addEventListener('click', (e) => {
   if (e.target === picker) closeIconPicker();
 });
-document.getElementById('btn-icons')?.addEventListener('click', () => openIconPicker(state.pickingCmd || 'send'));
+document.getElementById('btn-icons')?.addEventListener('click', () => {
+  closeGuide();
+  openIconPicker(state.pickingCmd || 'send');
+});
+
+const GUIDE_ITEMS = [
+  { section: '키캡' },
+  {
+    visual: 'agents',
+    title: '에이전트 슬롯',
+    text: '투명 키 ×6 · 탭 = 전환 · 더블탭 = Codex 앱 포커스',
+  },
+  {
+    icons: ['lightning'],
+    title: 'Fast mode',
+    text: 'reasoning을 minimal로 · 아이콘 바꾸면 다른 액션',
+  },
+  {
+    icons: ['check', 'times'],
+    title: 'Approve / Decline',
+    text: '승인 요청 수락 또는 거절',
+  },
+  {
+    icons: ['fork'],
+    title: 'Fork',
+    text: '현재 스레드를 분기해 새 작업으로',
+  },
+  {
+    icons: ['mic'],
+    title: '마이크',
+    text: '홀드 = 말하기 · 떼면 전송 · 더블탭 = hands-free',
+  },
+  {
+    icons: ['codex'],
+    title: 'Send',
+    text: 'Continue 전송 · 더블탭 = 새 채팅 · 아이콘별 프롬프트',
+  },
+  { section: '컨트롤' },
+  {
+    key: 'Dial',
+    title: '볼륨 / Reasoning',
+    text: '돌리면 reasoning 강도 (minimal → xhigh)',
+  },
+  {
+    key: 'Joy',
+    title: '조이스틱',
+    text: '레이어마다 다름 — 아래 Touch 참고',
+  },
+  {
+    key: 'Touch',
+    title: '터치 패드',
+    text: '탭 = Codex → Skills → Desktop 레이어 순환',
+  },
+  { section: '레이어 · Joy' },
+  {
+    key: 'Codex',
+    title: '기본',
+    text: '↑ Plan · → 히스토리 → · ↓ 사이드바 · ← 히스토리 ←',
+  },
+  {
+    key: 'Skills',
+    title: '스킬',
+    text: '↑ PR 리뷰 · → 디버그 · ↓ 문서 · ← 리팩터',
+  },
+  {
+    key: 'Desktop',
+    title: '데스크톱',
+    text: '↑ Composer · → 새 채팅 · ↓ 사이드바 · ← 히스토리 ←',
+  },
+  { section: '팁' },
+  {
+    key: '우클릭',
+    title: '아이콘 변경',
+    text: '커맨드 키 우클릭 또는 ◆ 버튼으로 아이콘·동작 변경',
+  },
+];
+
+const guidePanel = document.getElementById('guide-panel');
+const guideBody = document.getElementById('guide-body');
+
+function guideAgentsVisual() {
+  // matches pad layout: row0 empty|A0|A1|empty · row1 A2–A5
+  const cells = [
+    null, 0, 1, null,
+    2, 3, 4, 5,
+  ];
+  return `<div class="guide-item-key guide-item-key--agents" aria-hidden="true">
+    <div class="guide-agent-grid">
+      ${cells
+        .map((i) =>
+          i == null
+            ? '<span class="guide-agent-slot empty"></span>'
+            : `<span class="guide-agent-cap"><i class="guide-agent-led"></i></span>`
+        )
+        .join('')}
+    </div>
+  </div>`;
+}
+
+function guideKeyHtml(item) {
+  if (item.visual === 'agents') return guideAgentsVisual();
+  if (item.icons?.length) {
+    const icons = item.icons
+      .map((id) => `<span class="guide-ico">${iconMarkup(id)}</span>`)
+      .join('<span class="guide-ico-sep" aria-hidden="true"></span>');
+    return `<div class="guide-item-key guide-item-key--icons">${icons}</div>`;
+  }
+  return `<div class="guide-item-key">${String(item.key || '').replace(/\n/g, '<br>')}</div>`;
+}
+
+function openGuide() {
+  closeIconPicker();
+  if (!guideBody || !guidePanel) return;
+  let html = '';
+  let open = false;
+  for (const item of GUIDE_ITEMS) {
+    if (item.section) {
+      if (open) html += '</div>';
+      html += `<div class="guide-group"><div class="guide-section">${item.section}</div>`;
+      open = true;
+      continue;
+    }
+    html += `<div class="guide-item">
+      ${guideKeyHtml(item)}
+      <div class="guide-item-text"><strong>${item.title}</strong>${item.text}</div>
+    </div>`;
+  }
+  if (open) html += '</div>';
+  guideBody.innerHTML = html;
+  guidePanel.hidden = false;
+}
+
+function closeGuide() {
+  if (guidePanel) guidePanel.hidden = true;
+}
+
+document.getElementById('btn-help')?.addEventListener('click', openGuide);
+document.getElementById('guide-close')?.addEventListener('click', closeGuide);
+guidePanel?.addEventListener('click', (e) => {
+  if (e.target === guidePanel) closeGuide();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeGuide();
+    closeIconPicker();
+  }
+});
 
 function render() {
   if (!pad3d) return;
