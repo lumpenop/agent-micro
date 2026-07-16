@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('codexDesktop', {
   desktop: (action) => ipcRenderer.invoke('codex:desktop', action),
   focusApp: () => ipcRenderer.invoke('codex:focusApp'),
   reconnect: () => ipcRenderer.invoke('codex:reconnect'),
+  requestMic: () => ipcRenderer.invoke('mic:request'),
+  micStatus: () => ipcRenderer.invoke('mic:status'),
 
   onState: (cb) => {
     const handler = (_e, state) => cb(state);
@@ -28,5 +30,10 @@ contextBridge.exposeInMainWorld('codexDesktop', {
     const handler = (_e, msg) => cb(msg);
     ipcRenderer.on('codex:log', handler);
     return () => ipcRenderer.removeListener('codex:log', handler);
+  },
+  onMicStatus: (cb) => {
+    const handler = (_e, status) => cb(status);
+    ipcRenderer.on('mic:status', handler);
+    return () => ipcRenderer.removeListener('mic:status', handler);
   },
 });

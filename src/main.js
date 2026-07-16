@@ -1,9 +1,22 @@
-const { app, BrowserWindow, ipcMain, screen, globalShortcut, session } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, globalShortcut, session, systemPreferences } = require('electron');
 const path = require('path');
 const { CodexBridge, focusChatGPT } = require('./codex-bridge');
 
 let mainWindow = null;
 let bridge = null;
+
+async function ensureMicAccess() {
+  if (process.platform !== 'darwin') return true;
+  try {
+    const status = systemPreferences.getMediaAccessStatus('microphone');
+    if (status === 'granted') return true;
+    // shows the macOS permission dialog immediately
+    const ok = await systemPreferences.askForMediaAccess('microphone');
+    return !!ok;
+  } catch {
+    return false;
+  }
+}
 
 function createWindow() {
   const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
@@ -35,6 +48,12 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
   mainWindow.webContents.on('did-finish-load', () => {
+    // prompt mic as soon as UI is ready
+    ensureMicAccess().then((ok) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('mic:status', { granted: ok });
+      }
+    });
     mainWindow.webContents
       .executeJavaScript(
         `!!document.querySelector('#pad-canvas canvas') ? 'ok' : 'no-canvas'`
@@ -71,6 +90,12 @@ app.whenReady().then(async () => {
     if (permission === 'media' || permission === 'microphone') callback(true);
     else callback(false);
   });
+  session.defaultSession.setPermissionCheckHandler((_wc, permission) => {
+    return permission === 'media' || permission === 'microphone';
+  });
+
+  // ask immediately on launch (before first mic press)
+  ensureMicAccess();
 
   createWindow();
 
@@ -101,6 +126,16 @@ app.on('will-quit', () => {
 
 ipcMain.handle('window:minimize', () => mainWindow?.minimize());
 ipcMain.handle('window:close', () => mainWindow?.close());
+ipcMain.handle('mic:request', () => ensureMicAccess());
+ipcMain.handle('mic:status', () => {
+  if (process.platform !== 'darwin') return { granted: true, status: 'granted' };
+  try {
+    const status = systemPreferences.getMediaAccessStatus('microphone');
+    return { granted: status === 'granted', status };
+  } catch {
+    return { granted: false, status: 'unknown' };
+  }
+});
 
 ipcMain.handle('codex:getState', () => bridge?.getState());
 ipcMain.handle('codex:select', (_e, index, focus) => bridge?.select(index, { focus }));

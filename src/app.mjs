@@ -147,6 +147,8 @@ function statusLabel(s) {
 let micLatched = false;
 let recognition = null;
 let micTranscript = '';
+let micGranted = null;
+let micWarmPromise = null;
 
 function getSpeechRecognition() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -158,7 +160,43 @@ function getSpeechRecognition() {
   return r;
 }
 
-function startRecording({ latched = false } = {}) {
+/** Native macOS dialog via main + getUserMedia warm-up for Chromium */
+async function ensureMicPermission({ silent = false } = {}) {
+  if (micGranted === true) return true;
+  if (!micWarmPromise) {
+    micWarmPromise = (async () => {
+      const native = await api?.requestMic?.();
+      if (native === false) {
+        micGranted = false;
+        return false;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((t) => t.stop());
+        micGranted = true;
+        return true;
+      } catch {
+        micGranted = native === true;
+        return micGranted;
+      }
+    })().finally(() => {
+      micWarmPromise = null;
+    });
+  }
+  const ok = await micWarmPromise;
+  if (!silent) {
+    flashAction(ok ? 'mic ready' : 'mic permission needed · System Settings');
+  }
+  return ok;
+}
+
+async function startRecording({ latched = false } = {}) {
+  const ok = await ensureMicPermission({ silent: true });
+  if (!ok) {
+    flashAction('mic blocked · allow in System Settings');
+    return;
+  }
+
   state.recording = true;
   state.processing = false;
   micLatched = latched;
@@ -449,4 +487,12 @@ api?.onState?.(applyBridgeState);
 api?.onLog?.((m) => {
   if (m) console.log('[codex]', m);
 });
+api?.onMicStatus?.((s) => {
+  if (s?.granted) micGranted = true;
+});
 api?.getState?.().then(applyBridgeState);
+
+// ask for mic right away so the system dialog appears on launch
+ensureMicPermission({ silent: true }).then((ok) => {
+  if (ok) flashAction('mic ready');
+});
