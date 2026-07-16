@@ -1,7 +1,7 @@
 import * as THREE from './vendor/three.mjs';
 import { RoundedBoxGeometry } from './vendor/geometries/RoundedBoxGeometry.mjs';
 import { RoomEnvironment } from './vendor/RoomEnvironment.mjs';
-import { KEYCAP_ICONS, iconSvgBody } from './icons.mjs';
+import { iconSvgDocument } from './icons.mjs';
 
 const STATUS_COLOR = {
   idle: 0x7eb0e8,
@@ -26,25 +26,23 @@ function makeIconTexture(iconId) {
   canvas.height = size;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, size, size);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
 
-  // soft dish shading
-  const g = ctx.createRadialGradient(size * 0.5, size * 0.38, size * 0.05, size * 0.5, size * 0.5, size * 0.55);
-  g.addColorStop(0, 'rgba(255,255,255,0.0)');
-  g.addColorStop(1, 'rgba(0,0,0,0.0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, size, size);
-
-  const body = iconSvgBody(iconId, `tex-${iconId}`);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" color="#141414">${body}</svg>`;
-  const img = new Image();
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
 
+  const svg = iconSvgDocument(iconId, { size, color: '#141414' });
+  if (!svg) return tex;
+  const img = new Image();
   const url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   img.onload = () => {
     ctx.clearRect(0, 0, size, size);
-    const pad = size * 0.2;
+    const pad = size * 0.18;
     ctx.drawImage(img, pad, pad, size - pad * 2, size - pad * 2);
     tex.needsUpdate = true;
   };

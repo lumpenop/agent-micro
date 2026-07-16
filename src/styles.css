@@ -531,10 +531,11 @@ button {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 5px;
   color: var(--ink);
   cursor: pointer;
   transition: transform 0.08s ease, box-shadow 0.12s ease;
+  padding: 8px 4px 6px;
 }
 
 .icon-pick:hover {
@@ -547,14 +548,35 @@ button {
   outline-offset: 1px;
 }
 
-.icon-pick svg {
-  width: 22px;
-  height: 22px;
+.icon-pick svg,
+.icon-svg {
+  width: 28px;
+  height: 28px;
+  display: block;
+  flex-shrink: 0;
+  shape-rendering: geometricPrecision;
+  overflow: visible;
+}
+
+.icon-pick .icon-evenodd,
+.icon-svg.icon-evenodd {
+  fill-rule: evenodd;
+}
+
+.icon-pick .icon-fill,
+.icon-svg.icon-fill {
+  color: rgba(16, 20, 26, 0.92);
+}
+
+.icon-pick .icon-stroke,
+.icon-svg.icon-stroke {
+  color: rgba(16, 20, 26, 0.88);
 }
 
 .icon-pick span {
   font-size: 9px;
   color: rgba(0, 0, 0, 0.5);
+  line-height: 1.1;
 }
 
 .icon-picker-hint {
@@ -735,10 +757,16 @@ button {
   color: rgba(20, 24, 30, 0.78);
 }
 
-.guide-ico svg {
+.guide-ico svg,
+.guide-ico .icon-svg {
   width: 100%;
   height: 100%;
   display: block;
+  shape-rendering: geometricPrecision;
+}
+
+.guide-ico .icon-evenodd {
+  fill-rule: evenodd;
 }
 
 .guide-ico-sep {

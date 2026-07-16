@@ -33,9 +33,35 @@ export function iconSvgBody(id, maskId = 'icon-mask') {
   return def.svg.replaceAll('__MASK__', maskId);
 }
 
+function isStrokeIcon(def) {
+  return typeof def?.svg === 'string' && def.svg.includes('stroke="currentColor"');
+}
+
+/** Inline SVG markup for picker / guide */
 export function iconMarkup(id) {
   const def = KEYCAP_ICONS[id];
   if (!def) return '';
   const maskId = `m-${id}-${Math.random().toString(36).slice(2, 8)}`;
-  return `<svg viewBox="0 0 24 24" aria-hidden="true">${iconSvgBody(id, maskId)}</svg>`;
+  const body = iconSvgBody(id, maskId);
+  const stroke = isStrokeIcon(def);
+  const evenodd = !!def.evenodd;
+  const cls = ['icon-svg', stroke ? 'icon-stroke' : 'icon-fill', evenodd ? 'icon-evenodd' : '']
+    .filter(Boolean)
+    .join(' ');
+  const fill = stroke ? 'none' : 'currentColor';
+  const rule = evenodd ? 'evenodd' : 'nonzero';
+  return `<svg class="${cls}" viewBox="0 0 24 24" width="24" height="24" fill="${fill}" fill-rule="${rule}" aria-hidden="true">${body}</svg>`;
+}
+
+/** Full SVG document string for canvas / texture rasterization */
+export function iconSvgDocument(id, { size = 256, color = '#141414' } = {}) {
+  const def = KEYCAP_ICONS[id];
+  if (!def) return '';
+  const body = iconSvgBody(id, `tex-${id}`);
+  const stroke = isStrokeIcon(def);
+  const evenodd = !!def.evenodd;
+  const fill = stroke ? 'none' : color;
+  const rule = evenodd ? 'evenodd' : 'nonzero';
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="${fill}" fill-rule="${rule}" color="${color}">${body}</svg>`;
 }
