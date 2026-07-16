@@ -4,6 +4,7 @@ const path = require('path');
 const readline = require('readline');
 const EventEmitter = require('events');
 const mac = require('../platform/mac');
+const connectionMode = require('../connection-mode');
 const { REASONING, SKILLS, emptyAgent, demo, truncate } = require('./base-bridge');
 
 const PLATFORM_BIN = {
@@ -79,6 +80,8 @@ class CodexBridge extends EventEmitter {
   constructor() {
     super();
     this.provider = 'codex';
+    /** @type {'desktop'|'cli'} */
+    this.linkMode = connectionMode.resolveMode();
     this.proc = null;
     this.rl = null;
     this.nextId = 1;
@@ -94,11 +97,23 @@ class CodexBridge extends EventEmitter {
     this._poll = null;
   }
 
+  isDesktop() {
+    return this.linkMode !== 'cli';
+  }
+
+  setLinkMode(id) {
+    if (id !== 'desktop' && id !== 'cli') throw new Error(`invalid mode: ${id}`);
+    this.linkMode = id;
+    connectionMode.setMode(id);
+    this.emitState(`mode · ${id}`);
+  }
+
   getState() {
     return {
       provider: this.provider,
       connected: this.connected,
       mode: this.mode,
+      linkMode: this.linkMode,
       selected: this.selected,
       reasoning: REASONING[this.reasoningIndex],
       reasoningIndex: this.reasoningIndex,
@@ -120,6 +135,7 @@ class CodexBridge extends EventEmitter {
       hasBinary: !!bin,
       connected: this.connected,
       mode: this.mode,
+      linkMode: this.linkMode,
       loggedIn: this._loggedIn ?? null,
     };
   }
@@ -165,25 +181,41 @@ class CodexBridge extends EventEmitter {
   }
 
   /**
-   * Smart connect: ensure Codex binary → login if needed → start app-server.
+   * Connect using saved linkMode: desktop shortcuts OR CLI app-server.
    */
-  async connect({ forceLogin = false } = {}) {
-    const bin = findCodexNative();
-    if (!bin) {
-      this._seedDemo();
-      this.emitState('codex missing · pnpm install');
-      return { ok: false, reason: 'missing' };
+  async connect({ forceLogin = false, linkMode } = {}) {
+    if (linkMode === 'desktop' || linkMode === 'cli') {
+      this.setLinkMode(linkMode);
+    } else {
+      this.linkMode = connectionMode.resolveMode();
     }
 
-    const status = await this.checkLogin();
-    if (forceLogin || !status.loggedIn) {
-      const login = await this.login();
-      if (!login.ok) return { ok: false, reason: 'login', ...login };
+    const bin = findCodexNative();
+    if (this.linkMode === 'cli' && !bin) {
+      this._seedDemo();
+      this.emitState('codex missing · pnpm install');
+      return { ok: false, reason: 'missing', linkMode: 'cli' };
+    }
+
+    if (bin) {
+      const status = await this.checkLogin();
+      if (forceLogin || !status.loggedIn) {
+        const login = await this.login();
+        if (!login.ok) return { ok: false, reason: 'login', linkMode: this.linkMode, ...login };
+      }
+    } else if (forceLogin) {
+      this.emitState('codex CLI missing');
     }
 
     this.stop();
     const started = await this.start();
-    return { ok: started, reason: started ? 'connected' : 'offline', loggedIn: true };
+    return {
+      ok: started,
+      reason: started ? 'connected' : 'offline',
+      loggedIn: true,
+      linkMode: this.linkMode,
+      needsApiKey: started && this.linkMode === 'cli',
+    };
   }
 
   _runCodex(bin, args, timeoutMs = 15000) {
@@ -217,6 +249,50 @@ class CodexBridge extends EventEmitter {
   }
 
   async start() {
+    this.linkMode = connectionMode.resolveMode();
+    if (this.linkMode === 'cli') return this._startCli();
+    return this._startDesktop();
+  }
+
+  async _startDesktop() {
+    if (this._poll) {
+      clearInterval(this._poll);
+      this._poll = null;
+    }
+    if (this.proc) {
+      const prev = this.proc;
+      this.proc = null;
+      try {
+        prev.kill();
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const focus = await mac.focusCodexApp();
+    if (!focus.ok) {
+      this.connected = false;
+      this.mode = 'offline';
+      this._seedDemo();
+      this.emitState(focus.reason || 'Codex app offline · open Codex');
+      return false;
+    }
+
+    this.connected = true;
+    this.mode = 'desktop';
+    this.agents = Array.from({ length: 6 }, (_, i) => ({
+      name: i === 0 ? 'Codex' : '—',
+      status: i === 0 ? 'idle' : 'off',
+      threadId: null,
+      turnId: null,
+      approvalId: null,
+    }));
+    this.selected = 0;
+    this.emitState('connected · desktop');
+    return true;
+  }
+
+  async _startCli() {
     const bin = findCodexNative();
     if (!bin) {
       this._seedDemo();
@@ -241,8 +317,9 @@ class CodexBridge extends EventEmitter {
     }
 
     this.connected = true;
+    this.linkMode = 'cli';
     await this.refreshThreads().catch((e) => this.emit('log', e.message));
-    this.emitState('connected · ' + this.mode);
+    this.emitState('connected · cli');
     this._poll = setInterval(() => {
       this.refreshThreads().catch(() => {});
     }, 4000);
@@ -483,6 +560,22 @@ class CodexBridge extends EventEmitter {
     this.selected = Math.max(0, Math.min(5, index));
     const a = this.agents[this.selected];
     if (a.status === 'complete') a.status = 'idle';
+
+    if (this.isDesktop()) {
+      if (a.status === 'off') {
+        a.status = 'idle';
+        a.name = `Slot ${index + 1}`;
+      }
+      focusChatGPT();
+      if (focus) {
+        mac.desktopShortcut('composer').catch((e) => this.emit('log', e.message));
+        this.emitState(`Codex · Agent ${index + 1}`);
+      } else {
+        this.emitState(`switch · Agent ${index + 1}`);
+      }
+      return;
+    }
+
     if (a.status === 'off' && this.connected) {
       this.startThread(this.selected).catch(() => {});
     }
@@ -491,6 +584,24 @@ class CodexBridge extends EventEmitter {
   }
 
   async startThread(slot = this.selected) {
+    if (this.isDesktop()) {
+      try {
+        await mac.desktopShortcut('newChat');
+        this.agents[slot] = {
+          name: 'New chat',
+          status: 'idle',
+          threadId: null,
+          turnId: null,
+          approvalId: null,
+        };
+        this.selected = slot;
+        this.emitState('new chat · desktop');
+      } catch (e) {
+        this.emitState(`new chat failed · ${e.message}`);
+      }
+      return;
+    }
+
     if (!this.connected) return;
     const cwd = process.env.HOME || process.cwd();
     const result = await this.request('thread/start', { cwd });
@@ -509,6 +620,20 @@ class CodexBridge extends EventEmitter {
   }
 
   async approve() {
+    if (this.isDesktop()) {
+      try {
+        const r = await mac.desktopShortcut('approve');
+        const a = this.agents[this.selected];
+        a.status = 'thinking';
+        a.approvalId = null;
+        this.emitState(r.label);
+      } catch (e) {
+        this.emitState(`approve failed · ${e.message}`);
+        this.emit('log', e.message);
+      }
+      return;
+    }
+
     const a = this.agents[this.selected];
     if (!a?.approvalId) {
       this.emitState('nothing to approve');
@@ -525,6 +650,20 @@ class CodexBridge extends EventEmitter {
   }
 
   async decline() {
+    if (this.isDesktop()) {
+      try {
+        const r = await mac.desktopShortcut('decline');
+        const a = this.agents[this.selected];
+        a.status = 'idle';
+        a.approvalId = null;
+        this.emitState(r.label);
+      } catch (e) {
+        this.emitState(`decline failed · ${e.message}`);
+        this.emit('log', e.message);
+      }
+      return;
+    }
+
     const a = this.agents[this.selected];
     if (!a?.approvalId) {
       this.emitState('nothing to decline');
@@ -541,6 +680,26 @@ class CodexBridge extends EventEmitter {
   }
 
   async fork() {
+    if (this.isDesktop()) {
+      try {
+        await mac.desktopShortcut('newChat');
+        const empty = this.agents.findIndex((a) => a.status === 'off');
+        const target = empty === -1 ? (this.selected + 1) % 6 : empty;
+        this.agents[target] = {
+          name: 'Fork · new chat',
+          status: 'idle',
+          threadId: null,
+          turnId: null,
+          approvalId: null,
+        };
+        this.selected = target;
+        this.emitState(`fork · new chat · Agent ${target + 1}`);
+      } catch (e) {
+        this.emitState(`fork failed · ${e.message}`);
+      }
+      return;
+    }
+
     const src = this.agents[this.selected];
     if (!this.connected || !src.threadId || String(src.threadId).startsWith('demo')) {
       const empty = this.agents.findIndex((a) => a.status === 'off');
@@ -577,6 +736,23 @@ class CodexBridge extends EventEmitter {
 
   async send(text) {
     const prompt = text || 'Continue.';
+    if (this.isDesktop()) {
+      const a = this.agents[this.selected];
+      try {
+        a.status = 'thinking';
+        a.name = truncate(prompt, 42);
+        this.emitState('sending · desktop…');
+        await mac.submitToCodex(prompt);
+        a.status = 'idle';
+        this.emitState('sent · desktop');
+      } catch (e) {
+        a.status = 'error';
+        this.emit('log', `send: ${e.message}`);
+        this.emitState(`send failed · ${e.message}`);
+      }
+      return;
+    }
+
     const a = this.agents[this.selected];
     if (!this.connected) {
       a.status = 'thinking';
@@ -588,7 +764,6 @@ class CodexBridge extends EventEmitter {
       return;
     }
 
-    // Ensure a live thread — list entries may be stale / not attached to this server
     if (!a.threadId || String(a.threadId).startsWith('demo') || a.status === 'off') {
       try {
         await this.startThread(this.selected);
@@ -612,7 +787,7 @@ class CodexBridge extends EventEmitter {
         cur.name = truncate(prompt, 42);
       };
       markThinking();
-      this.emitState('sent');
+      this.emitState('sent · cli');
       let result;
       try {
         result = await startTurn(this.agents[this.selected].threadId);
@@ -637,35 +812,65 @@ class CodexBridge extends EventEmitter {
   setReasoning(index) {
     this.reasoningIndex = Math.max(0, Math.min(REASONING.length - 1, index));
     const value = REASONING[this.reasoningIndex];
-    if (this.connected) {
+    if (!this.isDesktop() && this.connected) {
       this.request('config/set', { key: 'model_reasoning_effort', value }).catch(() => {});
     }
     this.emitState(`reasoning · ${value}`);
+    return value;
   }
 
-  toggleFast() {
+  async toggleFast() {
     this.fastMode = !this.fastMode;
     if (this.fastMode) this.setReasoning(0);
     else if (this.reasoningIndex === 0) this.setReasoning(2);
-    this.emitState(this.fastMode ? 'fast mode on' : 'fast mode off');
+
+    if (this.isDesktop()) {
+      try {
+        await mac.submitToCodex(
+          this.fastMode
+            ? 'Switch to fast / minimal reasoning for this turn.'
+            : 'Switch back to normal reasoning effort.'
+        );
+        this.emitState(this.fastMode ? 'fast · desktop' : 'normal · desktop');
+      } catch (e) {
+        this.emitState(this.fastMode ? 'fast mode on' : 'fast mode off');
+        this.emit('log', e.message);
+      }
+    } else {
+      this.emitState(this.fastMode ? 'fast mode on' : 'fast mode off');
+    }
     return this.fastMode;
   }
 
   async togglePlan() {
     this.planMode = !this.planMode;
+    if (this.isDesktop()) {
+      try {
+        await mac.submitToCodex(
+          this.planMode
+            ? 'Enter plan mode: outline the approach before making changes.'
+            : 'Exit plan mode and continue implementing.'
+        );
+        this.emitState(this.planMode ? 'plan · desktop' : 'plan off · desktop');
+      } catch (e) {
+        this.emitState(this.planMode ? 'plan mode on' : 'plan mode off');
+        this.emit('log', e.message);
+      }
+      return this.planMode;
+    }
+
     if (this.connected) {
       try {
-        await this.request('config/set', {
-          key: 'plan_mode',
-          value: this.planMode,
-        });
+        await this.request('config/set', { key: 'plan_mode', value: this.planMode });
       } catch {
         try {
           await this.request('config/set', {
             key: 'model_reasoning_effort',
             value: this.planMode ? 'high' : REASONING[this.reasoningIndex],
           });
-        } catch {}
+        } catch {
+          /* ignore */
+        }
       }
     }
     this.emitState(this.planMode ? 'plan mode on' : 'plan mode off');
@@ -681,9 +886,8 @@ class CodexBridge extends EventEmitter {
   async newChat() {
     const empty = this.agents.findIndex((a) => a.status === 'off');
     const slot = empty === -1 ? this.selected : empty;
-    if (this.connected) {
+    if (this.isDesktop() || this.connected) {
       await this.startThread(slot);
-      this.emitState(`new chat · Agent ${slot + 1}`);
       return;
     }
     this.agents[slot] = demo('New task', 'idle');
@@ -692,51 +896,74 @@ class CodexBridge extends EventEmitter {
   }
 
   async desktopAction(action) {
+    // Joystick desktop shortcuts always hit the Codex app
     try {
-      if (action === 'historyBack') {
-        await mac.keystroke('[', ['command']);
-        this.emitState('history ←');
-      } else if (action === 'historyForward') {
-        await mac.keystroke(']', ['command']);
-        this.emitState('history →');
-      } else if (action === 'sidebar') {
-        await mac.keystroke('b', ['command']);
-        this.emitState('sidebar');
-      } else if (action === 'composer') {
-        await mac.keystroke('k', ['command']);
-        this.emitState('composer');
-      } else if (action === 'newDesktopChat') {
-        await mac.keystroke('n', ['command']);
-        this.emitState('desktop new chat');
-      } else {
-        this.emitState(`unknown desktop · ${action}`);
-      }
+      const r = await mac.desktopShortcut(action);
+      this.emitState(r.label);
     } catch (e) {
-      this.emitState(`mac shortcut failed · grant Accessibility?`);
+      this.emitState(`mac shortcut failed · ${e.message}`);
       this.emit('log', e.message);
     }
   }
 
-  /** Push spoken text into Codex desktop composer + app-server thread. */
   async voiceToCodex(text) {
     const body = String(text || '').trim();
     if (!body) {
       this.emitState('empty voice');
       return { ok: false, reason: 'empty' };
     }
-    try {
-      await mac.submitToCodex(body);
-      this.emitState('voice → Codex app');
-    } catch (e) {
-      this.emit('log', `voice desktop: ${e.message}`);
-      this.emitState('voice desktop failed · Accessibility?');
+
+    if (this.isDesktop()) {
+      try {
+        await mac.submitToCodex(body);
+        this.emitState('voice → Codex app');
+        return { ok: true, mode: 'desktop' };
+      } catch (e) {
+        this.emit('log', `voice desktop: ${e.message}`);
+        this.emitState('voice failed · Codex app + Accessibility?');
+        return { ok: false, error: e.message };
+      }
     }
+
+    // CLI: send into app-server thread (Whisper already transcribed)
     try {
       await this.send(body);
+      this.emitState('voice → cli');
+      return { ok: true, mode: 'cli' };
     } catch (e) {
-      this.emit('log', `voice send: ${e.message}`);
+      this.emit('log', `voice cli: ${e.message}`);
+      this.emitState('voice failed');
+      return { ok: false, error: e.message };
     }
-    return { ok: true };
+  }
+
+  /** No Whisper key: talk inside already-logged-in Codex app (system dictation). */
+  async beginVoiceDictation() {
+    try {
+      const r = await mac.beginCodexDictation();
+      this.emitState('Codex에서 말하세요');
+      return { ok: true, mode: 'codex-dictation', app: r?.app };
+    } catch (e) {
+      this.emit('log', e.message);
+      const hint =
+        e.code === 'NO_CODEX_APP' || e.code === 'WRONG_APP'
+          ? e.message
+          : 'dictation failed · Codex 앱 + Accessibility?';
+      this.emitState(hint);
+      return { ok: false, error: hint, code: e.code || 'DICTATION' };
+    }
+  }
+
+  async endVoiceDictation() {
+    try {
+      await mac.submitCodexComposer();
+      this.emitState('Codex 전송');
+      return { ok: true };
+    } catch (e) {
+      this.emit('log', e.message);
+      this.emitState('submit failed');
+      return { ok: false, error: e.message };
+    }
   }
 }
 

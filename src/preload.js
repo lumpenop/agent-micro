@@ -27,10 +27,16 @@ contextBridge.exposeInMainWorld('codexDesktop', {
   micStatus: () => ipcRenderer.invoke('mic:status'),
   whisperReady: () => ipcRenderer.invoke('mic:whisperReady'),
   transcribe: (payload) => ipcRenderer.invoke('mic:transcribe', payload),
+  voiceStatus: () => ipcRenderer.invoke('voice:status'),
+  setVoiceApiKey: (key) => ipcRenderer.invoke('voice:setApiKey', key),
+  skipVoiceSetup: () => ipcRenderer.invoke('voice:skipSetup'),
+  openApiKeysPage: () => ipcRenderer.invoke('voice:openApiKeysPage'),
+  beginVoiceDictation: () => ipcRenderer.invoke('voice:beginDictation'),
+  endVoiceDictation: () => ipcRenderer.invoke('voice:endDictation'),
 
-  listProviders: () => ipcRenderer.invoke('provider:list'),
-  getProvider: () => ipcRenderer.invoke('provider:get'),
-  setProvider: (id) => ipcRenderer.invoke('provider:set', id),
+  listModes: () => ipcRenderer.invoke('mode:list'),
+  getMode: () => ipcRenderer.invoke('mode:get'),
+  setMode: (id) => ipcRenderer.invoke('mode:set', id),
 
   onState: (cb) => {
     const handler = (_e, state) => cb(state);
@@ -47,9 +53,9 @@ contextBridge.exposeInMainWorld('codexDesktop', {
     ipcRenderer.on('mic:status', handler);
     return () => ipcRenderer.removeListener('mic:status', handler);
   },
-  onNeedProviderPick: (cb) => {
+  onNeedModePick: (cb) => {
     const handler = () => cb();
-    ipcRenderer.on('provider:needPick', handler);
-    return () => ipcRenderer.removeListener('provider:needPick', handler);
+    ipcRenderer.on('mode:needPick', handler);
+    return () => ipcRenderer.removeListener('mode:needPick', handler);
   },
 });

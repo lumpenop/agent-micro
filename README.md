@@ -2,50 +2,48 @@
 
 Work Louder × OpenAI **Codex Micro** 스타일 플로팅 맥로패드.
 
-지금은 **Codex 전용**으로 맞춰 두었습니다 (마이크 = Codex 음성, 키 = Continue/승인/Plan 등).  
-↻ 길게 누르면 Claude / Cursor / Gemini로 바꿀 수 있습니다.
+**Codex 전용**입니다. 연결 시 **Desktop / CLI**를 고릅니다.
+
+| 모드 | 동작 |
+|------|------|
+| **Desktop** | Codex 앱 단축키·붙여넣기 (조이스틱과 동일) |
+| **CLI** | `app-server` 스레드/승인 · 이어서 **API 키(sk-…)** 설정 · Whisper |
+
+상단 ⊞ 또는 ↻ 길게 = 모드 선택. 🎙 = API 키/마이크.
+
+나중에 “어떤 에이전트를 쓸지” 고르는 UI가 필요하면 그린필드로 붙이세요 (`src/providers/create-bridge.js` 주석 참고).
 
 ### 음성 (Mic)
 
-Electron Web Speech(Google) 대신 **OpenAI Whisper**를 씁니다.
+**Codex Connect** 때 로그인·연결 다음 단계로 마이크용 Platform API 키(`sk-…`) 설정을 띄웁니다.  
+저장하면 Whisper로 패드에서 바로 인식 → Codex 전송. **나중에**를 누르면 Codex 앱 받아쓰기로 임시 사용합니다.
 
 ```bash
-export OPENAI_API_KEY=sk-...
+# 또는 프로젝트 루트 .env / 환경변수
+OPENAI_API_KEY=sk-...
 pnpm start
 ```
-
-홀드=녹음 → 떼면 Whisper 인식 → Codex 앱+스레드로 전송.
 
 ## Run (pnpm)
 
 ```bash
-pnpm install   # Electron + @openai/codex + @cursor/sdk
+pnpm install   # Electron + @openai/codex
 pnpm start
 ```
 
 단축키: `⌘⇧M` — 창 숨기기/보이기
 
-- 초록 점 = 연결됨
+- 초록 점 = Codex 연결됨
 - 노란 점 = demo fallback
 
-## 에이전트 선택
-
-첫 실행 시 **에이전트 선택** 패널이 뜹니다. 이후에도:
+## Codex 연결
 
 | 조작 | 동작 |
 |------|------|
-| **↻** 길게 누르기 | 프로바이더 피커 |
-| **↻** / 제목 옆 **점** | 현재 프로바이더 연결 |
-| Shift + 점 | 강제 로그인 |
+| **↻** / 제목 옆 **점** | Codex Connect / Reconnect |
+| Shift + 점 | Codex 강제 로그인 (브라우저) |
 
-| Provider | 설치 | 로그인 |
-|----------|------|--------|
-| **Codex** | `pnpm install` (`@openai/codex`) | Connect → ChatGPT 브라우저 로그인 |
-| **Claude** | [Claude Code CLI](https://claude.ai/download) | `claude` 로그인 / Connect |
-| **Cursor** | `@cursor/sdk` (pnpm에 포함) | 환경변수 `CURSOR_API_KEY` |
-| **Gemini** | `gemini` CLI (`gemini --acp`) | `gemini` 로그인 |
-
-ChatGPT 단독 옵션은 없습니다 — Codex가 ChatGPT 계정으로 연결됩니다.
+설치: `pnpm install` (`@openai/codex`) · 로그인: Connect → ChatGPT 브라우저 로그인
 
 ## macOS 권한
 

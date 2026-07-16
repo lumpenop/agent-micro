@@ -1,13 +1,19 @@
-const { app, BrowserWindow, ipcMain, screen, globalShortcut, session, systemPreferences } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, globalShortcut, session, systemPreferences, shell } = require('electron');
 const path = require('path');
-const { createBridge, focusProviderApp } = require('./providers/create-bridge');
-const providerConfig = require('./providers/config');
-const { listProviders, getProviderMeta } = require('./providers/registry');
-const { transcribeWithWhisper, hasWhisperAuth } = require('./voice-transcribe');
+const { createCodexBridge, focusCodexDesktop } = require('./providers/create-bridge');
+const connectionMode = require('./connection-mode');
+const {
+  setUserDataPath: setVoiceUserDataPath,
+  transcribeWithWhisper,
+  hasWhisperAuth,
+  writeStoredApiKey,
+  voiceStatus,
+  needsVoiceSetup,
+  markVoiceSetupDone,
+} = require('./voice-transcribe');
 
 let mainWindow = null;
 let bridge = null;
-let currentProvider = null;
 
 async function ensureMicAccess() {
   if (process.platform !== 'darwin') return true;
@@ -78,7 +84,7 @@ function pushState(state) {
   }
 }
 
-/** After Codex/Claude/etc steals focus, bring the pad back so it keeps taking input. */
+/** After Codex steals focus, bring the pad back so it keeps taking input. */
 function refocusPad(delayMs = 280) {
   setTimeout(() => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -103,19 +109,18 @@ function bindBridge(b) {
   });
 }
 
-function switchBridge(providerId, { autoStart = true } = {}) {
-  bridge?.stop();
-  currentProvider = providerId;
-  bridge = createBridge(providerId);
+function ensureBridge({ autoStart = true } = {}) {
+  if (bridge) return bridge;
+  bridge = createCodexBridge();
   bindBridge(bridge);
-  if (autoStart) {
-    setTimeout(() => bridge.start(), 200);
-  }
+  if (autoStart) setTimeout(() => bridge.start(), 200);
   return bridge;
 }
 
 app.whenReady().then(async () => {
-  providerConfig.setUserDataPath(app.getPath('userData'));
+  const userData = app.getPath('userData');
+  setVoiceUserDataPath(userData);
+  connectionMode.setUserDataPath(userData);
 
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
     if (permission === 'media' || permission === 'microphone') callback(true);
@@ -128,14 +133,18 @@ app.whenReady().then(async () => {
   ensureMicAccess();
   createWindow();
 
-  // Codex-first mode for now — always boot on Codex
-  if (providerConfig.getProvider() !== 'codex') {
-    providerConfig.setProvider('codex');
-  }
-  currentProvider = 'codex';
-  bridge = createBridge('codex');
+  // Codex only — Desktop/CLI mode picker is the connection choice
+  bridge = createCodexBridge();
   bindBridge(bridge);
-  setTimeout(() => bridge.start(), 400);
+  if (connectionMode.hasModeChoice()) {
+    setTimeout(() => bridge.start(), 400);
+  } else {
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('mode:needPick');
+      }
+    }, 500);
+  }
 
   globalShortcut.register('CommandOrControl+Shift+M', () => {
     if (!mainWindow) return;
@@ -182,19 +191,50 @@ ipcMain.handle('mic:transcribe', async (_e, payload) => {
   }
 });
 ipcMain.handle('mic:whisperReady', () => ({ ok: hasWhisperAuth() }));
+ipcMain.handle('voice:status', () => voiceStatus());
+ipcMain.handle('voice:setApiKey', (_e, key) => {
+  try {
+    const r = writeStoredApiKey(key);
+    return { ...r, ...voiceStatus() };
+  } catch (e) {
+    return { ok: false, error: e.message, ...voiceStatus() };
+  }
+});
+ipcMain.handle('voice:skipSetup', () => markVoiceSetupDone({ skipped: true }));
+ipcMain.handle('voice:openApiKeysPage', () => {
+  shell.openExternal('https://platform.openai.com/api-keys');
+  return true;
+});
+ipcMain.handle('voice:beginDictation', async () => {
+  if (!bridge?.beginVoiceDictation) {
+    return { ok: false, error: 'dictation not supported' };
+  }
+  return bridge.beginVoiceDictation();
+});
+ipcMain.handle('voice:endDictation', async () => {
+  const r = (await bridge?.endVoiceDictation?.()) || { ok: false };
+  refocusPad(280);
+  return r;
+});
 
-ipcMain.handle('provider:list', () => listProviders());
-ipcMain.handle('provider:get', () => ({
-  provider: providerConfig.getProvider(),
-  resolved: currentProvider || providerConfig.resolveProvider(),
-  needsPick: !providerConfig.hasProviderChoice(),
-  meta: getProviderMeta(currentProvider || providerConfig.resolveProvider()),
+ipcMain.handle('mode:list', () => connectionMode.listModes());
+ipcMain.handle('mode:get', () => ({
+  mode: connectionMode.getMode(),
+  resolved: connectionMode.resolveMode(),
+  needsPick: !connectionMode.hasModeChoice(),
 }));
-ipcMain.handle('provider:set', async (_e, id) => {
-  providerConfig.setProvider(id);
-  switchBridge(id, { autoStart: false });
-  const result = await bridge.connect();
-  return { provider: id, ...result };
+ipcMain.handle('mode:set', async (_e, id) => {
+  connectionMode.setMode(id);
+  ensureBridge({ autoStart: false });
+  bridge.setLinkMode?.(id);
+  const result = await bridge.connect({ linkMode: id });
+  const needsKey =
+    id === 'cli' && result?.ok && needsVoiceSetup();
+  return {
+    ...withVoiceSetup(result),
+    linkMode: id,
+    needsApiKey: !!needsKey,
+  };
 });
 
 ipcMain.handle('codex:getState', () => bridge?.getState());
@@ -229,7 +269,7 @@ ipcMain.handle('codex:voice', async (_e, text) => {
   return r;
 });
 ipcMain.handle('codex:focusApp', () => {
-  focusProviderApp(currentProvider || 'codex');
+  focusCodexDesktop();
   bridge?.focusApp?.();
   refocusPad(320);
   return true;
@@ -237,14 +277,34 @@ ipcMain.handle('codex:focusApp', () => {
 ipcMain.handle('codex:linkInfo', () => bridge?.getLinkInfo());
 ipcMain.handle('codex:loginStatus', () => bridge?.checkLogin());
 ipcMain.handle('codex:login', () => bridge?.login());
+function withVoiceSetup(result) {
+  const base = result && typeof result === 'object' ? result : { ok: !!result };
+  const linkMode = base.linkMode || connectionMode.resolveMode();
+  // API key step only in CLI mode
+  const needsSetup = !!(base.ok && linkMode === 'cli' && needsVoiceSetup());
+  return {
+    ...base,
+    linkMode,
+    needsVoiceSetup: needsSetup,
+    needsApiKey: needsSetup,
+    voice: voiceStatus(),
+  };
+}
+
 ipcMain.handle('codex:connect', async (_e, opts) => {
-  if (!bridge) switchBridge(providerConfig.resolveProvider(), { autoStart: false });
-  return bridge.connect(opts || {});
+  ensureBridge({ autoStart: false });
+  const result = await bridge.connect(opts || {});
+  return withVoiceSetup(result);
 });
 ipcMain.handle('codex:reconnect', async () => {
-  if (!bridge) switchBridge(providerConfig.resolveProvider(), { autoStart: false });
+  ensureBridge({ autoStart: false });
   const info = bridge.getLinkInfo?.() || {};
-  if (!info.connected) return bridge.connect();
-  bridge.stop();
-  return bridge.start();
+  let result;
+  if (!info.connected) result = await bridge.connect();
+  else {
+    bridge.stop();
+    const started = await bridge.start();
+    result = { ok: !!started, reason: started ? 'connected' : 'offline' };
+  }
+  return withVoiceSetup(result);
 });

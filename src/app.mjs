@@ -10,14 +10,8 @@ const REASONING = ['minimal', 'low', 'medium', 'high', 'xhigh'];
 const api = window.codexDesktop;
 const STORAGE_KEY = 'codex-micro-key-icons-v4-codex';
 
-const PROVIDER_LABELS = {
-  codex: 'Codex',
-  claude: 'Claude',
-  cursor: 'Cursor',
-  gemini: 'Gemini',
-};
-
 /** Codex-dedicated layers */
+/** All layers → Codex desktop shortcuts / composer paste */
 const LAYERS = [
   {
     name: 'Codex',
@@ -43,7 +37,7 @@ const LAYERS = [
       up: () => api?.desktop('composer'),
       down: () => api?.desktop('sidebar'),
       left: () => api?.desktop('historyBack'),
-      right: () => api?.desktop('newDesktopChat'),
+      right: () => api?.desktop('newChat'),
     },
   },
 ];
@@ -77,8 +71,8 @@ const ICON_ACTIONS = {
   claude: () => api?.send('Continue.'),
   anthropic: () => api?.send('Continue.'),
   cursor: () => api?.send('Continue.'),
-  grok: () => api?.send('Continue.'),
   gemini: () => api?.send('Continue.'),
+  grok: () => api?.send('Continue.'),
   deepseek: () => api?.send('Continue.'),
   mistral: () => api?.send('Continue.'),
   perplexity: () => api?.send('Continue.'),
@@ -114,6 +108,7 @@ const state = {
   layer: 0,
   connected: false,
   mode: 'offline',
+  linkMode: 'desktop',
   provider: 'codex',
   lastAgentTap: { index: -1, at: 0 },
   lastMicTap: 0,
@@ -164,6 +159,191 @@ let mediaRecorder = null;
 let micChunks = [];
 let micMime = 'audio/webm';
 let micFinishing = false;
+/** 'whisper' | 'codex-dictation' */
+let voiceMode = 'codex-dictation';
+let dictationActive = false;
+
+const voicePanel = document.getElementById('voice-panel');
+const voiceTitleEl = document.getElementById('voice-title');
+const voiceLeadEl = document.getElementById('voice-lead');
+const voiceModeEl = document.getElementById('voice-mode');
+const voiceHintEl = document.getElementById('voice-hint');
+const voiceApiKeyEl = document.getElementById('voice-api-key');
+let voicePromptedThisSession = false;
+
+async function refreshVoiceStatus() {
+  const s = await api?.voiceStatus?.();
+  if (!s) return null;
+  voiceMode = s.mode || (s.whisperReady ? 'whisper' : 'codex-dictation');
+  if (voiceModeEl) {
+    voiceModeEl.textContent = s.whisperReady
+      ? '마이크 준비됨 · Whisper'
+      : 'Codex 연결 후 · API 키 저장 필요';
+  }
+  if (voiceHintEl) {
+    voiceHintEl.textContent = s.whisperReady
+      ? '키캡 마이크 · 말하기 → Codex'
+      : '키 발급 → 붙여넣기 → 저장하고 완료';
+  }
+  return s;
+}
+
+function openVoicePanel({ fromConnect = false } = {}) {
+  if (voiceTitleEl) {
+    voiceTitleEl.textContent = fromConnect ? 'CLI · API 키' : 'API 키 · 마이크';
+  }
+  if (voiceLeadEl) {
+    voiceLeadEl.textContent = fromConnect
+      ? 'CLI 모드 연결이 끝났습니다. Whisper/전송용 Platform API 키(sk-…)를 저장하세요.'
+      : 'CLI 모드에서 마이크(Whisper)와 API 호출에 쓰는 OpenAI 키입니다.';
+  }
+  if (voiceModeEl) {
+    voiceModeEl.textContent = fromConnect
+      ? 'CLI 연결 완료 · API 키 저장'
+      : `모드 · ${state.linkMode === 'cli' ? 'CLI' : 'Desktop'}`;
+  }
+  voicePanel?.removeAttribute('hidden');
+  refreshVoiceStatus();
+  flashAction(fromConnect ? 'API 키 설정' : '마이크 / API 키');
+  voiceApiKeyEl?.focus?.();
+}
+
+function closeVoicePanel() {
+  voicePanel?.setAttribute('hidden', '');
+}
+
+async function maybePromptVoiceSetup(result, { force = false } = {}) {
+  const linkMode = result?.linkMode || state.linkMode;
+  if (linkMode !== 'cli' && !force) return false;
+  const needs =
+    force ||
+    result?.needsApiKey ||
+    result?.needsVoiceSetup ||
+    (await api?.voiceStatus?.())?.needsSetup;
+  if (!needs) return false;
+  if (voicePromptedThisSession && !force) return false;
+  voicePromptedThisSession = true;
+  openVoicePanel({ fromConnect: true });
+  return true;
+}
+
+const modePanel = document.getElementById('mode-panel');
+const modeGrid = document.getElementById('mode-grid');
+const modeHint = document.getElementById('mode-hint');
+let modePicking = false;
+
+async function openModePicker() {
+  closeVoicePanel();
+  try {
+    closeGuide();
+  } catch {
+    /* ignore */
+  }
+  try {
+    closeIconPicker();
+  } catch {
+    /* ignore */
+  }
+  if (!modePanel || !modeGrid) return;
+  const modes = (await api?.listModes?.()) || [];
+  const info = await api?.getMode?.();
+  const active = info?.mode || state.linkMode;
+  modeGrid.innerHTML = modes
+    .map(
+      (m) => `<button type="button" class="provider-tile${m.id === active ? ' active' : ''}" data-mode="${m.id}">
+        <strong>${m.label}</strong>
+        <span>${m.blurb}</span>
+      </button>`
+    )
+    .join('');
+  if (modeHint) modeHint.textContent = '선택 후 바로 연결합니다';
+  modePanel.hidden = false;
+  flashAction('Desktop / CLI 선택');
+}
+
+function closeModePicker() {
+  if (modePanel) modePanel.hidden = true;
+  modePicking = false;
+}
+
+modeGrid?.addEventListener('click', async (e) => {
+  const tile = e.target.closest('[data-mode]');
+  if (!tile || modePicking) return;
+  const id = tile.getAttribute('data-mode');
+  modePicking = true;
+  modeGrid.querySelectorAll('.provider-tile').forEach((el) => {
+    el.classList.toggle('busy', true);
+    el.classList.toggle('active', el === tile);
+  });
+  if (modeHint) modeHint.textContent = `${id} 연결 중…`;
+  flashAction(`mode · ${id}`);
+  try {
+    const result = await api?.setMode?.(id);
+    state.linkMode = id;
+    closeModePicker();
+    render();
+    if (result?.ok === false && result?.reason === 'missing') {
+      flashAction('Codex 없음 · pnpm install');
+    } else if (result?.ok === false && result?.reason === 'login') {
+      flashAction('로그인 필요 · ↻ 다시');
+    } else if (result?.ok) {
+      const prompted = await maybePromptVoiceSetup({ ...result, linkMode: id });
+      flashAction(
+        prompted
+          ? 'CLI · API 키 입력'
+          : id === 'cli'
+            ? 'CLI connected'
+            : 'Desktop connected'
+      );
+    } else {
+      flashAction(result?.reason || 'connect failed');
+    }
+  } catch (err) {
+    flashAction(err?.message || 'mode failed');
+    modePicking = false;
+    modeGrid.querySelectorAll('.provider-tile').forEach((el) => el.classList.remove('busy'));
+  }
+});
+
+document.getElementById('mode-close')?.addEventListener('click', closeModePicker);
+modePanel?.addEventListener('click', (e) => {
+  if (e.target === modePanel) closeModePicker();
+});
+
+async function startCodexDictation({ latched = false } = {}) {
+  if (dictationActive) return;
+  flashAction('Codex로 이동…');
+  const r = await api?.beginVoiceDictation?.();
+  if (!r?.ok) {
+    // ⌘K가 Cursor 팔레트를 연 경우 등 — Whisper 키 설정으로 유도
+    flashAction(r?.error || 'Codex 앱을 연 뒤 다시');
+    openVoicePanel({ fromConnect: false });
+    return;
+  }
+  dictationActive = true;
+  state.recording = true;
+  micLatched = latched;
+  padEl.classList.add('recording');
+  pad3d?.setRecording(true);
+  flashAction(latched ? 'Codex에서 말하세요 (탭으로 전송)' : 'Codex에서 말하세요 · 떼면 전송');
+}
+
+async function stopCodexDictation({ submit = true } = {}) {
+  if (!dictationActive && !state.recording) return;
+  dictationActive = false;
+  state.recording = false;
+  micLatched = false;
+  padEl.classList.remove('recording');
+  pad3d?.setRecording(false);
+  if (!submit) {
+    flashAction('받아쓰기 취소');
+    await api?.endVoiceDictation?.();
+    return;
+  }
+  flashAction('Codex 전송…');
+  await api?.endVoiceDictation?.();
+  flashAction('Codex 전송');
+}
 
 function stopMicStream() {
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
@@ -240,6 +420,18 @@ function blobToBase64(blob) {
 }
 
 async function startRecording({ latched = false } = {}) {
+  await refreshVoiceStatus();
+  // CLI: Whisper + API key. Desktop: app dictation unless key saved.
+  if (state.linkMode === 'cli' && voiceMode !== 'whisper') {
+    flashAction('CLI · API 키 필요');
+    openVoicePanel({ fromConnect: true });
+    return;
+  }
+  if (voiceMode !== 'whisper') {
+    await startCodexDictation({ latched });
+    return;
+  }
+
   const ok = await ensureMicPermission({ silent: true });
   if (!ok) {
     flashAction('mic blocked · allow in System Settings');
@@ -324,7 +516,9 @@ async function finishVoiceToCodexFromAudio() {
     const result = await api?.transcribe?.({ base64, mimeType: blob.type || micMime });
     if (!result?.ok) {
       if (result?.code === 'NO_API_KEY') {
-        flashAction('OPENAI_API_KEY 필요 (Whisper)');
+        flashAction('API 키 없음 · Codex 받아쓰기로 전환');
+        voiceMode = 'codex-dictation';
+        openVoicePanel();
       } else {
         flashAction(result?.error || '인식 실패');
       }
@@ -342,6 +536,11 @@ async function finishVoiceToCodexFromAudio() {
 }
 
 function stopRecording({ process = true } = {}) {
+  if (dictationActive) {
+    stopCodexDictation({ submit: process });
+    return;
+  }
+
   if (!state.recording && !mediaRecorder) return;
   state.recording = false;
   micLatched = false;
@@ -500,7 +699,7 @@ const GUIDE_ITEMS = [
   {
     key: '↻ / 점',
     title: 'Codex 연결',
-    text: '클릭 = 연결 · Shift+점 = 강제 로그인 · 길게 = 프로바이더',
+    text: '클릭 = Codex 연결 · Shift+점 = 강제 로그인',
   },
 ];
 
@@ -572,72 +771,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeGuide();
     closeIconPicker();
-    closeProviderPicker();
   }
-});
-
-const providerPanel = document.getElementById('provider-panel');
-const providerGrid = document.getElementById('provider-grid');
-const providerHint = document.getElementById('provider-hint');
-let providerList = [];
-let providerPicking = false;
-
-async function openProviderPicker() {
-  closeGuide();
-  closeIconPicker();
-  if (!providerPanel || !providerGrid) return;
-  providerList = (await api?.listProviders?.()) || [];
-  const info = await api?.getProvider?.();
-  const active = info?.resolved || state.provider;
-  providerGrid.innerHTML = providerList
-    .map(
-      (p) => `<button type="button" class="provider-tile${p.id === active ? ' active' : ''}" data-provider="${p.id}">
-        <strong>${p.label}</strong>
-        <span>${p.blurb}</span>
-      </button>`
-    )
-    .join('');
-  if (providerHint) {
-    providerHint.textContent = '선택 후 자동으로 로그인·연결을 시도합니다';
-  }
-  providerPanel.hidden = false;
-}
-
-function closeProviderPicker() {
-  if (providerPanel) providerPanel.hidden = true;
-  providerPicking = false;
-}
-
-providerGrid?.addEventListener('click', async (e) => {
-  const tile = e.target.closest('[data-provider]');
-  if (!tile || providerPicking) return;
-  const id = tile.getAttribute('data-provider');
-  providerPicking = true;
-  providerGrid.querySelectorAll('.provider-tile').forEach((el) => {
-    el.classList.toggle('busy', true);
-    el.classList.toggle('active', el === tile);
-  });
-  if (providerHint) providerHint.textContent = `${PROVIDER_LABELS[id] || id} 연결 중…`;
-  flashAction(`provider · ${id}`);
-  try {
-    const result = await api?.setProvider?.(id);
-    state.provider = id;
-    if (result?.ok) flashAction(`connected · ${id}`);
-    else if (result?.reason === 'missing') flashAction(`${id} 설치 필요`);
-    else if (result?.reason === 'login') flashAction(`${id} 로그인 필요`);
-    else flashAction(result?.reason || `demo · ${id}`);
-    closeProviderPicker();
-    render();
-  } catch (err) {
-    flashAction(err?.message || 'provider failed');
-    providerPicking = false;
-    providerGrid.querySelectorAll('.provider-tile').forEach((el) => el.classList.remove('busy'));
-  }
-});
-
-document.getElementById('provider-close')?.addEventListener('click', closeProviderPicker);
-providerPanel?.addEventListener('click', (e) => {
-  if (e.target === providerPanel) closeProviderPicker();
 });
 
 function render() {
@@ -650,12 +784,12 @@ function render() {
   hud.status.textContent = statusLabel(current.status || 'off');
   hud.reason.textContent = REASONING[state.reasoningIndex];
   const layerName = layerDisplayName(state.layer);
-  const prov = PROVIDER_LABELS[state.provider] || state.provider;
+  const link = state.linkMode === 'cli' ? 'CLI' : 'Desktop';
   hud.link.textContent = state.connected
-    ? `${prov} · ${state.mode} · ${layerName}`
+    ? `Codex · ${link} · ${layerName}`
     : state.mode === 'offline'
-      ? `demo · ${prov} · ${layerName}`
-      : `${prov} · ${state.mode} · ${layerName}`;
+      ? `demo · ${link} · ${layerName}`
+      : `Codex · ${link} · ${layerName}`;
   linkDot.classList.toggle('on', state.connected);
   linkDot.classList.toggle('demo', !state.connected);
   pad3d.setCmdActive('fast', state.fastMode);
@@ -665,7 +799,8 @@ function applyBridgeState(s) {
   if (!s) return;
   state.connected = !!s.connected;
   state.mode = s.mode || 'offline';
-  if (s.provider) state.provider = s.provider;
+  if (s.linkMode) state.linkMode = s.linkMode;
+  state.provider = 'codex';
   state.selected = s.selected ?? state.selected;
   state.reasoningIndex = s.reasoningIndex ?? state.reasoningIndex;
   state.fastMode = !!s.fastMode;
@@ -694,7 +829,7 @@ async function runIconAction(cmd) {
   return false;
 }
 
-/** Mic PTT: hold = talk · double-tap down = hands-free latch */
+/** Mic PTT: hold = talk · double-tap = hands-free latch */
 function onMicPress() {
   const now = Date.now();
   if (now - state.lastMicTap < 350) {
@@ -812,21 +947,31 @@ try {
 }
 
 async function connectAgent({ forceLogin = false } = {}) {
+  const modeInfo = await api?.getMode?.();
+  if (modeInfo?.needsPick) {
+    openModePicker();
+    return;
+  }
   linkDot?.classList.add('busy');
-  const label = PROVIDER_LABELS[state.provider] || state.provider;
-  flashAction(forceLogin ? `${label} 로그인…` : 'connecting…');
+  flashAction(forceLogin ? 'Codex 로그인…' : 'Codex connecting…');
   try {
     const result = forceLogin
       ? await api?.connect?.({ forceLogin: true })
       : await api?.reconnect?.();
+    if (result?.linkMode) state.linkMode = result.linkMode;
     if (result?.ok === false && result?.reason === 'missing') {
-      flashAction(`${label} 없음 · 설치 확인`);
+      flashAction('Codex 없음 · pnpm install');
     } else if (result?.ok === false && result?.reason === 'login') {
-      flashAction('로그인 필요 · ↻ 다시 클릭');
+      flashAction('Codex 로그인 필요 · ↻ 다시');
     } else if (result?.ok || result === true) {
-      flashAction('connected');
+      const prompted = await maybePromptVoiceSetup(result);
+      flashAction(
+        prompted
+          ? 'CLI · API 키 설정'
+          : `Codex · ${state.linkMode === 'cli' ? 'CLI' : 'Desktop'}`
+      );
     } else {
-      flashAction('demo · ↻ 로 연결');
+      flashAction('demo · 모드/↻ 로 연결');
     }
   } catch (err) {
     flashAction(err?.message || 'connect failed');
@@ -850,7 +995,7 @@ btnReconnect?.addEventListener('pointerdown', () => {
   reconnectHoldTimer = setTimeout(() => {
     reconnectHoldTimer = null;
     reconnectHoldFired = true;
-    openProviderPicker();
+    openModePicker();
   }, 550);
 });
 btnReconnect?.addEventListener('pointerup', () => {
@@ -869,6 +1014,8 @@ btnReconnect?.addEventListener('click', () => {
   connectAgent();
 });
 
+document.getElementById('btn-mode')?.addEventListener('click', () => openModePicker());
+
 api?.onState?.(applyBridgeState);
 api?.onLog?.((m) => {
   if (m) console.log('[agent]', m);
@@ -876,18 +1023,42 @@ api?.onLog?.((m) => {
 api?.onMicStatus?.((s) => {
   if (s?.granted) micGranted = true;
 });
-api?.getProvider?.().then((info) => {
-  state.provider = 'codex';
-  if (info?.resolved && info.resolved !== 'codex') {
-    // stay Codex-first; long-press ↻ can still switch later
-  }
+api?.onNeedModePick?.(() => openModePicker());
+state.provider = 'codex';
+api?.getMode?.().then((info) => {
+  if (info?.resolved) state.linkMode = info.resolved;
+  if (info?.needsPick) openModePicker();
   render();
 });
 api?.getState?.().then(applyBridgeState);
 
-ensureMicPermission({ silent: true }).then(async (ok) => {
-  const w = await api?.whisperReady?.();
-  if (ok && w?.ok) flashAction('Codex mic · Whisper ready');
-  else if (ok) flashAction('mic ok · OPENAI_API_KEY 필요');
+document.getElementById('btn-voice')?.addEventListener('click', () => openVoicePanel());
+document.getElementById('voice-close')?.addEventListener('click', async () => {
+  const s = await api?.voiceStatus?.();
+  if (s?.needsSetup) await api?.skipVoiceSetup?.();
+  closeVoicePanel();
 });
-flashAction('Codex mode');
+document.getElementById('voice-save')?.addEventListener('click', async () => {
+  const key = voiceApiKeyEl?.value || '';
+  const r = await api?.setVoiceApiKey?.(key);
+  if (!r?.ok) {
+    flashAction(r?.error || '저장 실패');
+    return;
+  }
+  if (voiceApiKeyEl) voiceApiKeyEl.value = '';
+  await refreshVoiceStatus();
+  flashAction(r.whisperReady ? 'API 키 · Whisper 준비' : '저장됨');
+  closeVoicePanel();
+});
+document.getElementById('voice-skip')?.addEventListener('click', async () => {
+  await api?.skipVoiceSetup?.();
+  await refreshVoiceStatus();
+  closeVoicePanel();
+  flashAction(state.linkMode === 'cli' ? '나중에 · 키 없이 CLI' : '나중에');
+});
+document.getElementById('voice-open-keys')?.addEventListener('click', () => {
+  api?.openApiKeysPage?.();
+  flashAction('platform.openai.com 열림');
+});
+
+flashAction('Codex · Desktop / CLI');

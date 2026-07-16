@@ -22,7 +22,6 @@
     "electron": "^37.2.0"
   },
   "dependencies": {
-    "@cursor/sdk": "^1.0.23",
     "@openai/codex": "^0.144.5"
   }
 }

@@ -1,5 +1,7 @@
 # dependencies
 node_modules/
+.pnpm-store/
+.pnpm-debug.log*
 
 # logs / debug
 *.log
@@ -24,6 +26,8 @@ release/
 *.swp
 *.swo
 .cursor/
+.env
+.env.*
 
 # temp / screenshots
 /tmp/
