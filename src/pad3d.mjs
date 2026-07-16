@@ -379,15 +379,15 @@ export function createPad3D(container, handlers = {}) {
   const originX = -1.575;
   const originZ = -1.575;
 
-  // dial — dark socket + white knurled knob so the circle reads instantly
+  // dial — outer Ø ≈ 0.90 (keycap 0.92)
   const dialGroup = new THREE.Group();
   const dialBase = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.5, 0.52, 0.12, 48),
+    new THREE.CylinderGeometry(0.42, 0.44, 0.1, 48),
     new THREE.MeshStandardMaterial({ color: 0x2e353c, roughness: 0.6, metalness: 0.3 })
   );
   // shadow well under the knob emphasizes the round silhouette
   const dialWell = new THREE.Mesh(
-    new THREE.CircleGeometry(0.5, 48),
+    new THREE.CircleGeometry(0.43, 48),
     new THREE.MeshBasicMaterial({
       color: 0x000000,
       transparent: true,
@@ -396,7 +396,7 @@ export function createPad3D(container, handlers = {}) {
     })
   );
   dialWell.rotation.x = -Math.PI / 2;
-  dialWell.position.y = 0.07;
+  dialWell.position.y = 0.055;
   dialGroup.add(dialWell);
 
   // smooth knob — dark shaded side wall + bright top makes the circle read
@@ -429,26 +429,26 @@ export function createPad3D(container, handlers = {}) {
     clearcoatRoughness: 0.18,
   });
   const dialKnob = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.42, 0.44, 0.34, 64),
+    new THREE.CylinderGeometry(0.355, 0.375, 0.28, 64),
     [dialSideMat, dialTopMat, dialSideMat]
   );
-  dialKnob.position.y = 0.22;
+  dialKnob.position.y = 0.18;
   dialKnob.castShadow = true;
 
   const mark = new THREE.Mesh(
-    new THREE.BoxGeometry(0.05, 0.05, 0.22),
+    new THREE.BoxGeometry(0.04, 0.04, 0.17),
     new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.4 })
   );
-  mark.position.set(0, 0.18, -0.21);
+  mark.position.set(0, 0.15, -0.17);
   dialKnob.add(mark);
 
   // thin groove near the rim — subtle circular cue, stays smooth
   const ring = new THREE.Mesh(
-    new THREE.TorusGeometry(0.37, 0.012, 8, 64),
+    new THREE.TorusGeometry(0.31, 0.01, 8, 64),
     new THREE.MeshStandardMaterial({ color: 0xc4c0b6, roughness: 0.5 })
   );
   ring.rotation.x = Math.PI / 2;
-  ring.position.y = 0.175;
+  ring.position.y = 0.145;
   dialKnob.add(ring);
 
   dialGroup.add(dialBase, dialKnob);
@@ -459,61 +459,71 @@ export function createPad3D(container, handlers = {}) {
   scene.add(dialGroup);
   interactives.push(dialBase, dialKnob);
 
-  // joystick — gate ring + rubber boot + shaft + concave cap
+  // joystick — outer Ø ≈ 0.90, matches dial / keycap scale
   const joyGroup = new THREE.Group();
-  // contact shadow under the base so the round socket reads on the plate
+  // deeper contact shadow under the socket floor
   const joyWell = new THREE.Mesh(
-    new THREE.CircleGeometry(0.54, 48),
+    new THREE.CircleGeometry(0.44, 48),
     new THREE.MeshBasicMaterial({
       color: 0x000000,
       transparent: true,
-      opacity: 0.48,
+      opacity: 0.62,
       depthWrite: false,
     })
   );
   joyWell.rotation.x = -Math.PI / 2;
-  joyWell.position.y = 0.02;
+  joyWell.position.y = 0.015;
   joyGroup.add(joyWell);
 
+  // recessed floor plate — darker so the pit reads
+  const joyFloor = new THREE.Mesh(
+    new THREE.CircleGeometry(0.33, 48),
+    new THREE.MeshStandardMaterial({ color: 0x0c1014, roughness: 0.85, metalness: 0.08 })
+  );
+  joyFloor.rotation.x = -Math.PI / 2;
+  joyFloor.position.y = 0.055;
+  joyGroup.add(joyFloor);
+
   const joyBase = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.46, 0.48, 0.12, 48),
-    new THREE.MeshStandardMaterial({ color: 0x1a1f24, roughness: 0.7, metalness: 0.2 })
+    new THREE.CylinderGeometry(0.37, 0.39, 0.1, 48),
+    new THREE.MeshStandardMaterial({ color: 0x12171c, roughness: 0.75, metalness: 0.15 })
   );
   const joyGate = new THREE.Mesh(
-    new THREE.TorusGeometry(0.4, 0.03, 10, 48),
+    new THREE.TorusGeometry(0.32, 0.024, 10, 48),
     new THREE.MeshStandardMaterial({ color: 0x4a525a, roughness: 0.45, metalness: 0.3 })
   );
   joyGate.rotation.x = Math.PI / 2;
-  joyGate.position.y = 0.07;
+  joyGate.position.y = 0.06;
 
   const joyStick = new THREE.Group();
   const joyBoot = new THREE.Mesh(
-    new THREE.SphereGeometry(0.2, 28, 20),
-    new THREE.MeshStandardMaterial({ color: 0x14181c, roughness: 0.85 })
+    new THREE.SphereGeometry(0.155, 28, 20),
+    new THREE.MeshStandardMaterial({ color: 0x1a1f24, roughness: 0.85 })
   );
   joyBoot.scale.set(1, 0.55, 1);
-  joyBoot.position.y = 0.08;
+  joyBoot.position.y = 0.065;
+  // shaft: lighter, less contrast — avoid heavy side shadow look
   const joyShaft = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.075, 0.095, 0.3, 24),
-    new THREE.MeshStandardMaterial({ color: 0x2c3238, roughness: 0.4, metalness: 0.35 })
+    new THREE.CylinderGeometry(0.058, 0.072, 0.24, 24),
+    new THREE.MeshStandardMaterial({ color: 0x4a525a, roughness: 0.55, metalness: 0.12 })
   );
-  joyShaft.position.y = 0.24;
-  joyShaft.castShadow = true;
+  joyShaft.position.y = 0.18;
+  joyShaft.castShadow = false;
   const joyCap = new THREE.Mesh(
-    new THREE.SphereGeometry(0.19, 32, 24),
+    new THREE.SphereGeometry(0.145, 32, 24),
     new THREE.MeshStandardMaterial({ color: 0x394048, roughness: 0.55, metalness: 0.1 })
   );
   joyCap.scale.set(1, 0.72, 1);
-  joyCap.position.y = 0.42;
+  joyCap.position.y = 0.32;
   joyCap.castShadow = true;
   // concave thumb dimple
   const joyDimple = new THREE.Mesh(
-    new THREE.SphereGeometry(0.13, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.45),
+    new THREE.SphereGeometry(0.1, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.45),
     new THREE.MeshStandardMaterial({ color: 0x272d33, roughness: 0.65, side: THREE.BackSide })
   );
   joyDimple.rotation.x = Math.PI;
   joyDimple.scale.set(1, 0.4, 1);
-  joyDimple.position.y = 0.52;
+  joyDimple.position.y = 0.4;
   joyStick.add(joyBoot, joyShaft, joyCap, joyDimple);
   joyGroup.add(joyBase, joyGate, joyStick);
   joyGroup.position.set(originX + gap * 3, 0.28, originZ);
