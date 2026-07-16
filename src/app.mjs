@@ -679,13 +679,9 @@ function onJoy(dir) {
   state.lastJoy = { dir, at: now };
   const layer = LAYERS[state.layer] || LAYERS[0];
   const fn = layer.joy?.[dir];
-  if (fn) {
-    fn();
-    // Desktop / focus-stealing actions — return stick ASAP
-    if (state.layer === 0 || state.layer === 2) {
-      pad3d?.resetJoy?.();
-    }
-  } else flashAction(`joy · ${dir}`);
+  if (fn) fn();
+  else flashAction(`joy · ${dir}`);
+  // Stick snaps back on window blur when Codex/etc steals focus — don't reset mid-drag
 }
 
 let pad3d;

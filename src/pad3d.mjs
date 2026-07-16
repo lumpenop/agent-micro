@@ -689,12 +689,20 @@ export function createPad3D(container, handlers = {}) {
   }
 
   function onFocusLost() {
-    resetJoy();
-    if (dialDragging) dialDragging = false;
+    // Soft recenter only — pad is re-focused after Codex shortcuts so keep usable
+    joyTx = 0;
+    joyTz = 0;
+    if (!joyDragging) {
+      joyCx = 0;
+      joyCz = 0;
+      applyJoyPose(0, 0);
+    }
+    joyDragging = false;
+    dialDragging = false;
+    if (pressed?.userData?.type === 'cmd' && pressed.userData.cmd === 'mic') {
+      handlers.onCmdRelease?.('mic');
+    }
     if (pressed) {
-      if (pressed.userData?.type === 'cmd' && pressed.userData.cmd === 'mic') {
-        handlers.onCmdRelease?.('mic');
-      }
       pressVisual(pressed, false);
       pressed = null;
     }

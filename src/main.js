@@ -77,6 +77,22 @@ function pushState(state) {
   }
 }
 
+/** After Codex/Claude/etc steals focus, bring the pad back so it keeps taking input. */
+function refocusPad(delayMs = 280) {
+  setTimeout(() => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    try {
+      mainWindow.setAlwaysOnTop(true, 'floating');
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+      if (typeof app.focus === 'function') app.focus({ steal: true });
+    } catch (e) {
+      console.log('[refocus]', e.message);
+    }
+  }, delayMs);
+}
+
 function bindBridge(b) {
   b.on('state', (s) => pushState(s));
   b.on('log', (m) => {
@@ -177,7 +193,11 @@ ipcMain.handle('provider:set', async (_e, id) => {
 });
 
 ipcMain.handle('codex:getState', () => bridge?.getState());
-ipcMain.handle('codex:select', (_e, index, focus) => bridge?.select(index, { focus }));
+ipcMain.handle('codex:select', async (_e, index, focus) => {
+  const r = await bridge?.select(index, { focus });
+  if (focus) refocusPad(320);
+  return r;
+});
 ipcMain.handle('codex:approve', () => bridge?.approve());
 ipcMain.handle('codex:decline', () => bridge?.decline());
 ipcMain.handle('codex:fork', () => bridge?.fork());
@@ -187,10 +207,16 @@ ipcMain.handle('codex:toggleFast', () => bridge?.toggleFast());
 ipcMain.handle('codex:togglePlan', () => bridge?.togglePlan());
 ipcMain.handle('codex:skill', (_e, name) => bridge?.skill(name));
 ipcMain.handle('codex:newChat', () => bridge?.newChat());
-ipcMain.handle('codex:desktop', (_e, action) => bridge?.desktopAction(action));
+ipcMain.handle('codex:desktop', async (_e, action) => {
+  const r = await bridge?.desktopAction(action);
+  // desktop shortcuts activate Codex briefly — return focus to pad
+  refocusPad(220);
+  return r;
+});
 ipcMain.handle('codex:focusApp', () => {
   focusProviderApp(currentProvider || 'codex');
   bridge?.focusApp?.();
+  refocusPad(320);
   return true;
 });
 ipcMain.handle('codex:linkInfo', () => bridge?.getLinkInfo());
