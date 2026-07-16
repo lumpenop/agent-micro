@@ -1,16 +1,18 @@
 const { app, BrowserWindow, ipcMain, screen, globalShortcut, session, systemPreferences } = require('electron');
 const path = require('path');
-const { CodexBridge, focusChatGPT } = require('./codex-bridge');
+const { createBridge, focusProviderApp } = require('./providers/create-bridge');
+const providerConfig = require('./providers/config');
+const { listProviders, getProviderMeta } = require('./providers/registry');
 
 let mainWindow = null;
 let bridge = null;
+let currentProvider = null;
 
 async function ensureMicAccess() {
   if (process.platform !== 'darwin') return true;
   try {
     const status = systemPreferences.getMediaAccessStatus('microphone');
     if (status === 'granted') return true;
-    // shows the macOS permission dialog immediately
     const ok = await systemPreferences.askForMediaAccess('microphone');
     return !!ok;
   } catch {
@@ -48,7 +50,6 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
   mainWindow.webContents.on('did-finish-load', () => {
-    // prompt mic as soon as UI is ready
     ensureMicAccess().then((ok) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('mic:status', { granted: ok });
@@ -85,7 +86,20 @@ function bindBridge(b) {
   });
 }
 
+function switchBridge(providerId, { autoStart = true } = {}) {
+  bridge?.stop();
+  currentProvider = providerId;
+  bridge = createBridge(providerId);
+  bindBridge(bridge);
+  if (autoStart) {
+    setTimeout(() => bridge.start(), 200);
+  }
+  return bridge;
+}
+
 app.whenReady().then(async () => {
+  providerConfig.setUserDataPath(app.getPath('userData'));
+
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
     if (permission === 'media' || permission === 'microphone') callback(true);
     else callback(false);
@@ -94,14 +108,25 @@ app.whenReady().then(async () => {
     return permission === 'media' || permission === 'microphone';
   });
 
-  // ask immediately on launch (before first mic press)
   ensureMicAccess();
-
   createWindow();
 
-  bridge = new CodexBridge();
+  const chosen = providerConfig.hasProviderChoice();
+  currentProvider = providerConfig.resolveProvider();
+  bridge = createBridge(currentProvider);
   bindBridge(bridge);
-  setTimeout(() => bridge.start(), 400);
+  // Wait for picker on first run; otherwise connect
+  if (chosen) {
+    setTimeout(() => bridge.start(), 400);
+  } else {
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('provider:needPick');
+      }
+      bridge._seedDemo?.();
+      bridge.emitState?.('choose provider');
+    }, 500);
+  }
 
   globalShortcut.register('CommandOrControl+Shift+M', () => {
     if (!mainWindow) return;
@@ -137,6 +162,20 @@ ipcMain.handle('mic:status', () => {
   }
 });
 
+ipcMain.handle('provider:list', () => listProviders());
+ipcMain.handle('provider:get', () => ({
+  provider: providerConfig.getProvider(),
+  resolved: currentProvider || providerConfig.resolveProvider(),
+  needsPick: !providerConfig.hasProviderChoice(),
+  meta: getProviderMeta(currentProvider || providerConfig.resolveProvider()),
+}));
+ipcMain.handle('provider:set', async (_e, id) => {
+  providerConfig.setProvider(id);
+  switchBridge(id, { autoStart: false });
+  const result = await bridge.connect();
+  return { provider: id, ...result };
+});
+
 ipcMain.handle('codex:getState', () => bridge?.getState());
 ipcMain.handle('codex:select', (_e, index, focus) => bridge?.select(index, { focus }));
 ipcMain.handle('codex:approve', () => bridge?.approve());
@@ -150,12 +189,21 @@ ipcMain.handle('codex:skill', (_e, name) => bridge?.skill(name));
 ipcMain.handle('codex:newChat', () => bridge?.newChat());
 ipcMain.handle('codex:desktop', (_e, action) => bridge?.desktopAction(action));
 ipcMain.handle('codex:focusApp', () => {
-  focusChatGPT();
+  focusProviderApp(currentProvider || 'codex');
+  bridge?.focusApp?.();
   return true;
 });
+ipcMain.handle('codex:linkInfo', () => bridge?.getLinkInfo());
+ipcMain.handle('codex:loginStatus', () => bridge?.checkLogin());
+ipcMain.handle('codex:login', () => bridge?.login());
+ipcMain.handle('codex:connect', async (_e, opts) => {
+  if (!bridge) switchBridge(providerConfig.resolveProvider(), { autoStart: false });
+  return bridge.connect(opts || {});
+});
 ipcMain.handle('codex:reconnect', async () => {
-  bridge?.stop();
-  bridge = new CodexBridge();
-  bindBridge(bridge);
+  if (!bridge) switchBridge(providerConfig.resolveProvider(), { autoStart: false });
+  const info = bridge.getLinkInfo?.() || {};
+  if (!info.connected) return bridge.connect();
+  bridge.stop();
   return bridge.start();
 });

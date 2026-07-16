@@ -18,8 +18,16 @@ contextBridge.exposeInMainWorld('codexDesktop', {
   desktop: (action) => ipcRenderer.invoke('codex:desktop', action),
   focusApp: () => ipcRenderer.invoke('codex:focusApp'),
   reconnect: () => ipcRenderer.invoke('codex:reconnect'),
+  connect: (opts) => ipcRenderer.invoke('codex:connect', opts),
+  linkInfo: () => ipcRenderer.invoke('codex:linkInfo'),
+  loginStatus: () => ipcRenderer.invoke('codex:loginStatus'),
+  login: () => ipcRenderer.invoke('codex:login'),
   requestMic: () => ipcRenderer.invoke('mic:request'),
   micStatus: () => ipcRenderer.invoke('mic:status'),
+
+  listProviders: () => ipcRenderer.invoke('provider:list'),
+  getProvider: () => ipcRenderer.invoke('provider:get'),
+  setProvider: (id) => ipcRenderer.invoke('provider:set', id),
 
   onState: (cb) => {
     const handler = (_e, state) => cb(state);
@@ -35,5 +43,10 @@ contextBridge.exposeInMainWorld('codexDesktop', {
     const handler = (_e, status) => cb(status);
     ipcRenderer.on('mic:status', handler);
     return () => ipcRenderer.removeListener('mic:status', handler);
+  },
+  onNeedProviderPick: (cb) => {
+    const handler = () => cb();
+    ipcRenderer.on('provider:needPick', handler);
+    return () => ipcRenderer.removeListener('provider:needPick', handler);
   },
 });

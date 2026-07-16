@@ -10,10 +10,17 @@ const REASONING = ['minimal', 'low', 'medium', 'high', 'xhigh'];
 const api = window.codexDesktop;
 const STORAGE_KEY = 'codex-micro-key-icons-v3';
 
-/** Layer maps — matches Codex Micro style: core / skills / desktop */
+const PROVIDER_LABELS = {
+  codex: 'Codex',
+  claude: 'Claude',
+  cursor: 'Cursor',
+  gemini: 'Gemini',
+};
+
+/** Layer maps — core / skills / desktop (core name follows active provider) */
 const LAYERS = [
   {
-    name: 'Codex',
+    name: 'Core',
     joy: {
       up: () => api?.togglePlan(),
       down: () => api?.desktop('sidebar'),
@@ -40,6 +47,13 @@ const LAYERS = [
     },
   },
 ];
+
+function layerDisplayName(layerIndex) {
+  const layer = LAYERS[layerIndex];
+  if (!layer) return `L${layerIndex + 1}`;
+  if (layerIndex === 0) return PROVIDER_LABELS[state.provider] || 'Core';
+  return layer.name;
+}
 
 /** Icon → action when that icon is assigned to a command key */
 const ICON_ACTIONS = {
@@ -103,6 +117,7 @@ const state = {
   layer: 0,
   connected: false,
   mode: 'offline',
+  provider: 'codex',
   lastAgentTap: { index: -1, at: 0 },
   lastMicTap: 0,
   lastSendTap: 0,
@@ -312,7 +327,7 @@ const GUIDE_ITEMS = [
   {
     visual: 'agents',
     title: '에이전트 슬롯',
-    text: '투명 키 ×6 · 탭 = 전환 · 더블탭 = Codex 앱 포커스',
+    text: '투명 키 ×6 · 탭 = 전환 · 더블탭 = 에이전트 앱 포커스',
   },
   {
     icons: ['lightning'],
@@ -353,11 +368,11 @@ const GUIDE_ITEMS = [
   {
     key: 'Touch',
     title: '터치 패드',
-    text: '탭 = Codex → Skills → Desktop 레이어 순환',
+    text: '탭 = Core → Skills → Desktop 레이어 순환',
   },
   { section: '레이어 · Joy' },
   {
-    key: 'Codex',
+    key: 'Core',
     title: '기본',
     text: '↑ Plan · → 히스토리 → · ↓ 사이드바 · ← 히스토리 ←',
   },
@@ -376,6 +391,16 @@ const GUIDE_ITEMS = [
     key: '우클릭',
     title: '아이콘 변경',
     text: '커맨드 키 우클릭 또는 ◆ 버튼으로 아이콘·동작 변경',
+  },
+  {
+    key: '↻ / 점',
+    title: '연결',
+    text: '클릭 = 연결 · 미로그인 시 로그인 · Shift+점 = 강제 로그인',
+  },
+  {
+    key: '↻ 길게',
+    title: '에이전트 선택',
+    text: '새로고침 길게 누르기 · Codex / Claude / Cursor / Gemini',
   },
 ];
 
@@ -447,7 +472,72 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeGuide();
     closeIconPicker();
+    closeProviderPicker();
   }
+});
+
+const providerPanel = document.getElementById('provider-panel');
+const providerGrid = document.getElementById('provider-grid');
+const providerHint = document.getElementById('provider-hint');
+let providerList = [];
+let providerPicking = false;
+
+async function openProviderPicker() {
+  closeGuide();
+  closeIconPicker();
+  if (!providerPanel || !providerGrid) return;
+  providerList = (await api?.listProviders?.()) || [];
+  const info = await api?.getProvider?.();
+  const active = info?.resolved || state.provider;
+  providerGrid.innerHTML = providerList
+    .map(
+      (p) => `<button type="button" class="provider-tile${p.id === active ? ' active' : ''}" data-provider="${p.id}">
+        <strong>${p.label}</strong>
+        <span>${p.blurb}</span>
+      </button>`
+    )
+    .join('');
+  if (providerHint) {
+    providerHint.textContent = '선택 후 자동으로 로그인·연결을 시도합니다';
+  }
+  providerPanel.hidden = false;
+}
+
+function closeProviderPicker() {
+  if (providerPanel) providerPanel.hidden = true;
+  providerPicking = false;
+}
+
+providerGrid?.addEventListener('click', async (e) => {
+  const tile = e.target.closest('[data-provider]');
+  if (!tile || providerPicking) return;
+  const id = tile.getAttribute('data-provider');
+  providerPicking = true;
+  providerGrid.querySelectorAll('.provider-tile').forEach((el) => {
+    el.classList.toggle('busy', true);
+    el.classList.toggle('active', el === tile);
+  });
+  if (providerHint) providerHint.textContent = `${PROVIDER_LABELS[id] || id} 연결 중…`;
+  flashAction(`provider · ${id}`);
+  try {
+    const result = await api?.setProvider?.(id);
+    state.provider = id;
+    if (result?.ok) flashAction(`connected · ${id}`);
+    else if (result?.reason === 'missing') flashAction(`${id} 설치 필요`);
+    else if (result?.reason === 'login') flashAction(`${id} 로그인 필요`);
+    else flashAction(result?.reason || `demo · ${id}`);
+    closeProviderPicker();
+    render();
+  } catch (err) {
+    flashAction(err?.message || 'provider failed');
+    providerPicking = false;
+    providerGrid.querySelectorAll('.provider-tile').forEach((el) => el.classList.remove('busy'));
+  }
+});
+
+document.getElementById('provider-close')?.addEventListener('click', closeProviderPicker);
+providerPanel?.addEventListener('click', (e) => {
+  if (e.target === providerPanel) closeProviderPicker();
 });
 
 function render() {
@@ -459,12 +549,13 @@ function render() {
   hud.task.textContent = current.name || '—';
   hud.status.textContent = statusLabel(current.status || 'off');
   hud.reason.textContent = REASONING[state.reasoningIndex];
-  const layerName = LAYERS[state.layer]?.name || `L${state.layer + 1}`;
+  const layerName = layerDisplayName(state.layer);
+  const prov = PROVIDER_LABELS[state.provider] || state.provider;
   hud.link.textContent = state.connected
-    ? `codex · ${state.mode} · ${layerName}`
+    ? `${prov} · ${state.mode} · ${layerName}`
     : state.mode === 'offline'
-      ? `demo · ${layerName}`
-      : `${state.mode} · ${layerName}`;
+      ? `demo · ${prov} · ${layerName}`
+      : `${prov} · ${state.mode} · ${layerName}`;
   linkDot.classList.toggle('on', state.connected);
   linkDot.classList.toggle('demo', !state.connected);
   pad3d.setCmdActive('fast', state.fastMode);
@@ -474,6 +565,7 @@ function applyBridgeState(s) {
   if (!s) return;
   state.connected = !!s.connected;
   state.mode = s.mode || 'offline';
+  if (s.provider) state.provider = s.provider;
   state.selected = s.selected ?? state.selected;
   state.reasoningIndex = s.reasoningIndex ?? state.reasoningIndex;
   state.fastMode = !!s.fastMode;
@@ -488,6 +580,7 @@ async function onAgent(index) {
   const dbl = state.lastAgentTap.index === index && now - state.lastAgentTap.at < 350;
   state.lastAgentTap = { index, at: now };
   await api?.select(index, dbl);
+  if (dbl) pad3d?.resetJoy?.();
 }
 
 async function runIconAction(cmd) {
@@ -586,8 +679,13 @@ function onJoy(dir) {
   state.lastJoy = { dir, at: now };
   const layer = LAYERS[state.layer] || LAYERS[0];
   const fn = layer.joy?.[dir];
-  if (fn) fn();
-  else flashAction(`joy · ${dir}`);
+  if (fn) {
+    fn();
+    // Desktop / focus-stealing actions — return stick ASAP
+    if (state.layer === 0 || state.layer === 2) {
+      pad3d?.resetJoy?.();
+    }
+  } else flashAction(`joy · ${dir}`);
 }
 
 let pad3d;
@@ -608,8 +706,7 @@ try {
     onTouch: () => {
       state.layer = (state.layer + 1) % LAYERS.length;
       pad3d?.setLayer?.(state.layer);
-      const name = LAYERS[state.layer].name;
-      flashAction(`layer · ${name}`);
+      flashAction(`layer · ${layerDisplayName(state.layer)}`);
       render();
     },
   });
@@ -622,23 +719,81 @@ try {
   flashAction('3D error');
 }
 
+async function connectAgent({ forceLogin = false } = {}) {
+  linkDot?.classList.add('busy');
+  const label = PROVIDER_LABELS[state.provider] || state.provider;
+  flashAction(forceLogin ? `${label} 로그인…` : 'connecting…');
+  try {
+    const result = forceLogin
+      ? await api?.connect?.({ forceLogin: true })
+      : await api?.reconnect?.();
+    if (result?.ok === false && result?.reason === 'missing') {
+      flashAction(`${label} 없음 · 설치 확인`);
+    } else if (result?.ok === false && result?.reason === 'login') {
+      flashAction('로그인 필요 · ↻ 다시 클릭');
+    } else if (result?.ok || result === true) {
+      flashAction('connected');
+    } else {
+      flashAction('demo · ↻ 로 연결');
+    }
+  } catch (err) {
+    flashAction(err?.message || 'connect failed');
+  } finally {
+    linkDot?.classList.remove('busy');
+  }
+}
+
 document.getElementById('btn-min')?.addEventListener('click', () => api?.minimize());
 document.getElementById('btn-close')?.addEventListener('click', () => api?.close());
-document.getElementById('btn-reconnect')?.addEventListener('click', async () => {
-  flashAction('reconnecting…');
-  await api?.reconnect();
+linkDot?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  connectAgent({ forceLogin: e.shiftKey });
+});
+
+let reconnectHoldTimer = null;
+let reconnectHoldFired = false;
+const btnReconnect = document.getElementById('btn-reconnect');
+btnReconnect?.addEventListener('pointerdown', () => {
+  reconnectHoldFired = false;
+  reconnectHoldTimer = setTimeout(() => {
+    reconnectHoldTimer = null;
+    reconnectHoldFired = true;
+    openProviderPicker();
+  }, 550);
+});
+btnReconnect?.addEventListener('pointerup', () => {
+  if (reconnectHoldTimer) clearTimeout(reconnectHoldTimer);
+  reconnectHoldTimer = null;
+});
+btnReconnect?.addEventListener('pointerleave', () => {
+  if (reconnectHoldTimer) clearTimeout(reconnectHoldTimer);
+  reconnectHoldTimer = null;
+});
+btnReconnect?.addEventListener('click', () => {
+  if (reconnectHoldFired) {
+    reconnectHoldFired = false;
+    return;
+  }
+  connectAgent();
 });
 
 api?.onState?.(applyBridgeState);
 api?.onLog?.((m) => {
-  if (m) console.log('[codex]', m);
+  if (m) console.log('[agent]', m);
 });
 api?.onMicStatus?.((s) => {
   if (s?.granted) micGranted = true;
 });
+api?.onNeedProviderPick?.(() => {
+  openProviderPicker();
+});
+api?.getProvider?.().then((info) => {
+  if (info?.resolved) state.provider = info.resolved;
+  if (info?.needsPick) openProviderPicker();
+  render();
+});
 api?.getState?.().then(applyBridgeState);
 
-// ask for mic right away so the system dialog appears on launch
 ensureMicPermission({ silent: true }).then((ok) => {
   if (ok) flashAction('mic ready');
 });

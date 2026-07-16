@@ -1,0 +1,211 @@
+const EventEmitter = require('events');
+const { execFile } = require('child_process');
+
+const REASONING = ['minimal', 'low', 'medium', 'high', 'xhigh'];
+
+const SKILLS = {
+  review: 'Review the current changes / open PR. Summarize risks, bugs, and suggested fixes.',
+  debug: 'Debug the latest error. Identify root cause and propose a concrete fix.',
+  refactor: 'Refactor the relevant code for clarity and maintainability without changing behavior.',
+  docs: 'Write or update documentation for the current work. Be concise and accurate.',
+  continue: 'Continue.',
+  ship: 'Prepare this work to ship: check tests, summarize the diff, and list remaining risks.',
+  test: 'Add or run relevant tests for the current change. Report failures with fixes.',
+  explain: 'Explain the current code path simply: what it does, why, and key risks.',
+};
+
+function emptyAgent() {
+  return { name: '—', status: 'off', threadId: null, turnId: null, approvalId: null };
+}
+
+function demo(name, status, approvalId = null) {
+  return {
+    name,
+    status,
+    threadId: `demo-${name}`,
+    turnId: null,
+    approvalId,
+  };
+}
+
+function truncate(s, n) {
+  const str = String(s);
+  return str.length > n ? `${str.slice(0, n - 1)}…` : str;
+}
+
+/** Shared AgentBridge state + unsupported-op stubs. */
+class BaseBridge extends EventEmitter {
+  constructor(providerId) {
+    super();
+    this.provider = providerId;
+    this.connected = false;
+    this.mode = 'offline';
+    this.agents = Array.from({ length: 6 }, () => emptyAgent());
+    this.selected = 0;
+    this.reasoningIndex = 2;
+    this.fastMode = false;
+    this.planMode = false;
+    this._loggedIn = null;
+  }
+
+  getState() {
+    return {
+      provider: this.provider,
+      connected: this.connected,
+      mode: this.mode,
+      selected: this.selected,
+      reasoning: REASONING[this.reasoningIndex],
+      reasoningIndex: this.reasoningIndex,
+      fastMode: this.fastMode,
+      planMode: this.planMode,
+      agents: this.agents.map((a) => ({ ...a })),
+    };
+  }
+
+  getLinkInfo() {
+    return {
+      provider: this.provider,
+      hasCodex: this.provider === 'codex',
+      hasBinary: null,
+      connected: this.connected,
+      mode: this.mode,
+      loggedIn: this._loggedIn ?? null,
+    };
+  }
+
+  emitState(action) {
+    this.emit('state', { ...this.getState(), action });
+  }
+
+  _seedDemo() {
+    this.agents = [
+      demo('Refactor auth flow', 'thinking'),
+      demo('Fix flaky CI', 'idle'),
+      demo('PR review #4821', 'input', 'demo-appr'),
+      demo('Write migration', 'complete'),
+      demo('Debug race condition', 'error'),
+      demo('Docs pass', 'idle'),
+    ];
+    this.mode = 'offline';
+    this.connected = false;
+  }
+
+  select(index, { focus = false } = {}) {
+    if (index < 0 || index >= this.agents.length) return;
+    this.selected = index;
+    const a = this.agents[index];
+    if (a.status === 'off' && this.connected) {
+      a.status = 'idle';
+      a.name = a.name === '—' ? `Agent ${index + 1}` : a.name;
+    }
+    if (focus) this.focusApp?.();
+    this.emitState(focus ? `focus · Agent ${index + 1}` : `switch · Agent ${index + 1}`);
+  }
+
+  async setReasoning(index) {
+    this.reasoningIndex = Math.max(0, Math.min(REASONING.length - 1, index));
+    this.emitState(`reasoning · ${REASONING[this.reasoningIndex]}`);
+  }
+
+  async toggleFast() {
+    this.fastMode = !this.fastMode;
+    if (this.fastMode) {
+      this.reasoningIndex = 0;
+    }
+    this.emitState(this.fastMode ? 'fast mode on' : 'fast mode off');
+  }
+
+  async togglePlan() {
+    this.planMode = !this.planMode;
+    this.emitState(this.planMode ? 'plan mode on' : 'plan mode off');
+  }
+
+  async skill(name) {
+    const text = SKILLS[name] || SKILLS.continue;
+    await this.send(text);
+    this.emitState(`skill · ${name}`);
+  }
+
+  async approve() {
+    this.emitState('approve not supported');
+  }
+
+  async decline() {
+    this.emitState('decline not supported');
+  }
+
+  async fork() {
+    this.emitState('fork not supported');
+  }
+
+  async desktopAction(action) {
+    this.emitState(`desktop · ${action}`);
+  }
+
+  focusApp() {
+    /* override per provider */
+  }
+
+  async checkLogin() {
+    return { hasBinary: false, loggedIn: false };
+  }
+
+  async login() {
+    this.emitState('login not configured');
+    return { ok: false, reason: 'unsupported' };
+  }
+
+  async connect(opts = {}) {
+    const status = await this.checkLogin();
+    if (opts.forceLogin || !status.loggedIn) {
+      const login = await this.login();
+      if (!login.ok && login.reason !== 'already') {
+        return { ok: false, reason: 'login', ...login };
+      }
+    }
+    this.stop();
+    const started = await this.start();
+    return { ok: started, reason: started ? 'connected' : 'offline', loggedIn: !!status.loggedIn };
+  }
+
+  start() {
+    return Promise.resolve(false);
+  }
+
+  stop() {
+    this.connected = false;
+  }
+}
+
+function whichSync(cmd) {
+  try {
+    const { execFileSync } = require('child_process');
+    const out = execFileSync(process.platform === 'win32' ? 'where' : 'which', [cmd], {
+      encoding: 'utf8',
+      timeout: 3000,
+    });
+    return String(out).split(/\r?\n/).map((s) => s.trim()).find(Boolean) || null;
+  } catch {
+    return null;
+  }
+}
+
+function openUrl(url) {
+  const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+  if (process.platform === 'win32') {
+    execFile('cmd', ['/c', 'start', '', url], () => {});
+  } else {
+    execFile(opener, [url], () => {});
+  }
+}
+
+module.exports = {
+  BaseBridge,
+  REASONING,
+  SKILLS,
+  emptyAgent,
+  demo,
+  truncate,
+  whichSync,
+  openUrl,
+};

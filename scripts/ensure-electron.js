@@ -55,6 +55,6 @@ if (!fs.existsSync(framework)) {
 
 fs.writeFileSync(pathTxt, 'Electron.app/Contents/MacOS/Electron');
 if (!fs.existsSync(framework)) {
-  console.warn('Electron binary still incomplete. Run: npm rebuild electron');
+  console.warn('Electron binary still incomplete. Run: pnpm rebuild electron');
   process.exit(0);
 }

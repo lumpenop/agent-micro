@@ -242,8 +242,8 @@ function keycapMesh({ wide = false, frost = false, iconId = null } = {}) {
     mesh.add(glow);
     mesh.userData.glow = glow;
 
-    const light = new THREE.PointLight(0x4aa3ff, 0, 1.4);
-    light.position.y = 0.0;
+    const light = new THREE.PointLight(0x4aa3ff, 0, 1.85);
+    light.position.y = 0.05;
     mesh.add(light);
     mesh.userData.light = light;
   }
@@ -677,6 +677,34 @@ export function createPad3D(container, handlers = {}) {
     joyStick.rotation.x = nz * 0.62;
   }
 
+  /** Snap stick to center (e.g. when app loses focus to Codex / other windows). */
+  function resetJoy() {
+    joyDragging = false;
+    joyTx = 0;
+    joyTz = 0;
+    joyCx = 0;
+    joyCz = 0;
+    applyJoyPose(0, 0);
+    if (pressed?.userData?.type === 'joy') pressed = null;
+  }
+
+  function onFocusLost() {
+    resetJoy();
+    if (dialDragging) dialDragging = false;
+    if (pressed) {
+      if (pressed.userData?.type === 'cmd' && pressed.userData.cmd === 'mic') {
+        handlers.onCmdRelease?.('mic');
+      }
+      pressVisual(pressed, false);
+      pressed = null;
+    }
+  }
+
+  window.addEventListener('blur', onFocusLost);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) onFocusLost();
+  });
+
   function ndc(e) {
     const rect = renderer.domElement.getBoundingClientRect();
     pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -856,9 +884,11 @@ export function createPad3D(container, handlers = {}) {
 
   function animate() {
     raf = requestAnimationFrame(animate);
-    // LEDs stay fixed size — no breathing animation
+    // Keep selection glow size; no breathing animation
     agents.forEach((a) => {
-      if (a.userData.glow) a.userData.glow.scale.setScalar(1);
+      if (a.userData.glow) {
+        a.userData.glow.scale.setScalar(a.userData.selected ? 1.22 : 1);
+      }
     });
     // snappy follow + quick spring return
     const ease = joyDragging ? 0.58 : 0.42;
@@ -888,21 +918,23 @@ export function createPad3D(container, handlers = {}) {
       const color = STATUS_COLOR[status] ?? STATUS_COLOR.idle;
       const off = status === 'off';
       const lit = new THREE.Color(color);
-      if (selected && !off) lit.lerp(new THREE.Color(0xffffff), 0.22);
+      if (selected && !off) lit.lerp(new THREE.Color(0xffffff), 0.48);
       if (a.userData.glow) {
         a.userData.glow.material.color.copy(lit);
         a.userData.glow.material.opacity = off ? 0 : selected ? 1 : 0.72;
         a.userData.glow.visible = !off;
+        a.userData.glow.scale.setScalar(selected && !off ? 1.22 : 1);
       }
       if (a.userData.light) {
         a.userData.light.color.copy(lit);
         a.userData.light.intensity = off
           ? 0
           : selected
-            ? 2.85
+            ? 5.4
             : status === 'thinking'
               ? 1.45
               : 0.7;
+        a.userData.light.distance = selected && !off ? 2.35 : 1.85;
       }
       // selection reads via glow/halo/light only — scaling made the last
       // clicked key look stuck in a pressed/enlarged state
@@ -929,9 +961,11 @@ export function createPad3D(container, handlers = {}) {
     setLayer(layer) {
       setTouchLayer(((layer % 3) + 3) % 3);
     },
+    resetJoy,
     dispose() {
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', resize);
+      window.removeEventListener('blur', onFocusLost);
       renderer.dispose();
       container.innerHTML = '';
     },
@@ -939,5 +973,4 @@ export function createPad3D(container, handlers = {}) {
   };
 }
 
-void KEYCAP_ICONS;
 void LAYOUT;

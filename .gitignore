@@ -4,8 +4,11 @@ node_modules/
 # logs / debug
 *.log
 npm-debug.log*
+pnpm-debug.log*
 .DS_Store
 Thumbs.db
+package-lock.json
+yarn.lock
 
 # electron / build
 dist/
