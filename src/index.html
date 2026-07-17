@@ -52,10 +52,22 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
             </button>
           </div>
-          <div class="modal-scroll">
+          <div class="modal-scroll" id="icon-picker-scroll">
             <div class="icon-picker-grid" id="icon-picker-grid"></div>
+            <div class="icon-add-form" id="icon-add-form" hidden>
+              <div class="icon-add-preview-wrap">
+                <img id="icon-add-preview" alt="" />
+              </div>
+              <label class="icon-add-label" for="icon-add-name" data-i18n="picker.nameLabel">Icon name</label>
+              <input type="text" id="icon-add-name" maxlength="24" autocomplete="off" spellcheck="false" />
+              <div class="icon-add-actions">
+                <button type="button" id="icon-add-cancel" data-i18n="picker.cancel">Cancel</button>
+                <button type="button" class="primary" id="icon-add-confirm" data-i18n="picker.confirmAdd">Add icon</button>
+              </div>
+            </div>
           </div>
-          <p class="icon-picker-hint" data-i18n="picker.hint">Icon maps to the key action · right-click to change</p>
+          <input type="file" id="icon-picker-file" accept="image/svg+xml,image/png,image/jpeg,image/webp,.svg" hidden />
+          <p class="icon-picker-hint" data-i18n="picker.hint">Lucide icons · + add SVG/PNG with a name · right-click key to change</p>
         </div>
       </div>
 
@@ -111,39 +123,6 @@
         </div>
       </div>
 
-      <div class="icon-picker" id="voice-panel" hidden>
-        <div class="icon-picker-card provider-card voice-card">
-          <div class="guide-head">
-            <div class="guide-head-copy">
-              <span class="guide-kicker">Codex CLI</span>
-              <span class="guide-title" id="voice-title" data-i18n="voice.title">API key · Mic</span>
-            </div>
-            <button type="button" class="chrome-btn" id="voice-close" title="Close" data-i18n-title="chrome.close">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-            </button>
-          </div>
-          <p class="provider-lead" id="voice-lead" data-i18n="voice.lead">
-            OpenAI Platform API key for Whisper mic → CLI.
-          </p>
-          <p class="voice-mode" id="voice-mode" data-i18n="voice.mode">CLI · save API key</p>
-          <label class="voice-label" for="voice-api-key" data-i18n="voice.label">OpenAI API key</label>
-          <input
-            id="voice-api-key"
-            class="voice-input"
-            type="password"
-            autocomplete="off"
-            spellcheck="false"
-            placeholder="sk-…"
-          />
-          <div class="voice-actions">
-            <button type="button" class="voice-btn primary" id="voice-save" data-i18n="voice.save">Save &amp; finish</button>
-            <button type="button" class="voice-btn" id="voice-open-keys" data-i18n="voice.openKeys">Get a key</button>
-            <button type="button" class="voice-btn" id="voice-skip" data-i18n="voice.skip">Later</button>
-          </div>
-          <p class="icon-picker-hint" id="voice-hint" data-i18n="voice.hint">Save sk-… → mic = Whisper → CLI</p>
-        </div>
-      </div>
-
       <div class="icon-picker" id="settings-panel" hidden>
         <div class="icon-picker-card provider-card settings-card">
           <div class="guide-head">
@@ -158,6 +137,43 @@
           <div class="modal-scroll settings-scroll">
           <p class="provider-lead" data-i18n="settings.lead">Codex CLI options · saved to ~/.codex · applies to new CLI windows.</p>
           <div class="settings-body" id="settings-body">
+            <div class="settings-section">
+              <p class="settings-section-title" data-i18n="settings.account">Account</p>
+              <div class="settings-field">
+                <label class="voice-label" data-i18n="settings.codexLogin">Codex login</label>
+                <p class="settings-status" id="set-codex-status" data-i18n="settings.codexLogin.unknown">Checking…</p>
+                <p class="settings-desc" data-i18n="settings.codexLogin.desc">
+                  ChatGPT login for Codex CLI. Re-login anytime from here.
+                </p>
+                <div class="voice-actions settings-inline-actions">
+                  <button type="button" class="voice-btn primary" id="settings-codex-login" data-i18n="settings.codexLogin.btn">
+                    Log in / Re-login
+                  </button>
+                </div>
+              </div>
+              <div class="settings-field">
+                <label class="voice-label" for="settings-license-key" data-i18n="trial.keyLabel">License key</label>
+                <p class="settings-status" id="set-license-status" data-i18n="settings.license.unknown">Checking…</p>
+                <input
+                  id="settings-license-key"
+                  class="voice-input"
+                  type="text"
+                  autocomplete="off"
+                  spellcheck="false"
+                  placeholder="AM-····-····-····-····"
+                />
+                <p class="settings-desc" data-i18n="settings.license.desc">
+                  Enter anytime during trial or after purchase. You can replace the key later.
+                </p>
+                <div class="voice-actions settings-inline-actions">
+                  <button type="button" class="voice-btn primary" id="settings-license-activate" data-i18n="trial.activate">
+                    Activate key
+                  </button>
+                  <button type="button" class="voice-btn" id="settings-license-buy" data-i18n="trial.buy">Buy</button>
+                </div>
+              </div>
+            </div>
+
             <div class="settings-field">
               <label class="voice-label" for="set-locale" data-i18n="settings.language">Language</label>
               <select id="set-locale" class="voice-input settings-select">
@@ -232,6 +248,28 @@
             <button type="button" class="voice-btn" id="settings-ignore" data-i18n="settings.ignore">.codexignore</button>
             <button type="button" class="voice-btn" id="settings-open-config" data-i18n="settings.openConfig">config.toml</button>
           </div>
+        </div>
+      </div>
+
+      <div class="icon-picker trial-lock" id="codex-login-gate" hidden>
+        <div class="icon-picker-card guide-card trial-lock-card">
+          <div class="guide-head">
+            <div class="guide-head-copy">
+              <span class="guide-kicker">Codex CLI</span>
+              <span class="guide-title" data-i18n="loginGate.title">Codex login</span>
+            </div>
+          </div>
+          <p class="provider-lead" data-i18n="loginGate.lead">
+            Sign in with ChatGPT to use Codex CLI. Required on first launch.
+          </p>
+          <div class="voice-actions trial-lock-actions">
+            <button type="button" class="voice-btn primary" id="login-gate-btn" data-i18n="loginGate.btn">
+              Log in with ChatGPT
+            </button>
+          </div>
+          <p class="icon-picker-hint" id="login-gate-hint" data-i18n="loginGate.hint">
+            Browser opens · finish login · then the pad unlocks
+          </p>
         </div>
       </div>
 

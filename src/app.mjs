@@ -1,10 +1,16 @@
 import { createPad3D } from './pad3d.mjs';
 import {
-  KEYCAP_ICONS,
   DEFAULT_KEY_ICONS,
-  ICON_ORDER,
   isPickerIcon,
+  pickerIconIds,
   iconMarkup,
+  getCustomIcons,
+  getCustomIcon,
+  setCustomIcons,
+  upsertCustomIcon,
+  removeCustomIcon,
+  isCustomIcon,
+  resolveIconDef,
 } from './icons.mjs';
 
 const { t: tRaw, normalizeLocale } = window.agentI18n || {
@@ -15,6 +21,8 @@ const { t: tRaw, normalizeLocale } = window.agentI18n || {
 const REASONING = ['minimal', 'low', 'medium', 'high', 'xhigh'];
 const api = window.codexDesktop;
 const STORAGE_KEY = 'agent-micro-key-icons-v1';
+const CUSTOM_ICONS_KEY = 'agent-micro-custom-icons-v1';
+const MAX_CUSTOM_ICONS = 32;
 
 /** All layers → Codex CLI (app-server) */
 const LAYERS = [
@@ -85,7 +93,21 @@ const ICON_ACTIONS = {
   kimi: () => api?.send('Continue.'),
 };
 
+function loadCustomIconsFromStorage() {
+  try {
+    const list = JSON.parse(localStorage.getItem(CUSTOM_ICONS_KEY) || '[]');
+    setCustomIcons(Array.isArray(list) ? list : []);
+  } catch {
+    setCustomIcons([]);
+  }
+}
+
+function saveCustomIconsToStorage() {
+  localStorage.setItem(CUSTOM_ICONS_KEY, JSON.stringify(getCustomIcons()));
+}
+
 function loadKeyIcons() {
+  loadCustomIconsFromStorage();
   let stored = {};
   try {
     stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
@@ -99,16 +121,50 @@ function loadKeyIcons() {
   } catch {
     stored = {};
   }
+  // Migrate old Codex brand mark → Lucide send
+  if (stored.send === 'codex') stored.send = 'send';
   const merged = { ...DEFAULT_KEY_ICONS, ...stored };
   for (const [cmd, id] of Object.entries(merged)) {
-    // Drop other AI brand marks until multi-agent picker ships
-    if (!KEYCAP_ICONS[id] || !isPickerIcon(id)) merged[cmd] = DEFAULT_KEY_ICONS[cmd];
+    if (!isPickerIcon(id)) merged[cmd] = DEFAULT_KEY_ICONS[cmd];
   }
   return merged;
 }
 
 function saveKeyIcons(map) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
+}
+
+async function fileToCustomIcon(file) {
+  const id = `custom_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  const label = (file.name || 'Custom').replace(/\.[^.]+$/, '').slice(0, 24) || 'Custom';
+  const isSvg =
+    file.type === 'image/svg+xml' || /\.svg$/i.test(file.name || '');
+
+  if (isSvg) {
+    const text = await file.text();
+    if (/<script/i.test(text) || /\bon\w+\s*=/i.test(text)) {
+      throw new Error('unsafe svg');
+    }
+    const dataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(text)}`;
+    if (dataUrl.length > 220_000) throw new Error('too large');
+    return { id, label, dataUrl };
+  }
+
+  if (!file.type.startsWith('image/')) throw new Error('not image');
+  const bitmap = await createImageBitmap(file);
+  const size = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, size, size);
+  const scale = Math.min(size / bitmap.width, size / bitmap.height) * 0.86;
+  const dw = bitmap.width * scale;
+  const dh = bitmap.height * scale;
+  ctx.drawImage(bitmap, (size - dw) / 2, (size - dh) / 2, dw, dh);
+  bitmap.close?.();
+  const dataUrl = c.toDataURL('image/png');
+  if (dataUrl.length > 220_000) throw new Error('too large');
+  return { id, label, dataUrl };
 }
 
 const state = {
@@ -134,6 +190,8 @@ const state = {
   hotkeyModifier: 'shift',
   canFork: true,
   trialExpired: false,
+  /** Not logged into Codex CLI — pad locked until login */
+  needsCodexLogin: false,
   /** @type {'en' | 'ko'} */
   locale: 'en',
 };
@@ -224,10 +282,10 @@ function applyTrialLock(status) {
     trialLockEl?.setAttribute('hidden', '');
     return;
   }
+  hideLoginGate();
   closeGuide();
   closeKeymap();
   closeSettings();
-  closeVoicePanel();
   closeIconPicker();
   trialLockEl?.removeAttribute('hidden');
   const hasUrl = !!status?.sponsorUrl;
@@ -244,6 +302,58 @@ function trialBlocks() {
   return !!state.trialExpired;
 }
 
+function loginBlocks() {
+  return !!state.needsCodexLogin;
+}
+
+/** Pad / hotkeys blocked while trial expired or Codex login gate is up */
+function padBlocks() {
+  return trialBlocks() || loginBlocks();
+}
+
+const loginGateEl = document.getElementById('codex-login-gate');
+const loginGateBtn = document.getElementById('login-gate-btn');
+const loginGateHintEl = document.getElementById('login-gate-hint');
+
+function showLoginGate({ missing = false } = {}) {
+  state.needsCodexLogin = true;
+  shellEl?.classList.add('login-required');
+  closeGuide();
+  closeKeymap();
+  closeSettings();
+  closeIconPicker();
+  loginGateEl?.removeAttribute('hidden');
+  if (loginGateHintEl) {
+    loginGateHintEl.textContent = missing ? t('loginGate.missing') : t('loginGate.hint');
+  }
+  flashAction(t('loginGate.flash'));
+}
+
+function hideLoginGate() {
+  state.needsCodexLogin = false;
+  shellEl?.classList.remove('login-required');
+  loginGateEl?.setAttribute('hidden', '');
+}
+
+async function ensureCodexLoginOnEntry() {
+  if (trialBlocks()) return;
+  try {
+    const login = await api?.loginStatus?.();
+    if (!login?.hasCodex) {
+      showLoginGate({ missing: true });
+      return;
+    }
+    if (login.loggedIn) {
+      hideLoginGate();
+      await connectAgent({ forceLogin: false });
+      return;
+    }
+    showLoginGate();
+  } catch {
+    showLoginGate();
+  }
+}
+
 function statusLabel(s) {
   return (
     {
@@ -258,84 +368,15 @@ function statusLabel(s) {
 }
 
 let micLatched = false;
-let micGranted = null;
-let micWarmPromise = null;
-let micStream = null;
-let mediaRecorder = null;
-let micChunks = [];
-let micMime = 'audio/webm';
-let micFinishing = false;
-/** 'whisper' | 'codex-dictation' */
-let voiceMode = 'codex-dictation';
 let dictationActive = false;
 
-const voicePanel = document.getElementById('voice-panel');
-const voiceTitleEl = document.getElementById('voice-title');
-const voiceLeadEl = document.getElementById('voice-lead');
-const voiceModeEl = document.getElementById('voice-mode');
-const voiceHintEl = document.getElementById('voice-hint');
-const voiceApiKeyEl = document.getElementById('voice-api-key');
-let voicePromptedThisSession = false;
-
-async function refreshVoiceStatus() {
-  const s = await api?.voiceStatus?.();
-  if (!s) return null;
-  voiceMode = s.mode || (s.whisperReady ? 'whisper' : 'codex-dictation');
-  if (voiceModeEl) {
-    voiceModeEl.textContent = s.whisperReady ? t('voice.mode.ready') : t('voice.mode.needKey');
-  }
-  if (voiceHintEl) {
-    voiceHintEl.textContent = s.whisperReady ? t('voice.hint.ready') : t('voice.hint.needKey');
-  }
-  return s;
-}
-
-function openVoicePanel({ fromConnect = false } = {}) {
-  if (trialBlocks()) return;
-  closeGuide();
-  closeKeymap();
-  closeSettings();
-  closeIconPicker();
-  if (voiceTitleEl) {
-    voiceTitleEl.textContent = fromConnect ? t('voice.title.connect') : t('voice.title');
-  }
-  if (voiceLeadEl) {
-    voiceLeadEl.textContent = fromConnect ? t('voice.lead.connect') : t('voice.lead');
-  }
-  if (voiceModeEl) {
-    voiceModeEl.textContent = fromConnect ? t('voice.mode.connect') : t('voice.mode');
-  }
-  voicePanel?.removeAttribute('hidden');
-  refreshVoiceStatus();
-  flashAction(fromConnect ? t('flash.apiSetup') : t('flash.micApi'));
-  voiceApiKeyEl?.focus?.();
-}
-
-function closeVoicePanel() {
-  voicePanel?.setAttribute('hidden', '');
-}
-
-async function maybePromptVoiceSetup(result, { force = false } = {}) {
-  const needs =
-    force ||
-    result?.needsApiKey ||
-    result?.needsVoiceSetup ||
-    (await api?.voiceStatus?.())?.needsSetup;
-  if (!needs) return false;
-  if (voicePromptedThisSession && !force) return false;
-  voicePromptedThisSession = true;
-  openVoicePanel({ fromConnect: true });
-  return true;
-}
-
-async function startCodexDictation({ latched = false } = {}) {
+/** Mic = macOS dictation into the selected Agent CLI pane (no Whisper). */
+async function startRecording({ latched = false } = {}) {
   if (dictationActive) return;
   flashAction(t('flash.codexJump'));
   const r = await api?.beginVoiceDictation?.();
   if (!r?.ok) {
-    // ⌘K가 Cursor 팔레트를 연 경우 등 — Whisper 키 설정으로 유도
     flashAction(r?.error || t('flash.codexApp'));
-    openVoicePanel({ fromConnect: false });
     return;
   }
   dictationActive = true;
@@ -346,14 +387,15 @@ async function startCodexDictation({ latched = false } = {}) {
   flashAction(latched ? t('flash.speakTap') : t('flash.speakHold'));
 }
 
-async function stopCodexDictation({ submit = true } = {}) {
+async function stopRecording({ process = true } = {}) {
   if (!dictationActive && !state.recording) return;
   dictationActive = false;
   state.recording = false;
   micLatched = false;
   padEl.classList.remove('recording');
   pad3d?.setRecording(false);
-  if (!submit) {
+  pad3d?.releasePress?.('mic');
+  if (!process) {
     flashAction(t('flash.dictationCancel'));
     await api?.endVoiceDictation?.();
     return;
@@ -363,230 +405,6 @@ async function stopCodexDictation({ submit = true } = {}) {
   flashAction(t('flash.codexSent'));
 }
 
-function stopMicStream() {
-  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-    try {
-      mediaRecorder.stop();
-    } catch {
-      /* ignore */
-    }
-  }
-  mediaRecorder = null;
-  if (!micStream) return;
-  try {
-    micStream.getTracks().forEach((t) => t.stop());
-  } catch {
-    /* ignore */
-  }
-  micStream = null;
-}
-
-function pickRecorderMime() {
-  const candidates = [
-    'audio/webm;codecs=opus',
-    'audio/webm',
-    'audio/mp4',
-    'audio/ogg;codecs=opus',
-  ];
-  for (const t of candidates) {
-    if (window.MediaRecorder?.isTypeSupported?.(t)) return t;
-  }
-  return '';
-}
-
-/** Native macOS dialog via main + getUserMedia warm-up for Chromium */
-async function ensureMicPermission({ silent = false } = {}) {
-  if (micGranted === true) return true;
-  if (!micWarmPromise) {
-    micWarmPromise = (async () => {
-      const native = await api?.requestMic?.();
-      if (native === false) {
-        micGranted = false;
-        return false;
-      }
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach((t) => t.stop());
-        micGranted = true;
-        return true;
-      } catch {
-        micGranted = native === true;
-        return micGranted;
-      }
-    })().finally(() => {
-      micWarmPromise = null;
-    });
-  }
-  const ok = await micWarmPromise;
-  if (!silent) {
-    flashAction(ok ? t('flash.micReady') : t('flash.micPerm'));
-  }
-  return ok;
-}
-
-function blobToBase64(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const s = String(reader.result || '');
-      const i = s.indexOf(',');
-      resolve(i >= 0 ? s.slice(i + 1) : s);
-    };
-    reader.onerror = () => reject(reader.error || new Error('read failed'));
-    reader.readAsDataURL(blob);
-  });
-}
-
-async function startRecording({ latched = false } = {}) {
-  await refreshVoiceStatus();
-  // No Whisper key → macOS dictation into the selected Agent CLI window
-  if (voiceMode !== 'whisper') {
-    await startCodexDictation({ latched });
-    return;
-  }
-
-  const ok = await ensureMicPermission({ silent: true });
-  if (!ok) {
-    flashAction(t('flash.micBlocked'));
-    return;
-  }
-
-  micFinishing = false;
-  stopMicStream();
-  micChunks = [];
-
-  try {
-    micStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true },
-    });
-  } catch {
-    flashAction(t('flash.micStream'));
-    return;
-  }
-
-  micMime = pickRecorderMime();
-  try {
-    mediaRecorder = micMime
-      ? new MediaRecorder(micStream, { mimeType: micMime })
-      : new MediaRecorder(micStream);
-    micMime = mediaRecorder.mimeType || micMime || 'audio/webm';
-  } catch {
-    flashAction(t('flash.recorderNo'));
-    stopMicStream();
-    return;
-  }
-
-  mediaRecorder.ondataavailable = (ev) => {
-    if (ev.data && ev.data.size > 0) micChunks.push(ev.data);
-  };
-
-  state.recording = true;
-  state.processing = false;
-  micLatched = latched;
-  padEl.classList.add('recording');
-  padEl.classList.remove('processing');
-  pad3d?.setRecording(true);
-  flashAction(latched ? t('flash.talkingHf') : t('flash.talking'));
-
-  try {
-    mediaRecorder.start(250);
-  } catch {
-    flashAction(t('flash.recFail'));
-    stopMicStream();
-    state.recording = false;
-    padEl.classList.remove('recording');
-    pad3d?.setRecording(false);
-  }
-}
-
-async function finishVoiceToCodexFromAudio() {
-  if (micFinishing) return;
-  micFinishing = true;
-
-  padEl.classList.remove('processing');
-  state.processing = false;
-
-  if (!micChunks.length) {
-    flashAction(t('flash.recEmpty'));
-    micFinishing = false;
-    stopMicStream();
-    return;
-  }
-
-  const blob = new Blob(micChunks, { type: micMime || 'audio/webm' });
-  micChunks = [];
-  stopMicStream();
-
-  if (blob.size < 800) {
-    flashAction(t('flash.recShort'));
-    micFinishing = false;
-    return;
-  }
-
-  flashAction(t('flash.whisper'));
-  try {
-    const base64 = await blobToBase64(blob);
-    const result = await api?.transcribe?.({ base64, mimeType: blob.type || micMime });
-    if (!result?.ok) {
-      if (result?.code === 'NO_API_KEY') {
-        flashAction(t('flash.apiNeed'));
-        openVoicePanel({ fromConnect: true });
-      } else {
-        flashAction(result?.error || t('flash.recogFail'));
-      }
-      micFinishing = false;
-      return;
-    }
-    const text = String(result.text || '').trim();
-    flashAction(`🎤 ${text.slice(0, 48)}`);
-    flashAction(`→ Codex · ${text.slice(0, 36)}`);
-    await api?.voiceToCodex?.(text);
-  } catch (e) {
-    flashAction(e?.message || t('flash.voiceFail'));
-  }
-  micFinishing = false;
-}
-
-function stopRecording({ process = true } = {}) {
-  if (dictationActive) {
-    stopCodexDictation({ submit: process });
-    return;
-  }
-
-  if (!state.recording && !mediaRecorder) return;
-  state.recording = false;
-  micLatched = false;
-  padEl.classList.remove('recording');
-  pad3d?.setRecording(false);
-  pad3d?.releasePress?.('mic');
-
-  if (!process) {
-    stopMicStream();
-    micChunks = [];
-    flashAction(t('flash.micOff'));
-    return;
-  }
-
-  state.processing = true;
-  padEl.classList.add('processing');
-  flashAction(t('flash.saving'));
-
-  const rec = mediaRecorder;
-  if (!rec || rec.state === 'inactive') {
-    finishVoiceToCodexFromAudio();
-    return;
-  }
-
-  rec.onstop = () => {
-    finishVoiceToCodexFromAudio();
-  };
-  try {
-    rec.stop();
-  } catch {
-    finishVoiceToCodexFromAudio();
-  }
-}
-
 function applyKeyIcons() {
   if (!pad3d) return;
   Object.entries(state.keyIcons).forEach(([cmd, id]) => {
@@ -594,36 +412,172 @@ function applyKeyIcons() {
   });
 }
 
-function openIconPicker(cmd) {
-  if (trialBlocks()) return;
-  state.pickingCmd = cmd || 'send';
-  pickerTitle.textContent = t('picker.title', { cmd: state.pickingCmd });
+let pendingCustomIcon = null;
+
+const iconAddForm = document.getElementById('icon-add-form');
+const iconAddPreview = document.getElementById('icon-add-preview');
+const iconAddName = document.getElementById('icon-add-name');
+const iconPickerScroll = document.getElementById('icon-picker-scroll');
+
+function showIconGrid() {
+  if (pickerGrid) pickerGrid.hidden = false;
+  if (iconAddForm) iconAddForm.hidden = true;
+  pendingCustomIcon = null;
+  if (iconAddPreview) iconAddPreview.removeAttribute('src');
+  if (iconAddName) iconAddName.value = '';
+}
+
+function showIconAddForm(entry) {
+  pendingCustomIcon = entry;
+  if (pickerGrid) pickerGrid.hidden = true;
+  if (iconAddForm) iconAddForm.hidden = false;
+  if (iconAddPreview) iconAddPreview.src = entry.dataUrl;
+  if (iconAddName) {
+    iconAddName.value = entry.label || '';
+    iconAddName.focus();
+    iconAddName.select();
+  }
+  pickerTitle.textContent = t('picker.nameTitle');
+  iconPickerScroll?.scrollTo?.(0, 0);
+}
+
+function renderIconPickerGrid() {
+  showIconGrid();
+  if (state.pickingCmd) {
+    pickerTitle.textContent = t('picker.title', { cmd: state.pickingCmd });
+  }
   const current = state.keyIcons[state.pickingCmd];
-  pickerGrid.innerHTML = ICON_ORDER.map((id) => {
-    const def = KEYCAP_ICONS[id];
-    if (!def) return '';
-    return `<button type="button" class="icon-pick${id === current ? ' active' : ''}" data-icon="${id}" title="${def.label}">
+  const tiles = pickerIconIds()
+    .map((id) => {
+      const def = resolveIconDef(id);
+      if (!def) return '';
+      const custom = isCustomIcon(id);
+      return `<button type="button" class="icon-pick${id === current ? ' active' : ''}${custom ? ' icon-pick-custom' : ''}" data-icon="${id}" title="${def.label}${custom ? ` · ${t('picker.customHint')}` : ''}">
       ${iconMarkup(id)}
       <span>${def.label}</span>
+      ${custom ? `<span class="icon-pick-del" data-del="${id}" title="${t('picker.remove')}">×</span>` : ''}
     </button>`;
-  }).join('');
+    })
+    .join('');
+  const addTile = `<button type="button" class="icon-pick icon-pick-add" data-add="1" title="${t('picker.add')}">
+      <span class="icon-pick-plus">+</span>
+      <span>${t('picker.add')}</span>
+    </button>`;
+  pickerGrid.innerHTML = tiles + addTile;
+}
+
+function openIconPicker(cmd) {
+  if (padBlocks()) return;
+  state.pickingCmd = cmd || 'send';
+  renderIconPickerGrid();
   picker.hidden = false;
 }
 
 function closeIconPicker() {
   state.pickingCmd = null;
+  pendingCustomIcon = null;
+  showIconGrid();
   picker.hidden = true;
 }
 
-pickerGrid.addEventListener('click', (e) => {
+function commitPendingCustomIcon() {
+  if (!pendingCustomIcon) return;
+  const name = (iconAddName?.value || '').trim().slice(0, 24);
+  if (!name) {
+    flashAction(t('picker.nameRequired'));
+    iconAddName?.focus();
+    return;
+  }
+  const entry = { ...pendingCustomIcon, label: name };
+  upsertCustomIcon(entry);
+  saveCustomIconsToStorage();
+  if (state.pickingCmd) {
+    state.keyIcons[state.pickingCmd] = entry.id;
+    saveKeyIcons(state.keyIcons);
+    pad3d?.setKeyIcon(state.pickingCmd, entry.id);
+  }
+  flashAction(t('picker.added', { name: entry.label }));
+  pendingCustomIcon = null;
+  renderIconPickerGrid();
+}
+
+pickerGrid.addEventListener('click', async (e) => {
+  const del = e.target.closest('[data-del]');
+  if (del) {
+    e.preventDefault();
+    e.stopPropagation();
+    const id = del.dataset.del;
+    if (!id || !isCustomIcon(id)) return;
+    removeCustomIcon(id);
+    saveCustomIconsToStorage();
+    // Reset any keys still using the removed icon
+    let dirty = false;
+    for (const [cmd, iconId] of Object.entries(state.keyIcons)) {
+      if (iconId === id) {
+        state.keyIcons[cmd] = DEFAULT_KEY_ICONS[cmd] || 'send';
+        dirty = true;
+        pad3d?.setKeyIcon(cmd, state.keyIcons[cmd]);
+      }
+    }
+    if (dirty) saveKeyIcons(state.keyIcons);
+    flashAction(t('picker.removed'));
+    renderIconPickerGrid();
+    return;
+  }
+
+  const add = e.target.closest('[data-add]');
+  if (add) {
+    e.preventDefault();
+    document.getElementById('icon-picker-file')?.click();
+    return;
+  }
+
   const btn = e.target.closest('.icon-pick');
-  if (!btn || !state.pickingCmd) return;
+  if (!btn || !state.pickingCmd || btn.dataset.add) return;
   const id = btn.dataset.icon;
+  if (!id || !isPickerIcon(id)) return;
   state.keyIcons[state.pickingCmd] = id;
   saveKeyIcons(state.keyIcons);
   pad3d?.setKeyIcon(state.pickingCmd, id);
-  flashAction(`icon · ${KEYCAP_ICONS[id]?.label || id}`);
+  const label = resolveIconDef(id)?.label || getCustomIcon(id)?.label || id;
+  flashAction(`icon · ${label}`);
   closeIconPicker();
+});
+
+document.getElementById('icon-picker-file')?.addEventListener('change', async (e) => {
+  const input = e.target;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  if (getCustomIcons().length >= MAX_CUSTOM_ICONS) {
+    flashAction(t('picker.addFull'));
+    return;
+  }
+  try {
+    const entry = await fileToCustomIcon(file);
+    showIconAddForm(entry);
+  } catch (err) {
+    flashAction(t('picker.addFail'));
+    console.warn('[icons] add failed', err);
+  }
+});
+
+document.getElementById('icon-add-confirm')?.addEventListener('click', () => {
+  commitPendingCustomIcon();
+});
+document.getElementById('icon-add-cancel')?.addEventListener('click', () => {
+  pendingCustomIcon = null;
+  renderIconPickerGrid();
+});
+iconAddName?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    commitPendingCustomIcon();
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    pendingCustomIcon = null;
+    renderIconPickerGrid();
+  }
 });
 
 document.getElementById('icon-picker-close')?.addEventListener('click', closeIconPicker);
@@ -730,7 +684,7 @@ function buildKeymapItems(g = modGlyph()) {
       text: t('map.mic.text'),
     },
     {
-      icons: ['codex'],
+      icons: ['send'],
       title: `${g}F · Send`,
       text: t('map.send.text'),
     },
@@ -841,7 +795,7 @@ function renderGuideList(items) {
 }
 
 function openGuide() {
-  if (trialBlocks()) return;
+  if (padBlocks()) return;
   closeIconPicker();
   closeKeymap();
   closeSettings();
@@ -875,7 +829,7 @@ function applyHotkeyModifier(mod) {
 }
 
 function openKeymap() {
-  if (trialBlocks()) return;
+  if (padBlocks()) return;
   closeIconPicker();
   closeGuide();
   closeSettings();
@@ -898,6 +852,12 @@ const setTool = document.getElementById('set-tool');
 const setJob = document.getElementById('set-job');
 const setProxy = document.getElementById('set-proxy');
 const settingsHint = document.getElementById('settings-hint');
+const setCodexStatusEl = document.getElementById('set-codex-status');
+const setLicenseStatusEl = document.getElementById('set-license-status');
+const settingsLicenseKeyEl = document.getElementById('settings-license-key');
+const settingsCodexLoginBtn = document.getElementById('settings-codex-login');
+const settingsLicenseActivateBtn = document.getElementById('settings-license-activate');
+const settingsLicenseBuyBtn = document.getElementById('settings-license-buy');
 
 function readSettingsForm() {
   return {
@@ -919,12 +879,101 @@ function fillSettingsForm(s = {}) {
   if (setProxy) setProxy.checked = !!s.network_proxy;
 }
 
+function setStatusTone(el, tone) {
+  if (!el) return;
+  el.classList.remove('is-ok', 'is-warn', 'is-bad', 'is-muted');
+  if (tone) el.classList.add(`is-${tone}`);
+}
+
+function renderLicenseStatus(status) {
+  if (!setLicenseStatusEl) return;
+  if (!status) {
+    setLicenseStatusEl.textContent = t('settings.license.unknown');
+    setStatusTone(setLicenseStatusEl, 'muted');
+    return;
+  }
+  if (status.licensed) {
+    setLicenseStatusEl.textContent = t('settings.license.licensed');
+    setStatusTone(setLicenseStatusEl, 'ok');
+  } else if (status.locked || status.expired) {
+    setLicenseStatusEl.textContent = t('settings.license.expired');
+    setStatusTone(setLicenseStatusEl, 'bad');
+  } else {
+    setLicenseStatusEl.textContent = t('settings.license.trial', {
+      n: Math.max(0, Number(status.daysLeft) || 0),
+    });
+    // Trial active but no license key yet
+    setStatusTone(setLicenseStatusEl, 'warn');
+  }
+  if (settingsLicenseBuyBtn) {
+    settingsLicenseBuyBtn.disabled = !status.sponsorUrl;
+  }
+}
+
+async function refreshAccountStatus() {
+  if (setCodexStatusEl) {
+    setCodexStatusEl.textContent = t('settings.codexLogin.unknown');
+    setStatusTone(setCodexStatusEl, 'muted');
+  }
+  if (setLicenseStatusEl) {
+    setLicenseStatusEl.textContent = t('settings.license.unknown');
+    setStatusTone(setLicenseStatusEl, 'muted');
+  }
+
+  try {
+    const login = await api?.loginStatus?.();
+    if (!setCodexStatusEl) {
+      /* skip */
+    } else if (!login?.hasCodex) {
+      setCodexStatusEl.textContent = t('settings.codexLogin.missing');
+      setStatusTone(setCodexStatusEl, 'bad');
+    } else if (login.loggedIn) {
+      setCodexStatusEl.textContent = t('settings.codexLogin.ok');
+      setStatusTone(setCodexStatusEl, 'ok');
+    } else {
+      setCodexStatusEl.textContent = t('settings.codexLogin.no');
+      setStatusTone(setCodexStatusEl, 'bad');
+    }
+  } catch {
+    if (setCodexStatusEl) {
+      setCodexStatusEl.textContent = t('settings.codexLogin.no');
+      setStatusTone(setCodexStatusEl, 'bad');
+    }
+  }
+
+  try {
+    const trial = await api?.getTrialStatus?.();
+    renderLicenseStatus(trial);
+  } catch {
+    renderLicenseStatus(null);
+  }
+}
+
+async function activateLicenseFromInput(inputEl, buttonEl) {
+  const key = inputEl?.value || '';
+  if (buttonEl) buttonEl.disabled = true;
+  try {
+    const r = await api?.activateLicense?.(key);
+    if (!r?.ok) {
+      flashAction(r?.errorKey ? t(r.errorKey) : (r?.error || t('trial.activate.fail')));
+      return false;
+    }
+    applyTrialLock(r.trial || { locked: false, expired: false, licensed: true });
+    if (inputEl) inputEl.value = '';
+    renderLicenseStatus(r.trial || { licensed: true, locked: false });
+    flashAction(t('trial.activate.ok'));
+    api?.getState?.().then(applyBridgeState);
+    return true;
+  } finally {
+    if (buttonEl) buttonEl.disabled = false;
+  }
+}
+
 async function openSettings() {
-  if (trialBlocks()) return;
+  if (padBlocks()) return;
   closeIconPicker();
   closeGuide();
   closeKeymap();
-  closeVoicePanel();
   if (!settingsPanel) return;
   try {
     const r = await api?.getCodexSettings?.();
@@ -941,6 +990,7 @@ async function openSettings() {
   }
   settingsPanel.hidden = false;
   flashAction(t('flash.settings'));
+  refreshAccountStatus();
 }
 
 function closeSettings() {
@@ -1063,7 +1113,7 @@ function applyBridgeState(s) {
 }
 
 async function onAgent(index) {
-  if (trialBlocks()) return;
+  if (padBlocks()) return;
   const now = Date.now();
   const dbl = state.lastAgentTap.index === index && now - state.lastAgentTap.at < 350;
   state.lastAgentTap = { index, at: now };
@@ -1084,7 +1134,7 @@ async function runIconAction(cmd) {
 
 /** Mic PTT: hold = talk · double-tap = hands-free latch */
 function onMicPress() {
-  if (trialBlocks()) return;
+  if (padBlocks()) return;
   const now = Date.now();
   if (now - state.lastMicTap < 350) {
     state.lastMicTap = 0;
@@ -1100,12 +1150,12 @@ function onMicPress() {
 }
 
 function onMicRelease() {
-  if (trialBlocks()) return;
+  if (padBlocks()) return;
   if (state.recording && !micLatched) stopRecording({ process: true });
 }
 
 async function onCmd(cmd) {
-  if (trialBlocks()) return;
+  if (padBlocks()) return;
   if (cmd === 'mic') {
     // fallback if press/release not wired
     onMicPress();
@@ -1150,7 +1200,7 @@ async function onCmd(cmd) {
 
 let dialAcc = 0;
 function onDialDelta(d) {
-  if (trialBlocks()) return;
+  if (padBlocks()) return;
   dialAcc += d;
   if (Math.abs(dialAcc) < 28) return;
   const step = dialAcc > 0 ? 1 : -1;
@@ -1168,7 +1218,7 @@ function onDialDelta(d) {
 }
 
 function onJoy(dir) {
-  if (trialBlocks()) return;
+  if (padBlocks()) return;
   const now = Date.now();
   if (state.lastJoy.dir === dir && now - state.lastJoy.at < 450) return;
   state.lastJoy = { dir, at: now };
@@ -1195,7 +1245,7 @@ try {
     onDialStart: () => flashAction(t('flash.reasoningCtrl')),
     onJoy,
     onTouch: () => {
-      if (trialBlocks()) return;
+      if (padBlocks()) return;
       state.layer = (state.layer + 1) % LAYERS.length;
       pad3d?.setLayer?.(state.layer);
       flashAction(t('flash.layer', { name: layerDisplayName(state.layer) }));
@@ -1214,7 +1264,7 @@ try {
 async function connectAgent({ forceLogin = false } = {}) {
   if (trialBlocks()) {
     flashAction(t('trial.flash'));
-    return;
+    return { ok: false, reason: 'trial' };
   }
   linkDot?.classList.add('busy');
   flashAction(forceLogin ? t('flash.login') : t('flash.connecting'));
@@ -1228,13 +1278,15 @@ async function connectAgent({ forceLogin = false } = {}) {
     } else if (result?.ok === false && result?.reason === 'login') {
       flashAction(t('flash.needLogin'));
     } else if (result?.ok || result === true) {
-      const prompted = await maybePromptVoiceSetup(result);
-      flashAction(prompted ? t('flash.cliApi') : t('flash.connected'));
+      flashAction(t('flash.connected'));
+      hideLoginGate();
     } else {
       flashAction(t('flash.demo'));
     }
+    return result && typeof result === 'object' ? result : { ok: !!result };
   } catch (err) {
     flashAction(err?.message || t('flash.connectFail'));
+    return { ok: false, error: err?.message };
   } finally {
     linkDot?.classList.remove('busy');
   }
@@ -1255,13 +1307,9 @@ api?.onState?.(applyBridgeState);
 api?.onLog?.((m) => {
   if (m) console.log('[agent]', m);
 });
-api?.onMicStatus?.((s) => {
-  if (s?.granted) micGranted = true;
-});
-
 /** Mod+QWERDF / Tab / arrows / 1–6 — pad or our CLI context */
 api?.onHotkey?.(({ cmd, phase, dir, index } = {}) => {
-  if (trialBlocks()) return;
+  if (padBlocks()) return;
   if (!cmd) return;
   const g = modGlyph();
 
@@ -1338,74 +1386,70 @@ trialSponsorBtn?.addEventListener('click', async () => {
   else flashAction(t('trial.buy.opened'));
 });
 trialCloseBtn?.addEventListener('click', () => api?.close());
-trialActivateBtn?.addEventListener('click', async () => {
-  const key = trialKeyInput?.value || '';
-  trialActivateBtn.disabled = true;
-  try {
-    const r = await api?.activateLicense?.(key);
-    if (!r?.ok) {
-      flashAction(r?.errorKey ? t(r.errorKey) : (r?.error || t('trial.activate.fail')));
-      return;
-    }
-    applyTrialLock(r.trial || { locked: false, expired: false, licensed: true });
-    if (trialKeyInput) trialKeyInput.value = '';
-    flashAction(t('trial.activate.ok'));
-    api?.getState?.().then(applyBridgeState);
-  } finally {
-    trialActivateBtn.disabled = false;
-  }
+trialActivateBtn?.addEventListener('click', () => {
+  activateLicenseFromInput(trialKeyInput, trialActivateBtn);
 });
 trialKeyInput?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') trialActivateBtn?.click();
 });
 
-api?.getTrialStatus?.().then((status) => {
-  applyTrialLock(status);
-  if (!(status?.locked ?? status?.expired)) {
-    state.provider = 'codex';
-    state.linkMode = 'cli';
-    api?.getState?.().then(applyBridgeState);
+settingsCodexLoginBtn?.addEventListener('click', async () => {
+  if (trialBlocks()) return;
+  settingsCodexLoginBtn.disabled = true;
+  flashAction(t('flash.login'));
+  try {
+    await connectAgent({ forceLogin: true });
+    await refreshAccountStatus();
+  } finally {
+    settingsCodexLoginBtn.disabled = false;
   }
-}).catch(() => {
+});
+
+loginGateBtn?.addEventListener('click', async () => {
+  if (trialBlocks()) return;
+  loginGateBtn.disabled = true;
+  try {
+    const r = await connectAgent({ forceLogin: true });
+    if (r?.ok) {
+      hideLoginGate();
+      await refreshAccountStatus();
+    } else if (r?.reason === 'missing') {
+      showLoginGate({ missing: true });
+    } else {
+      showLoginGate();
+    }
+  } finally {
+    loginGateBtn.disabled = false;
+  }
+});
+settingsLicenseActivateBtn?.addEventListener('click', () => {
+  activateLicenseFromInput(settingsLicenseKeyEl, settingsLicenseActivateBtn);
+});
+settingsLicenseKeyEl?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') settingsLicenseActivateBtn?.click();
+});
+settingsLicenseBuyBtn?.addEventListener('click', async () => {
+  const r = await api?.openSponsor?.();
+  if (!r?.ok) flashAction(r?.error || t('trial.buy.none'));
+  else flashAction(t('trial.buy.opened'));
+});
+
+api?.getTrialStatus?.().then(async (status) => {
+  applyTrialLock(status);
+  state.provider = 'codex';
+  state.linkMode = 'cli';
+  if (status?.locked ?? status?.expired) return;
+  api?.getState?.().then(applyBridgeState);
+  await ensureCodexLoginOnEntry();
+}).catch(async () => {
   state.provider = 'codex';
   state.linkMode = 'cli';
   api?.getState?.().then(applyBridgeState);
+  await ensureCodexLoginOnEntry();
 });
 
 state.provider = 'codex';
 state.linkMode = 'cli';
-
-document.getElementById('voice-close')?.addEventListener('click', async () => {
-  const s = await api?.voiceStatus?.();
-  if (s?.needsSetup) await api?.skipVoiceSetup?.();
-  closeVoicePanel();
-});
-document.getElementById('voice-save')?.addEventListener('click', async () => {
-  const key = voiceApiKeyEl?.value || '';
-  const r = await api?.setVoiceApiKey?.(key);
-  if (!r?.ok) {
-    flashAction(r?.error || t('flash.saveFail'));
-    return;
-  }
-  if (voiceApiKeyEl) voiceApiKeyEl.value = '';
-  await refreshVoiceStatus();
-  flashAction(r.whisperReady ? t('flash.whisperReady') : t('flash.saved'));
-  closeVoicePanel();
-});
-document.getElementById('voice-skip')?.addEventListener('click', async () => {
-  await api?.skipVoiceSetup?.();
-  await refreshVoiceStatus();
-  closeVoicePanel();
-  flashAction(t('flash.later'));
-});
-document.getElementById('voice-open-keys')?.addEventListener('click', () => {
-  api?.openApiKeysPage?.();
-  flashAction(t('flash.keysOpened'));
-});
-
-api?.onState?.((s) => {
-  if (s?.connected) maybePromptVoiceSetup();
-});
 
 /** While typing in inputs, don't treat ⇧Q/D/1… as pad shortcuts */
 function isEditableEl(el) {

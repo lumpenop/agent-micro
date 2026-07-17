@@ -30,14 +30,6 @@ contextBridge.exposeInMainWorld('codexDesktop', {
   linkInfo: () => ipcRenderer.invoke('codex:linkInfo'),
   loginStatus: () => ipcRenderer.invoke('codex:loginStatus'),
   login: () => ipcRenderer.invoke('codex:login'),
-  requestMic: () => ipcRenderer.invoke('mic:request'),
-  micStatus: () => ipcRenderer.invoke('mic:status'),
-  whisperReady: () => ipcRenderer.invoke('mic:whisperReady'),
-  transcribe: (payload) => ipcRenderer.invoke('mic:transcribe', payload),
-  voiceStatus: () => ipcRenderer.invoke('voice:status'),
-  setVoiceApiKey: (key) => ipcRenderer.invoke('voice:setApiKey', key),
-  skipVoiceSetup: () => ipcRenderer.invoke('voice:skipSetup'),
-  openApiKeysPage: () => ipcRenderer.invoke('voice:openApiKeysPage'),
   beginVoiceDictation: () => ipcRenderer.invoke('voice:beginDictation'),
   endVoiceDictation: () => ipcRenderer.invoke('voice:endDictation'),
   getCodexSettings: () => ipcRenderer.invoke('codexSettings:get'),
@@ -60,11 +52,6 @@ contextBridge.exposeInMainWorld('codexDesktop', {
     const handler = (_e, msg) => cb(msg);
     ipcRenderer.on('codex:log', handler);
     return () => ipcRenderer.removeListener('codex:log', handler);
-  },
-  onMicStatus: (cb) => {
-    const handler = (_e, status) => cb(status);
-    ipcRenderer.on('mic:status', handler);
-    return () => ipcRenderer.removeListener('mic:status', handler);
   },
   onHotkey: (cb) => {
     const handler = (_e, payload) => cb(payload);

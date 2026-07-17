@@ -1,7 +1,7 @@
 import * as THREE from './vendor/three.mjs';
 import { RoundedBoxGeometry } from './vendor/geometries/RoundedBoxGeometry.mjs';
 import { RoomEnvironment } from './vendor/RoomEnvironment.mjs';
-import { iconSvgDocument } from './icons.mjs';
+import { iconImageUrl } from './icons.mjs';
 import { playKeyDown, playKeyUp, playDialTick, playJoyTick } from './key-sounds.mjs';
 
 /** Match HUD legend (--thinking/complete/input/error); idle stays neutral gray for frost */
@@ -21,16 +21,18 @@ const LAYOUT = [
   ['joy', 'cmd:mic', null, 'cmd:send'], // mic spans 2 via special case
 ];
 
-/** Per-icon face size — codex/mic settled halfway from last tweak */
+/** Per-icon face size — send/mic settled halfway from last tweak */
 function iconPlaneSize(iconId, wide = false) {
-  if (iconId === 'codex') return wide ? 0.58 : 0.49;
+  if (iconId === 'send') return wide ? 0.56 : 0.46;
   if (iconId === 'mic') return wide ? 0.49 : 0.42;
+  if (String(iconId || '').startsWith('custom_')) return wide ? 0.56 : 0.46;
   return wide ? 0.54 : 0.44;
 }
 
 function iconTexFill(iconId) {
-  if (iconId === 'codex') return 0.71;
+  if (iconId === 'send') return 0.68;
   if (iconId === 'mic') return 0.61;
+  if (String(iconId || '').startsWith('custom_')) return 0.7;
   return 0.64;
 }
 
@@ -51,10 +53,9 @@ function makeIconTexture(iconId) {
   tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.magFilter = THREE.LinearFilter;
 
-  const svg = iconSvgDocument(iconId, { size, color: '#141414' });
-  if (!svg) return tex;
+  const url = iconImageUrl(iconId, { size, color: '#141414' });
+  if (!url) return tex;
   const img = new Image();
-  const url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   img.onload = () => {
     // Draw oversized, then re-center on alpha bounds so every glyph sits dead-center
     const scratch = document.createElement('canvas');
@@ -470,23 +471,56 @@ export function createPad3D(container, handlers = {}) {
   const hemi = new THREE.HemisphereLight(0xf5f7fa, 0x6a7380, 0.42);
   scene.add(hemi);
 
-  // chassis — cooler mid-tone shell (keys stay brighter on top)
+  // chassis — frosted shell; picks up selected agent glow (like RGB case bleed)
+  const CHASSIS_BASE = 0xb8c4d0;
   const chassis = new THREE.Mesh(
     new RoundedBoxGeometry(5.05, 0.55, 5.05, 6, 0.45),
     new THREE.MeshPhysicalMaterial({
-      color: 0xb8c4d0,
-      roughness: 0.38,
-      metalness: 0.12,
+      color: CHASSIS_BASE,
+      roughness: 0.32,
+      metalness: 0.08,
       transparent: true,
-      opacity: 0.94,
-      clearcoat: 0.55,
-      clearcoatRoughness: 0.28,
+      opacity: 0.9,
+      clearcoat: 0.62,
+      clearcoatRoughness: 0.22,
+      emissive: 0x000000,
+      emissiveIntensity: 0,
     })
   );
   chassis.position.y = -0.15;
   chassis.receiveShadow = true;
   chassis.castShadow = true;
   scene.add(chassis);
+
+  let chassisRecording = false;
+  /** Soft case glow from the selected clear key */
+  function syncChassisGlow() {
+    if (chassisRecording) {
+      chassis.material.emissive.setHex(0x1ecf9a);
+      chassis.material.emissiveIntensity = 0.16;
+      chassis.material.color.setHex(CHASSIS_BASE);
+      chassis.userData.glowPulse = false;
+      return;
+    }
+    const lit = agents.find(
+      (a) => a?.userData?.selected && a.userData.status && a.userData.status !== 'off'
+    );
+    if (!lit) {
+      chassis.material.emissive.setHex(0x000000);
+      chassis.material.emissiveIntensity = 0;
+      chassis.material.color.setHex(CHASSIS_BASE);
+      chassis.userData.glowPulse = false;
+      return;
+    }
+    const hex = STATUS_COLOR[lit.userData.status] ?? STATUS_COLOR.idle;
+    const glow = new THREE.Color(hex);
+    // pastel shell tint + richer emissive (reference: case matches key LED)
+    const tint = new THREE.Color(CHASSIS_BASE).lerp(glow, 0.42);
+    chassis.material.color.copy(tint);
+    chassis.material.emissive.copy(glow);
+    chassis.material.emissiveIntensity = 0.28;
+    chassis.userData.glowPulse = true;
+  }
 
   // inset plate — darker well so cream/frost caps pop
   const plate = new THREE.Mesh(
@@ -781,7 +815,7 @@ export function createPad3D(container, handlers = {}) {
   ];
   // mic centered between col 1-2
   cmdSlots.forEach(([name, col, row, wide]) => {
-    const m = keycapMesh({ wide, frost: false, iconId: name === 'send' ? 'codex' : name === 'mic' ? 'mic' : name === 'fast' ? 'lightning' : name === 'approve' ? 'check' : name === 'decline' ? 'times' : 'fork' });
+    const m = keycapMesh({ wide, frost: false, iconId: name === 'send' ? 'send' : name === 'mic' ? 'mic' : name === 'fast' ? 'lightning' : name === 'approve' ? 'check' : name === 'decline' ? 'times' : 'fork' });
     const x = wide ? originX + gap * 1.5 : originX + gap * col;
     m.position.set(x, 0.42, originZ + gap * row);
     m.userData = { ...m.userData, type: 'cmd', cmd: name, baseY: 0.42 };
@@ -1104,6 +1138,11 @@ export function createPad3D(container, handlers = {}) {
     agents.forEach((a) => {
       if (a.userData.glow) a.userData.glow.scale.set(1, 1, 1);
     });
+    // Soft breathing on the outer shell when a clear key is selected
+    if (chassis.userData.glowPulse && !chassisRecording) {
+      const pulse = 0.22 + (Math.sin(performance.now() * 0.0028) * 0.5 + 0.5) * 0.12;
+      chassis.material.emissiveIntensity = pulse;
+    }
     // snappy follow + quick spring return
     const ease = joyDragging ? 0.58 : 0.42;
     joyCx += (joyTx - joyCx) * ease;
@@ -1129,6 +1168,7 @@ export function createPad3D(container, handlers = {}) {
       const a = agents[i];
       if (!a) return;
       a.userData.selected = selected;
+      a.userData.status = status;
       const color = STATUS_COLOR[status] ?? STATUS_COLOR.idle;
       const off = status === 'off';
       // Disc = status color (default slightly soft; selected = richer)
@@ -1160,6 +1200,7 @@ export function createPad3D(container, handlers = {}) {
       // selection reads via glow/halo/light only — scaling made the last
       // clicked key look stuck in a pressed/enlarged state
       a.scale.setScalar(1);
+      syncChassisGlow();
     },
     setKeyIcon(cmd, iconId) {
       const m = cmds[cmd];
@@ -1198,8 +1239,8 @@ export function createPad3D(container, handlers = {}) {
       }
     },
     setRecording(on) {
-      chassis.material.emissive = new THREE.Color(on ? 0x1ecf9a : 0x000000);
-      chassis.material.emissiveIntensity = on ? 0.12 : 0;
+      chassisRecording = !!on;
+      syncChassisGlow();
     },
     setLayer(layer) {
       setTouchLayer(((layer % 3) + 3) % 3);

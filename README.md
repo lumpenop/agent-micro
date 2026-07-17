@@ -3,20 +3,14 @@
 **Agent Micro** — Codex CLI용 플로팅 맥로패드.
 
 Connect = `app-server` · 키/조이스틱/마이크 모두 CLI로 전송합니다.  
-연결 후 Whisper용 **API 키(`sk-…`)** 설정을 안내합니다.
+마이크는 **macOS 받아쓰기**만 사용합니다 (Whisper / Platform API 키 없음).
 
 나중에 “어떤 에이전트를 쓸지” 고르는 UI가 필요하면 그린필드로 붙이세요 (`src/providers/create-bridge.js` 주석 참고).
 
 ### 음성 (Mic)
 
-**Codex Connect** 때 로그인·연결 다음 단계로 마이크용 Platform API 키(`sk-…`) 설정을 띄웁니다.  
-저장하면 Whisper로 패드에서 바로 인식 → Codex 전송. **나중에**를 누르면 Codex 앱 받아쓰기로 임시 사용합니다.
-
-```bash
-# 또는 프로젝트 루트 .env / 환경변수
-OPENAI_API_KEY=sk-...
-pnpm start
-```
+Mic 키캡 → 선택 Agent CLI 포커스 → macOS Dictation → 떼면 Return 전송.  
+시스템 설정에서 **받아쓰기**와 **손쉬운 사용(Agent Micro)** 을 허용하세요.
 
 ## Run (pnpm)
 

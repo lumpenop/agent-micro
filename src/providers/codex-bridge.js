@@ -282,7 +282,6 @@ class CodexBridge extends EventEmitter {
       reason: started ? 'connected' : 'offline',
       loggedIn: true,
       linkMode: 'cli',
-      needsApiKey: started,
     };
   }
 

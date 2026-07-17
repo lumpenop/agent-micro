@@ -28,75 +28,10 @@ function skip(name, detail = '') {
   console.log(`SKIP  ${name}${detail ? ` — ${detail}` : ''}`);
 }
 
-function makeTinyWav() {
-  // Minimal valid WAV: 0.3s silence, 16kHz mono PCM16
-  const sampleRate = 16000;
-  const seconds = 0.35;
-  const numSamples = Math.floor(sampleRate * seconds);
-  const dataSize = numSamples * 2;
-  const buf = Buffer.alloc(44 + dataSize);
-  buf.write('RIFF', 0);
-  buf.writeUInt32LE(36 + dataSize, 4);
-  buf.write('WAVE', 8);
-  buf.write('fmt ', 12);
-  buf.writeUInt32LE(16, 16);
-  buf.writeUInt16LE(1, 20);
-  buf.writeUInt16LE(1, 22);
-  buf.writeUInt32LE(sampleRate, 24);
-  buf.writeUInt32LE(sampleRate * 2, 28);
-  buf.writeUInt16LE(2, 32);
-  buf.writeUInt16LE(16, 34);
-  buf.write('data', 36);
-  buf.writeUInt32LE(dataSize, 40);
-  // soft tone so Whisper may return something (or EMPTY is still auth-ok)
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / sampleRate;
-    const sample = Math.sin(2 * Math.PI * 440 * t) * 0.2 * 32767;
-    buf.writeInt16LE(sample | 0, 44 + i * 2);
-  }
-  return buf;
-}
-
 async function main() {
   console.log('=== Agent Micro feature smoke ===\n');
 
-  // ── voice / API key ──
-  const voice = require('../src/voice-transcribe');
-  voice.setUserDataPath(USER_DATA);
-  const vs = voice.voiceStatus();
-  if (vs.whisperReady && vs.hasStoredKey && !vs.needsSetup) {
-    ok('voice.status', `mode=${vs.mode}`);
-  } else {
-    fail('voice.status', JSON.stringify(vs));
-  }
-
-  const key = voice.resolveOpenAIApiKey();
-  if (key && key.startsWith('sk-')) ok('voice.resolveApiKey', `sk-… (${key.length} chars)`);
-  else fail('voice.resolveApiKey', 'missing');
-
-  // OpenAI auth ping (models)
-  try {
-    const res = await fetch('https://api.openai.com/v1/models', {
-      headers: { Authorization: `Bearer ${key}` },
-    });
-    if (res.ok) ok('openai.apiKey.valid', `HTTP ${res.status}`);
-    else fail('openai.apiKey.valid', `HTTP ${res.status} ${(await res.text()).slice(0, 120)}`);
-  } catch (e) {
-    fail('openai.apiKey.valid', e.message);
-  }
-
-  // Whisper
-  try {
-    const wav = makeTinyWav();
-    const r = await voice.transcribeWithWhisper(wav, 'audio/wav');
-    ok('whisper.transcribe', `text="${String(r.text).slice(0, 60)}"`);
-  } catch (e) {
-    if (e.code === 'EMPTY') {
-      ok('whisper.transcribe', 'auth OK · empty transcript (silence/tone)');
-    } else {
-      fail('whisper.transcribe', `${e.code || ''} ${e.message}`);
-    }
-  }
+  ok('voice.mode', 'macOS dictation only (Whisper removed)');
 
   // ── settings / prefs ──
   const settings = require('../src/codex-settings');
@@ -314,12 +249,13 @@ async function main() {
     const mac = require('../src/platform/mac');
     const names = [
       'ensureCodexCliWindow',
-      'focusCodexCliSlot',
-      'beginDictation',
-      'endDictation',
+      'beginCodexDictation',
+      'submitCodexComposer',
+      'listOpenCodexCliSlots',
+      'resolveCliSlot',
     ].filter((n) => typeof mac[n] === 'function');
-    if (names.length >= 2) ok('mac.platform.exports', names.join(', '));
-    else fail('mac.platform.exports', `only ${names.join(',')}`);
+    if (names.length === 5) ok('mac.platform.exports', names.join(', '));
+    else fail('mac.platform.exports', `got ${names.join(',')}`);
   } catch (e) {
     fail('mac.platform.exports', e.message);
   }

@@ -1,15 +1,6 @@
-const { app, BrowserWindow, ipcMain, screen, globalShortcut, session, systemPreferences, shell, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, globalShortcut, shell, Menu } = require('electron');
 const path = require('path');
 const { createCodexBridge, focusCodexDesktop } = require('./providers/create-bridge');
-const {
-  setUserDataPath: setVoiceUserDataPath,
-  transcribeWithWhisper,
-  hasWhisperAuth,
-  writeStoredApiKey,
-  voiceStatus,
-  needsVoiceSetup,
-  markVoiceSetupDone,
-} = require('./voice-transcribe');
 const codexSettings = require('./codex-settings');
 const padPrefs = require('./pad-prefs');
 const trial = require('./trial');
@@ -329,18 +320,6 @@ function installAppMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-async function ensureMicAccess() {
-  if (process.platform !== 'darwin') return true;
-  try {
-    const status = systemPreferences.getMediaAccessStatus('microphone');
-    if (status === 'granted') return true;
-    const ok = await systemPreferences.askForMediaAccess('microphone');
-    return !!ok;
-  } catch {
-    return false;
-  }
-}
-
 function createWindow() {
   const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
   // Fit chrome + tight pad + hud (legend must not clip)
@@ -372,11 +351,6 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
   mainWindow.webContents.on('did-finish-load', () => {
-    ensureMicAccess().then((ok) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('mic:status', { granted: ok });
-      }
-    });
     mainWindow.webContents
       .executeJavaScript(
         `!!document.querySelector('#pad-canvas canvas') ? 'ok' : 'no-canvas'`
@@ -441,20 +415,10 @@ function ensureBridge({ autoStart = true } = {}) {
 
 app.whenReady().then(async () => {
   const userData = app.getPath('userData');
-  setVoiceUserDataPath(userData);
   codexSettings.setUserDataPath(userData);
   padPrefs.setUserDataPath(userData);
   trial.setUserDataPath(userData);
 
-  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
-    if (permission === 'media' || permission === 'microphone') callback(true);
-    else callback(false);
-  });
-  session.defaultSession.setPermissionCheckHandler((_wc, permission) => {
-    return permission === 'media' || permission === 'microphone';
-  });
-
-  ensureMicAccess();
   installAppMenu();
   createWindow();
 
@@ -530,58 +494,6 @@ ipcMain.handle('trial:activate', (_e, key) => {
   return { ...r, trial: trial.getStatus() };
 });
 
-ipcMain.handle('mic:request', () => {
-  if (trialLocked()) return false;
-  return ensureMicAccess();
-});
-ipcMain.handle('mic:status', () => {
-  if (trialLocked()) return { granted: false, status: 'denied', whisper: false, trialExpired: true };
-  if (process.platform !== 'darwin') return { granted: true, status: 'granted' };
-  try {
-    const status = systemPreferences.getMediaAccessStatus('microphone');
-    return { granted: status === 'granted', status, whisper: hasWhisperAuth() };
-  } catch {
-    return { granted: false, status: 'unknown', whisper: hasWhisperAuth() };
-  }
-});
-ipcMain.handle('mic:transcribe', async (_e, payload) => {
-  if (trialLocked()) return trialDenied();
-  const { base64, mimeType } = payload || {};
-  if (!base64) return { ok: false, error: 'empty audio' };
-  try {
-    const bytes = Buffer.from(base64, 'base64');
-    const result = await transcribeWithWhisper(bytes, mimeType || 'audio/webm');
-    return { ok: true, text: result.text };
-  } catch (e) {
-    return { ok: false, error: e.message, code: e.code || 'TRANSCRIBE' };
-  }
-});
-ipcMain.handle('mic:whisperReady', () => {
-  if (trialLocked()) return { ok: false, trialExpired: true };
-  return { ok: hasWhisperAuth() };
-});
-ipcMain.handle('voice:status', () => {
-  if (trialLocked()) return { ...voiceStatus(), trialExpired: true, needsSetup: false };
-  return voiceStatus();
-});
-ipcMain.handle('voice:setApiKey', (_e, key) => {
-  if (trialLocked()) return trialDenied();
-  try {
-    const r = writeStoredApiKey(key);
-    return { ...r, ...voiceStatus() };
-  } catch (e) {
-    return { ok: false, error: e.message, ...voiceStatus() };
-  }
-});
-ipcMain.handle('voice:skipSetup', () => {
-  if (trialLocked()) return trialDenied();
-  return markVoiceSetupDone({ skipped: true });
-});
-ipcMain.handle('voice:openApiKeysPage', () => {
-  if (trialLocked()) return false;
-  shell.openExternal('https://platform.openai.com/api-keys');
-  return true;
-});
 ipcMain.handle('codexSettings:get', () => {
   if (trialLocked()) return { settings: null, meta: null, trialExpired: true };
   return {
@@ -722,23 +634,11 @@ ipcMain.handle('codex:login', () => {
   if (trialLocked()) return trialDenied();
   return bridge?.login();
 });
-function withVoiceSetup(result) {
-  const base = result && typeof result === 'object' ? result : { ok: !!result };
-  const needsSetup = !!(base.ok && needsVoiceSetup());
-  return {
-    ...base,
-    linkMode: 'cli',
-    needsVoiceSetup: needsSetup,
-    needsApiKey: needsSetup,
-    voice: voiceStatus(),
-  };
-}
-
 ipcMain.handle('codex:connect', async (_e, opts) => {
   if (trialLocked()) return trialDenied();
   ensureBridge({ autoStart: false });
   const result = await bridge.connect(opts || {});
-  return withVoiceSetup(result);
+  return { ...(result && typeof result === 'object' ? result : { ok: !!result }), linkMode: 'cli' };
 });
 ipcMain.handle('codex:reconnect', async () => {
   if (trialLocked()) return trialDenied();
@@ -751,5 +651,5 @@ ipcMain.handle('codex:reconnect', async () => {
     const started = await bridge.start();
     result = { ok: !!started, reason: started ? 'connected' : 'offline', linkMode: 'cli' };
   }
-  return withVoiceSetup(result);
+  return { ...(result && typeof result === 'object' ? result : { ok: !!result }), linkMode: 'cli' };
 });
