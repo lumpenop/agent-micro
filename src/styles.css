@@ -1,9 +1,9 @@
 :root {
-  /* Larger pad canvas so the outer rim fits; inner key layout unchanged */
-  --pad: 348px;
-  --keyboard: 330px;
+  /* Slightly larger than baseline for a modest outer rim */
+  --pad: 332px;
+  --keyboard: 316px;
   --gap: 9px;
-  --radius-pad: 38px;
+  --radius-pad: 34px;
   --radius-cap: 14px;
   --ink: #141414;
   /* idle = frost key neutral gray (same as pad3d STATUS_COLOR.idle) */

@@ -14,6 +14,37 @@ const STATUS_COLOR = {
   off: 0x000000,
 };
 
+/**
+ * Flat rounded slab — plan-view radius is NOT clamped by thickness
+ * (RoundedBoxGeometry clamps to height/2, so corners stay too square).
+ */
+function roundedSlabGeometry(width, depth, height, radius, curveSegments = 20) {
+  const w = width / 2;
+  const d = depth / 2;
+  const r = Math.min(radius, w - 0.01, d - 0.01);
+  const shape = new THREE.Shape();
+  shape.moveTo(-w + r, -d);
+  shape.lineTo(w - r, -d);
+  shape.quadraticCurveTo(w, -d, w, -d + r);
+  shape.lineTo(w, d - r);
+  shape.quadraticCurveTo(w, d, w - r, d);
+  shape.lineTo(-w + r, d);
+  shape.quadraticCurveTo(-w, d, -w, d - r);
+  shape.lineTo(-w, -d + r);
+  shape.quadraticCurveTo(-w, -d, -w + r, -d);
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: height,
+    bevelEnabled: true,
+    bevelThickness: Math.min(0.03, height * 0.22),
+    bevelSize: Math.min(0.032, r * 0.08),
+    bevelSegments: 2,
+    curveSegments,
+  });
+  geo.rotateX(-Math.PI / 2);
+  geo.translate(0, height / 2, 0);
+  return geo;
+}
+
 const LAYOUT = [
   ['touch', 'agent:0', 'agent:1', 'dial'],
   ['agent:2', 'agent:3', 'agent:4', 'agent:5'],
@@ -419,9 +450,9 @@ export function createPad3D(container, handlers = {}) {
   const w = Math.max(container.clientWidth || 0, 280);
   const h = Math.max(container.clientHeight || 0, 280);
 
-  // Near top-down — slight pullback so the larger outer rim is visible
+  // Near top-down — same framing as pre-border (dial/touch scale)
   const camera = new THREE.PerspectiveCamera(28, w / h, 0.1, 100);
-  camera.position.set(0, 11.2, 1.4);
+  camera.position.set(0, 10.85, 1.35);
   camera.lookAt(0, 0, 0);
 
   const renderer = new THREE.WebGLRenderer({
@@ -445,7 +476,7 @@ export function createPad3D(container, handlers = {}) {
   renderer.domElement.style.width = '100%';
   renderer.domElement.style.height = '100%';
   renderer.domElement.style.display = 'block';
-  renderer.domElement.style.borderRadius = '40px';
+  renderer.domElement.style.borderRadius = '36px';
 
   // lights — soft matte key (volume without gloss)
   const amb = new THREE.AmbientLight(0xffffff, 0.38);
@@ -473,21 +504,21 @@ export function createPad3D(container, handlers = {}) {
   const hemi = new THREE.HemisphereLight(0xf5f7fa, 0x6a7380, 0.42);
   scene.add(hemi);
 
-  // Grow outer shell only — plate/keys stay at the pre-border layout (5.05 → 5.65)
+  // Outer bezel — modest rim only (was 5.65 / too thick). Soft corners, still under dial/keys.
   const CHASSIS_BASE = 0xb8c4d0;
   const chassis = new THREE.Mesh(
-    new RoundedBoxGeometry(5.65, 0.58, 5.65, 7, 0.52),
+    roundedSlabGeometry(5.28, 5.28, 0.4, 0.62, 20),
     new THREE.MeshPhysicalMaterial({
       color: CHASSIS_BASE,
-      roughness: 0.32,
-      metalness: 0.08,
-      clearcoat: 0.55,
-      clearcoatRoughness: 0.28,
+      roughness: 0.34,
+      metalness: 0.06,
+      clearcoat: 0.5,
+      clearcoatRoughness: 0.3,
       emissive: 0x000000,
       emissiveIntensity: 0,
     })
   );
-  chassis.position.y = -0.15;
+  chassis.position.y = -0.3; // top ≈ 0.10 — dial/joy/keys sit above
   chassis.receiveShadow = true;
   chassis.castShadow = true;
   scene.add(chassis);
@@ -514,7 +545,6 @@ export function createPad3D(container, handlers = {}) {
     }
     const hex = STATUS_COLOR[lit.userData.status] ?? STATUS_COLOR.idle;
     const glow = new THREE.Color(hex);
-    // pastel shell tint + richer emissive (reference: case matches key LED)
     const tint = new THREE.Color(CHASSIS_BASE).lerp(glow, 0.42);
     chassis.material.color.copy(tint);
     chassis.material.emissive.copy(glow);
@@ -522,9 +552,9 @@ export function createPad3D(container, handlers = {}) {
     chassis.userData.glowPulse = true;
   }
 
-  // inset plate — darker well so cream/frost caps pop
+  // Inner plate — restore pre-border sit so dial / touch / keys aren't sunk
   const plate = new THREE.Mesh(
-    new RoundedBoxGeometry(4.45, 0.14, 4.45, 5, 0.28),
+    roundedSlabGeometry(4.45, 4.45, 0.14, 0.28, 16),
     new THREE.MeshStandardMaterial({
       color: 0x5a6570,
       roughness: 0.72,
@@ -535,9 +565,8 @@ export function createPad3D(container, handlers = {}) {
   plate.receiveShadow = true;
   scene.add(plate);
 
-  // soft vignette rim inside the well
   const wellRim = new THREE.Mesh(
-    new RoundedBoxGeometry(4.52, 0.06, 4.52, 5, 0.3),
+    roundedSlabGeometry(4.52, 4.52, 0.08, 0.32, 16),
     new THREE.MeshStandardMaterial({
       color: 0x3e4750,
       roughness: 0.8,

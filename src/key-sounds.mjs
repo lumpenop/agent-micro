@@ -36,10 +36,18 @@ function noiseBuffer(duration) {
   return buf;
 }
 
+function finite(n, fallback) {
+  return Number.isFinite(n) ? n : fallback;
+}
+
 function envGain(g, t0, peak, attack, release) {
-  g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t0 + attack);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + attack + release);
+  const p = Math.max(0.0002, finite(peak, 0.1));
+  const a = Math.max(0.0001, finite(attack, 0.001));
+  const r = Math.max(0.0001, finite(release, 0.02));
+  const t = finite(t0, 0);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(p, t + a);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + a + r);
 }
 
 /**
@@ -145,7 +153,7 @@ function playBlue(profile, phase) {
       up: { hi: 1400, lo: 600, bright: 0.55 },
     },
     joy: {
-      down: { hi: 1900, lo: 700, click: 1400, thump: 130, bright: 0.7, body: 0.15 },
+      down: { hi: 1900, lo: 700, noise: 1400, thump: 130, bright: 0.7, body: 0.15 },
       up: { hi: 1300, lo: 560, bright: 0.5 },
     },
   };
@@ -169,7 +177,7 @@ function playBlue(profile, phase) {
     src.buffer = noiseBuffer(0.05);
     const bp = c.createBiquadFilter();
     bp.type = 'bandpass';
-    bp.frequency.value = conf.noise;
+    bp.frequency.value = finite(conf.noise, 1600);
     bp.Q.value = 3.2;
     const ng = c.createGain();
     envGain(ng, t0, 0.34 * conf.bright, 0.001, 0.042);
