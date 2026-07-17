@@ -13,6 +13,7 @@ const {
 const codexSettings = require('./codex-settings');
 const padPrefs = require('./pad-prefs');
 const trial = require('./trial');
+const i18n = require('./i18n');
 const mac = require('./platform/mac');
 
 let mainWindow = null;
@@ -275,16 +276,18 @@ function isPadChordKey(key, code) {
 /** Quit stays ⌘⇧Q · Edit roles = paste/copy in inputs */
 function installAppMenu() {
   const isMac = process.platform === 'darwin';
+  const { t } = require('./i18n');
+  const loc = padPrefs.getLocale();
   const template = [
     ...(isMac
       ? [
           {
             label: app.name,
             submenu: [
-              { role: 'about' },
+              { label: t(loc, 'menu.about'), role: 'about' },
               { type: 'separator' },
               {
-                label: 'Quit',
+                label: t(loc, 'menu.quit'),
                 accelerator: 'Command+Shift+Q',
                 click: () => app.quit(),
               },
@@ -293,7 +296,7 @@ function installAppMenu() {
         ]
       : []),
     {
-      label: 'Edit',
+      label: t(loc, 'menu.edit'),
       submenu: [
         { role: 'undo' },
         { role: 'redo' },
@@ -307,10 +310,10 @@ function installAppMenu() {
       ],
     },
     {
-      label: 'Window',
+      label: t(loc, 'menu.window'),
       submenu: [
         {
-          label: 'Toggle Agent Micro',
+          label: t(loc, 'menu.toggle'),
           accelerator: 'CommandOrControl+Shift+M',
           click: () => {
             if (!mainWindow) return;
@@ -340,9 +343,9 @@ async function ensureMicAccess() {
 
 function createWindow() {
   const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
-  // Fit chrome + tight pad + hud (keyboard on-screen size unchanged)
+  // Fit chrome + tight pad + hud (legend must not clip)
   const winW = 330;
-  const winH = 478;
+  const winH = 512;
 
   mainWindow = new BrowserWindow({
     width: winW,
@@ -594,7 +597,7 @@ ipcMain.handle('codexSettings:writeIgnore', async () => {
   if (trialLocked()) return trialDenied();
   const { dialog } = require('electron');
   const r = await dialog.showOpenDialog(mainWindow, {
-    title: '.codexignore 저장 폴더',
+    title: require('./i18n').t(padPrefs.getLocale(), 'settings.dialog.ignore'),
     properties: ['openDirectory', 'createDirectory'],
   });
   if (r.canceled || !r.filePaths?.[0]) return { ok: false, canceled: true };
@@ -605,11 +608,22 @@ ipcMain.handle('codexSettings:openConfig', () => {
   const p = codexSettings.meta().configPath;
   return shell.openPath(p);
 });
+/** Sync i18n for sandboxed preload (cannot require ./i18n there) */
+ipcMain.on('i18n:t', (event, payload = {}) => {
+  event.returnValue = i18n.t(payload.locale, payload.key, payload.vars || {});
+});
+ipcMain.on('i18n:normalizeLocale', (event, locale) => {
+  event.returnValue = i18n.normalizeLocale(locale);
+});
+
 ipcMain.handle('padPrefs:get', () => padPrefs.load());
 ipcMain.handle('padPrefs:set', (_e, partial) => {
   if (trialLocked()) return trialDenied();
   const next = padPrefs.save(partial || {});
   rearmPadHotkeys();
+  if (partial && Object.prototype.hasOwnProperty.call(partial, 'locale')) {
+    installAppMenu();
+  }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('padPrefs:changed', next);
   }

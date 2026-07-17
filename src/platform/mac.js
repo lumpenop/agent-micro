@@ -8,6 +8,12 @@ const { execFile } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { t } = require('../i18n');
+const padPrefs = require('../pad-prefs');
+
+function lt(key, vars) {
+  return t(padPrefs.getLocale(), key, vars);
+}
 
 const CLI_SESSION_PATH = path.join(os.homedir(), '.agent-micro', 'cli-slots.json');
 
@@ -101,7 +107,7 @@ async function ensureCodexFocused() {
   await delay(100);
   const front = await frontmostAppName();
   if (!isCodexFrontmost(front)) {
-    const err = new Error(`포커스가 ${front || '?'} · Codex 앱 필요`);
+    const err = new Error(lt('bridge.wrongApp', { app: front || '?' }));
     err.code = 'WRONG_APP';
     throw err;
   }
@@ -798,10 +804,10 @@ async function ensureCodexCliWindow(requestedSlot, opts = {}) {
     reason: why || 'blocked',
     error:
       why === 'need-agent-1'
-        ? 'Agent 1 창을 먼저 여세요'
+        ? lt('bridge.needAgent1')
         : /^need-agent-\d+$/.test(String(why || ''))
-          ? `Agent ${String(why).replace('need-agent-', '')} 먼저`
-          : 'Agent 1→6 순서대로',
+          ? lt('bridge.needAgentN', { n: String(why).replace('need-agent-', '') })
+          : lt('bridge.order'),
   });
 
   let { slot, mode, reason } = resolveCliSlot(requestedSlot, open);

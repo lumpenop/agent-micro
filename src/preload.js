@@ -1,5 +1,11 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+// Sandboxed preload cannot require local modules — i18n lives in main via sync IPC
+contextBridge.exposeInMainWorld('agentI18n', {
+  t: (locale, key, vars) => ipcRenderer.sendSync('i18n:t', { locale, key, vars }),
+  normalizeLocale: (locale) => ipcRenderer.sendSync('i18n:normalizeLocale', locale),
+});
+
 contextBridge.exposeInMainWorld('codexDesktop', {
   minimize: () => ipcRenderer.invoke('window:minimize'),
   close: () => ipcRenderer.invoke('window:close'),

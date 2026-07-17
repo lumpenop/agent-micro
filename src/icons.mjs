@@ -22,11 +22,21 @@ export const DEFAULT_KEY_ICONS = {
   send: 'codex',
 };
 
-/** AI agents first, then Lucide generics */
+/**
+ * Brand marks shown in the icon picker.
+ * Codex-only for v1 — restore full `Object.keys(LOBE_BRAND_ICONS)` later.
+ */
+export const PICKER_BRAND_IDS = ['codex'];
+
+/** Picker order: allowed brands, then Lucide generics */
 export const ICON_ORDER = [
-  ...Object.keys(LOBE_BRAND_ICONS),
+  ...PICKER_BRAND_IDS.filter((id) => id in LOBE_BRAND_ICONS),
   ...Object.keys(LUCIDE_ICONS),
 ];
+
+export function isPickerIcon(id) {
+  return ICON_ORDER.includes(id);
+}
 
 export function iconSvgBody(id, maskId = 'icon-mask') {
   const def = KEYCAP_ICONS[id];

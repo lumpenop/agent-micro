@@ -18,22 +18,22 @@
           <button type="button" class="link-dot no-drag" id="link-dot" title="Connect / Reconnect" aria-label="Connect"></button>
         </span>
         <div class="chrome-actions no-drag">
-          <button type="button" class="chrome-btn" id="btn-help" title="사용 설명서">
+          <button type="button" class="chrome-btn" id="btn-help" title="User guide" data-i18n-title="chrome.help">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
           </button>
-          <button type="button" class="chrome-btn" id="btn-keymap" title="키 맵핑">
+          <button type="button" class="chrome-btn" id="btn-keymap" title="Key map" data-i18n-title="chrome.keymap">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.01"/><path d="M10 8h.01"/><path d="M14 8h.01"/><path d="M18 8h.01"/><path d="M6 12h.01"/><path d="M10 12h.01"/><path d="M14 12h.01"/><path d="M18 12h.01"/><path d="M7 16h10"/></svg>
           </button>
-          <button type="button" class="chrome-btn" id="btn-settings" title="Codex 설정">
+          <button type="button" class="chrome-btn" id="btn-settings" title="Settings" data-i18n-title="chrome.settings">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
-          <button type="button" class="chrome-btn" id="btn-reconnect" title="Codex CLI Connect">
+          <button type="button" class="chrome-btn" id="btn-reconnect" title="Codex CLI Connect" data-i18n-title="chrome.reconnect">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
           </button>
-          <button type="button" class="chrome-btn" id="btn-min" title="Minimize">
+          <button type="button" class="chrome-btn" id="btn-min" title="Minimize" data-i18n-title="chrome.min">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>
           </button>
-          <button type="button" class="chrome-btn close" id="btn-close" title="Close">
+          <button type="button" class="chrome-btn close" id="btn-close" title="Close" data-i18n-title="chrome.close">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
         </div>
@@ -55,7 +55,7 @@
           <div class="modal-scroll">
             <div class="icon-picker-grid" id="icon-picker-grid"></div>
           </div>
-          <p class="icon-picker-hint">아이콘이 키 동작에 연결됩니다 · 우클릭으로 변경</p>
+          <p class="icon-picker-hint" data-i18n="picker.hint">Icon maps to the key action · right-click to change</p>
         </div>
       </div>
 
@@ -64,20 +64,20 @@
           <div class="guide-head">
             <div class="guide-head-copy">
               <span class="guide-kicker">Agent Micro</span>
-              <span class="guide-title">사용 설명서</span>
+              <span class="guide-title" data-i18n="guide.title">User guide</span>
             </div>
-            <button type="button" class="chrome-btn" id="guide-close" title="Close">
+            <button type="button" class="chrome-btn" id="guide-close" title="Close" data-i18n-title="chrome.close">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
             </button>
           </div>
           <div class="guide-body modal-scroll" id="guide-body"></div>
           <div class="guide-foot">
-            <span>⌘⇧M 숨기기</span>
+            <span data-i18n="guide.foot.hide">⌘⇧M hide</span>
             <span class="guide-dot on"></span>
-            <span>연결</span>
+            <span data-i18n="guide.foot.link">Connected</span>
             <span class="guide-dot demo"></span>
             <span>demo</span>
-            <button type="button" class="guide-link" id="guide-to-keymap">키 맵핑 →</button>
+            <button type="button" class="guide-link" id="guide-to-keymap" data-i18n="guide.foot.keymap">Key map →</button>
           </div>
         </div>
       </div>
@@ -87,26 +87,26 @@
           <div class="guide-head">
             <div class="guide-head-copy">
               <span class="guide-kicker">Agent Micro</span>
-              <span class="guide-title">키 맵핑</span>
+              <span class="guide-title" data-i18n="keymap.title">Key map</span>
             </div>
-            <button type="button" class="chrome-btn" id="keymap-close" title="Close">
+            <button type="button" class="chrome-btn" id="keymap-close" title="Close" data-i18n-title="chrome.close">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
             </button>
           </div>
           <div class="modal-scroll keymap-scroll">
-            <div class="mod-picker" id="mod-picker" role="group" aria-label="수정키">
-              <span class="mod-picker-label">수정키</span>
+            <div class="mod-picker" id="mod-picker" role="group" aria-label="Modifier" data-i18n-aria="keymap.modLabel">
+              <span class="mod-picker-label" data-i18n="keymap.modLabel">Modifier</span>
               <div class="mod-picker-btns">
                 <button type="button" class="mod-btn" data-mod="shift" id="mod-shift">⇧ Shift</button>
                 <button type="button" class="mod-btn" data-mod="command" id="mod-command">⌘ Command</button>
               </div>
-              <p class="mod-picker-hint" id="mod-hint">패드·CLI 단축키에 쓰는 키 · 바로 적용</p>
+              <p class="mod-picker-hint" id="mod-hint" data-i18n="keymap.modHint">Used for pad &amp; CLI shortcuts · applies immediately</p>
             </div>
             <div class="guide-body" id="keymap-body"></div>
           </div>
           <div class="guide-foot">
-            <span>종료 ⌘⇧Q</span>
-            <button type="button" class="guide-link" id="keymap-to-guide">← 사용 설명서</button>
+            <span data-i18n="keymap.foot.quit">Quit ⌘⇧Q</span>
+            <button type="button" class="guide-link" id="keymap-to-guide" data-i18n="keymap.foot.guide">← User guide</button>
           </div>
         </div>
       </div>
@@ -116,17 +116,17 @@
           <div class="guide-head">
             <div class="guide-head-copy">
               <span class="guide-kicker">Codex CLI</span>
-              <span class="guide-title" id="voice-title">API 키 · 마이크</span>
+              <span class="guide-title" id="voice-title" data-i18n="voice.title">API key · Mic</span>
             </div>
-            <button type="button" class="chrome-btn" id="voice-close" title="Close">
+            <button type="button" class="chrome-btn" id="voice-close" title="Close" data-i18n-title="chrome.close">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
             </button>
           </div>
-          <p class="provider-lead" id="voice-lead">
-            Codex CLI(app-server) 연결 후, Whisper 마이크용 Platform API 키를 저장하세요.
+          <p class="provider-lead" id="voice-lead" data-i18n="voice.lead">
+            OpenAI Platform API key for Whisper mic → CLI.
           </p>
-          <p class="voice-mode" id="voice-mode">CLI · API 키 저장</p>
-          <label class="voice-label" for="voice-api-key">OpenAI API 키</label>
+          <p class="voice-mode" id="voice-mode" data-i18n="voice.mode">CLI · save API key</p>
+          <label class="voice-label" for="voice-api-key" data-i18n="voice.label">OpenAI API key</label>
           <input
             id="voice-api-key"
             class="voice-input"
@@ -136,11 +136,11 @@
             placeholder="sk-…"
           />
           <div class="voice-actions">
-            <button type="button" class="voice-btn primary" id="voice-save">저장하고 완료</button>
-            <button type="button" class="voice-btn" id="voice-open-keys">키 발급</button>
-            <button type="button" class="voice-btn" id="voice-skip">나중에</button>
+            <button type="button" class="voice-btn primary" id="voice-save" data-i18n="voice.save">Save &amp; finish</button>
+            <button type="button" class="voice-btn" id="voice-open-keys" data-i18n="voice.openKeys">Get a key</button>
+            <button type="button" class="voice-btn" id="voice-skip" data-i18n="voice.skip">Later</button>
           </div>
-          <p class="icon-picker-hint" id="voice-hint">sk-… 저장 → 마이크 = Whisper → CLI 전송</p>
+          <p class="icon-picker-hint" id="voice-hint" data-i18n="voice.hint">Save sk-… → mic = Whisper → CLI</p>
         </div>
       </div>
 
@@ -149,84 +149,88 @@
           <div class="guide-head">
             <div class="guide-head-copy">
               <span class="guide-kicker">Codex CLI</span>
-              <span class="guide-title">설정</span>
+              <span class="guide-title" data-i18n="settings.title">Settings</span>
             </div>
-            <button type="button" class="chrome-btn" id="settings-close" title="Close">
+            <button type="button" class="chrome-btn" id="settings-close" title="Close" data-i18n-title="chrome.close">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
             </button>
           </div>
           <div class="modal-scroll settings-scroll">
-          <p class="provider-lead">Codex CLI 동작 · 저장 시 ~/.codex 에 반영되고 새 CLI 창부터 적용됩니다.</p>
+          <p class="provider-lead" data-i18n="settings.lead">Codex CLI options · saved to ~/.codex · applies to new CLI windows.</p>
           <div class="settings-body" id="settings-body">
             <div class="settings-field">
-              <label class="voice-label" for="set-sandbox">sandbox_mode · 샌드박스</label>
-              <select id="set-sandbox" class="voice-input settings-select">
-                <option value="read-only">read-only · 읽기만</option>
-                <option value="workspace-write">workspace-write · 워크스페이스 쓰기</option>
-                <option value="danger-full-access">danger-full-access · 전체 접근</option>
+              <label class="voice-label" for="set-locale" data-i18n="settings.language">Language</label>
+              <select id="set-locale" class="voice-input settings-select">
+                <option value="en" data-i18n="settings.lang.en">English</option>
+                <option value="ko" data-i18n="settings.lang.ko">한국어</option>
               </select>
-              <p class="settings-desc">
-                CLI가 파일/시스템에 쓸 수 있는 범위입니다. read-only는 안전하고, workspace-write는 프로젝트 안에서만 수정, danger-full-access는 제한이 거의 없습니다.
+            </div>
+
+            <div class="settings-field">
+              <label class="voice-label" for="set-sandbox" data-i18n="settings.sandbox">sandbox_mode · Sandbox</label>
+              <select id="set-sandbox" class="voice-input settings-select">
+                <option value="read-only" data-i18n="settings.sandbox.ro">read-only · read only</option>
+                <option value="workspace-write" data-i18n="settings.sandbox.ww">workspace-write · workspace write</option>
+                <option value="danger-full-access" data-i18n="settings.sandbox.full">danger-full-access · full access</option>
+              </select>
+              <p class="settings-desc" data-i18n="settings.sandbox.desc">
+                How far the CLI can write files/system.
               </p>
             </div>
 
             <div class="settings-field">
-              <label class="voice-label" for="set-approval">approval_policy · 승인</label>
+              <label class="voice-label" for="set-approval" data-i18n="settings.approval">approval_policy · Approval</label>
               <select id="set-approval" class="voice-input settings-select">
-                <option value="untrusted">untrusted · 거의 항상 묻기</option>
-                <option value="on-request">on-request · 필요할 때 묻기</option>
-                <option value="never">never · 묻지 않음</option>
+                <option value="untrusted" data-i18n="settings.approval.untrusted">untrusted · ask almost always</option>
+                <option value="on-request" data-i18n="settings.approval.onRequest">on-request · ask when needed</option>
+                <option value="never" data-i18n="settings.approval.never">never · do not ask</option>
               </select>
-              <p class="settings-desc">
-                명령 실행 전에 사용자 확인을 받을지 정합니다. untrusted가 가장 까다롭고, never는 자동 실행에 가깝습니다.
+              <p class="settings-desc" data-i18n="settings.approval.desc">
+                Whether to confirm before running commands.
               </p>
             </div>
 
             <div class="settings-row">
               <div class="settings-field">
-                <label class="voice-label" for="set-startup">MCP 시작(초)</label>
+                <label class="voice-label" for="set-startup" data-i18n="settings.startup">MCP startup (sec)</label>
                 <input id="set-startup" class="voice-input" type="number" min="5" max="300" step="1" />
-                <p class="settings-desc">MCP 서버가 뜰 때까지 기다리는 시간. 기본 10초 · 무거운 서버면 30–60 권장.</p>
+                <p class="settings-desc" data-i18n="settings.startup.desc">Wait for MCP servers.</p>
               </div>
               <div class="settings-field">
-                <label class="voice-label" for="set-tool">도구 타임아웃(초)</label>
+                <label class="voice-label" for="set-tool" data-i18n="settings.tool">Tool timeout (sec)</label>
                 <input id="set-tool" class="voice-input" type="number" min="10" max="3600" step="1" />
-                <p class="settings-desc">도구 한 번 호출의 제한 시간. 기본 60초 · 긴 작업이면 늘리세요.</p>
+                <p class="settings-desc" data-i18n="settings.tool.desc">Per tool call limit.</p>
               </div>
             </div>
 
             <div class="settings-field">
-              <label class="voice-label" for="set-job">Job 최대 실행(초)</label>
+              <label class="voice-label" for="set-job" data-i18n="settings.job">Job max runtime (sec)</label>
               <input id="set-job" class="voice-input" type="number" min="60" max="86400" step="60" />
-              <p class="settings-desc">
-                agents.job_max_runtime_seconds · 한 작업(Job)이 너무 오래 돌면 끊습니다. 기본 1800초(30분) 전후.
-              </p>
+              <p class="settings-desc" data-i18n="settings.job.desc">Stop runaway jobs.</p>
             </div>
 
             <div class="settings-field">
               <label class="settings-check" for="set-proxy">
                 <input id="set-proxy" type="checkbox" />
-                <span>network_proxy · 네트워크 프록시</span>
+                <span data-i18n="settings.proxy">network_proxy · Network proxy</span>
               </label>
-              <p class="settings-desc">
-                features.network_proxy · 모델의 외부 네트워크 요청을 프록시로 세밀하게 제어합니다. 불필요한 외부 호출을 줄일 때 켭니다.
-              </p>
+              <p class="settings-desc" data-i18n="settings.proxy.desc">Finer control of model network calls.</p>
             </div>
 
             <div class="settings-field settings-field--actions">
-              <p class="settings-desc">
-                <strong>.codexignore</strong> — RAM/컨텍스트 절약용. node_modules·빌드 산출물 등 불필요 파일을 제외하는 샘플을 프로젝트 폴더에 만듭니다.<br />
-                <strong>config.toml</strong> — ~/.codex/config.toml 을 열어 직접 확인·수정합니다.
+              <p class="settings-desc" data-i18n-html="settings.actions.desc">
+                <strong>.codexignore</strong> — sample ignore for RAM/context.<br />
+                <strong>config.toml</strong> — open ~/.codex/config.toml.
               </p>
             </div>
 
-            <p class="settings-hint" id="settings-hint">저장 시 ~/.codex 에 반영 · 새 CLI 창에 적용</p>
+            <p class="settings-hint" id="settings-hint" data-i18n="settings.hint">Saves to ~/.codex · applies to new CLI windows</p>
           </div>
           </div>
           <div class="voice-actions">
-            <button type="button" class="voice-btn primary" id="settings-save">저장</button>
-            <button type="button" class="voice-btn" id="settings-ignore">.codexignore</button>
-            <button type="button" class="voice-btn" id="settings-open-config">config.toml</button>
+            <button type="button" class="voice-btn primary" id="settings-save" data-i18n="settings.save">Save</button>
+            <button type="button" class="voice-btn" id="settings-ignore" data-i18n="settings.ignore">.codexignore</button>
+            <button type="button" class="voice-btn" id="settings-open-config" data-i18n="settings.openConfig">config.toml</button>
           </div>
         </div>
       </div>
@@ -236,13 +240,13 @@
           <div class="guide-head">
             <div class="guide-head-copy">
               <span class="guide-kicker">Agent Micro</span>
-              <span class="guide-title">무료 기간 종료</span>
+              <span class="guide-title" data-i18n="trial.title">Trial ended</span>
             </div>
           </div>
-          <p class="provider-lead" id="trial-lock-lead">
-            무료 사용 기간(7일)이 끝났습니다. Gumroad에서 구매한 뒤 라이선스 키를 입력하세요.
+          <p class="provider-lead" id="trial-lock-lead" data-i18n="trial.lead">
+            Your 7-day free trial has ended. Buy on Gumroad, then enter your license key.
           </p>
-          <label class="voice-label" for="trial-license-key">라이선스 키</label>
+          <label class="voice-label" for="trial-license-key" data-i18n="trial.keyLabel">License key</label>
           <input
             id="trial-license-key"
             class="voice-input"
@@ -252,11 +256,11 @@
             placeholder="AM-····-····-····-····"
           />
           <div class="voice-actions trial-lock-actions">
-            <button type="button" class="voice-btn primary" id="trial-activate">키로 활성화</button>
-            <button type="button" class="voice-btn" id="trial-sponsor" disabled>구매하기</button>
-            <button type="button" class="voice-btn" id="trial-close">창 닫기</button>
+            <button type="button" class="voice-btn primary" id="trial-activate" data-i18n="trial.activate">Activate key</button>
+            <button type="button" class="voice-btn" id="trial-sponsor" disabled data-i18n="trial.buy">Buy</button>
+            <button type="button" class="voice-btn" id="trial-close" data-i18n="trial.close">Close window</button>
           </div>
-          <p class="icon-picker-hint" id="trial-lock-hint">구매 메일의 키를 붙여넣기 · 구매 링크는 준비 중일 수 있음</p>
+          <p class="icon-picker-hint" id="trial-lock-hint" data-i18n="trial.hint">Paste the key from your purchase email · buy link may be pending</p>
         </div>
       </div>
 

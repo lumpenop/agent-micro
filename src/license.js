@@ -103,8 +103,8 @@ function formatDisplay(key) {
  */
 function activate(key) {
   const trimmed = String(key || '').trim();
-  if (!trimmed) return { ok: false, error: '키를 입력하세요' };
-  if (!verifyOffline(trimmed)) return { ok: false, error: '유효하지 않은 라이선스 키' };
+  if (!trimmed) return { ok: false, error: 'empty', errorKey: 'trial.emptyKey' };
+  if (!verifyOffline(trimmed)) return { ok: false, error: 'invalid', errorKey: 'trial.badKey' };
 
   const display = formatDisplay(trimmed);
   writeStore({

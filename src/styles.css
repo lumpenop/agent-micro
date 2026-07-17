@@ -49,8 +49,9 @@ button {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  padding: 2px 4px 4px;
+  padding: 2px 4px 8px;
   gap: 0;
+  overflow: hidden;
 }
 
 .drag { -webkit-app-region: drag; }
@@ -541,16 +542,21 @@ button {
 }
 
 .icon-picker-card {
-  width: min(340px, calc(100% - 28px));
+  width: min(var(--pad), calc(100% - 12px));
   max-height: min(420px, calc(100% - 36px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 12px;
+  padding: 12px 14px 12px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.82);
   border: 1px solid rgba(255, 255, 255, 0.7);
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
+}
+
+.icon-picker-card > .modal-scroll {
+  padding: 2px 4px 4px 0;
+  margin-right: -2px;
 }
 
 .icon-picker-head {
@@ -567,13 +573,14 @@ button {
 
 .icon-picker-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+  padding-right: 4px;
 }
 
 .icon-pick {
   aspect-ratio: 1;
-  border-radius: 12px;
+  border-radius: 11px;
   background: linear-gradient(180deg, #fcfcfa, #ecece8);
   border: 1px solid rgba(0, 0, 0, 0.06);
   box-shadow: inset 0 1px 0 #fff, 0 3px 8px rgba(0, 0, 0, 0.08);
@@ -581,11 +588,12 @@ button {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 4px;
   color: var(--ink);
   cursor: pointer;
   transition: transform 0.08s ease, box-shadow 0.12s ease;
-  padding: 8px 4px 6px;
+  padding: 6px 3px 5px;
+  min-width: 0;
 }
 
 .icon-pick:hover {
@@ -600,8 +608,8 @@ button {
 
 .icon-pick svg,
 .icon-svg {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   display: block;
   flex-shrink: 0;
   shape-rendering: geometricPrecision;
@@ -624,9 +632,14 @@ button {
 }
 
 .icon-pick span {
-  font-size: 9px;
+  font-size: 8px;
   color: rgba(0, 0, 0, 0.5);
   line-height: 1.1;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 2px;
 }
 
 .icon-picker-hint {
@@ -800,8 +813,8 @@ button {
 }
 
 .guide-agent-cap:nth-child(2) .guide-agent-led {
-  background: radial-gradient(circle at 35% 30%, #fff, #7eb0e8 75%);
-  box-shadow: 0 0 3px rgba(126, 176, 232, 0.55);
+  background: radial-gradient(circle at 35% 30%, #fff, #8fa5b4 75%);
+  box-shadow: 0 0 3px rgba(143, 165, 180, 0.55);
 }
 
 .guide-ico {
@@ -1380,14 +1393,14 @@ button {
   flex: 0 0 auto;
   align-self: center;
   box-sizing: border-box;
-  margin-top: 4px;
-  padding: 7px 10px 5px;
+  margin-top: 6px;
+  padding: 8px 10px 8px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.42);
-  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.54);
+  border: 1px solid rgba(255, 255, 255, 0.66);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
   display: grid;
   gap: 3px;
 }

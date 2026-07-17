@@ -3,12 +3,18 @@ import {
   KEYCAP_ICONS,
   DEFAULT_KEY_ICONS,
   ICON_ORDER,
+  isPickerIcon,
   iconMarkup,
 } from './icons.mjs';
 
+const { t: tRaw, normalizeLocale } = window.agentI18n || {
+  t: (_loc, key) => key,
+  normalizeLocale: (l) => (l === 'ko' ? 'ko' : 'en'),
+};
+
 const REASONING = ['minimal', 'low', 'medium', 'high', 'xhigh'];
 const api = window.codexDesktop;
-const STORAGE_KEY = 'codex-micro-key-icons-v4-codex';
+const STORAGE_KEY = 'agent-micro-key-icons-v1';
 
 /** All layers → Codex CLI (app-server) */
 const LAYERS = [
@@ -83,12 +89,20 @@ function loadKeyIcons() {
   let stored = {};
   try {
     stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    if (!Object.keys(stored).length) {
+      const legacy = localStorage.getItem('codex-micro-key-icons-v4-codex');
+      if (legacy) {
+        stored = JSON.parse(legacy);
+        localStorage.setItem(STORAGE_KEY, legacy);
+      }
+    }
   } catch {
     stored = {};
   }
   const merged = { ...DEFAULT_KEY_ICONS, ...stored };
   for (const [cmd, id] of Object.entries(merged)) {
-    if (!KEYCAP_ICONS[id]) merged[cmd] = DEFAULT_KEY_ICONS[cmd];
+    // Drop other AI brand marks until multi-agent picker ships
+    if (!KEYCAP_ICONS[id] || !isPickerIcon(id)) merged[cmd] = DEFAULT_KEY_ICONS[cmd];
   }
   return merged;
 }
@@ -120,7 +134,57 @@ const state = {
   hotkeyModifier: 'shift',
   canFork: true,
   trialExpired: false,
+  /** @type {'en' | 'ko'} */
+  locale: 'en',
 };
+
+function t(key, vars) {
+  return tRaw(state.locale || 'en', key, vars);
+}
+
+function applyStaticI18n() {
+  document.documentElement.lang = state.locale === 'ko' ? 'ko' : 'en';
+  for (const el of document.querySelectorAll('[data-i18n]')) {
+    const key = el.getAttribute('data-i18n');
+    if (key) el.textContent = t(key);
+  }
+  for (const el of document.querySelectorAll('[data-i18n-html]')) {
+    const key = el.getAttribute('data-i18n-html');
+    if (key) el.innerHTML = t(key);
+  }
+  for (const el of document.querySelectorAll('[data-i18n-title]')) {
+    const key = el.getAttribute('data-i18n-title');
+    if (key) el.setAttribute('title', t(key));
+  }
+  for (const el of document.querySelectorAll('[data-i18n-aria]')) {
+    const key = el.getAttribute('data-i18n-aria');
+    if (key) el.setAttribute('aria-label', t(key));
+  }
+  const setLocaleEl = document.getElementById('set-locale');
+  if (setLocaleEl) setLocaleEl.value = state.locale;
+  syncModPickerUI();
+  const gPanel = document.getElementById('guide-panel');
+  const gBody = document.getElementById('guide-body');
+  if (gBody && gPanel && !gPanel.hidden) {
+    gBody.innerHTML = renderGuideList(getGuideItems());
+  }
+  const kPanel = document.getElementById('keymap-panel');
+  const kBody = document.getElementById('keymap-body');
+  if (kBody && kPanel && !kPanel.hidden) {
+    kBody.innerHTML = renderGuideList(buildKeymapItems());
+  }
+  if (state.trialExpired) {
+    const sponsor = document.getElementById('trial-sponsor');
+    const hint = document.getElementById('trial-lock-hint');
+    const hasUrl = !!sponsor && !sponsor.disabled;
+    if (hint) hint.textContent = hasUrl ? t('trial.hint.url') : t('trial.hint.noUrl');
+  }
+}
+
+function applyLocale(locale) {
+  state.locale = normalizeLocale(locale);
+  applyStaticI18n();
+}
 
 function modGlyph(mod = state.hotkeyModifier) {
   return mod === 'command' ? '⌘' : '⇧';
@@ -171,11 +235,9 @@ function applyTrialLock(status) {
     trialSponsorBtn.disabled = !hasUrl;
   }
   if (trialHintEl) {
-    trialHintEl.textContent = hasUrl
-      ? '구매 후 메일·페이지의 키를 입력하세요'
-      : '키로 활성화 · 구매 링크는 SPONSOR_URL에 설정';
+    trialHintEl.textContent = hasUrl ? t('trial.hint.url') : t('trial.hint.noUrl');
   }
-  flashAction('무료 기간 종료');
+  flashAction(t('trial.flash'));
 }
 
 function trialBlocks() {
@@ -220,14 +282,10 @@ async function refreshVoiceStatus() {
   if (!s) return null;
   voiceMode = s.mode || (s.whisperReady ? 'whisper' : 'codex-dictation');
   if (voiceModeEl) {
-    voiceModeEl.textContent = s.whisperReady
-      ? '마이크 준비됨 · Whisper'
-      : 'Codex 연결 후 · API 키 저장 필요';
+    voiceModeEl.textContent = s.whisperReady ? t('voice.mode.ready') : t('voice.mode.needKey');
   }
   if (voiceHintEl) {
-    voiceHintEl.textContent = s.whisperReady
-      ? '키캡 마이크 · 말하기 → Codex'
-      : '키 발급 → 붙여넣기 → 저장하고 완료';
+    voiceHintEl.textContent = s.whisperReady ? t('voice.hint.ready') : t('voice.hint.needKey');
   }
   return s;
 }
@@ -239,19 +297,17 @@ function openVoicePanel({ fromConnect = false } = {}) {
   closeSettings();
   closeIconPicker();
   if (voiceTitleEl) {
-    voiceTitleEl.textContent = fromConnect ? 'CLI · API 키' : 'API 키 · 마이크';
+    voiceTitleEl.textContent = fromConnect ? t('voice.title.connect') : t('voice.title');
   }
   if (voiceLeadEl) {
-    voiceLeadEl.textContent = fromConnect
-      ? 'Codex CLI 연결이 끝났습니다. Whisper용 Platform API 키(sk-…)를 저장하세요.'
-      : '마이크(Whisper) → CLI 전송에 쓰는 OpenAI API 키입니다.';
+    voiceLeadEl.textContent = fromConnect ? t('voice.lead.connect') : t('voice.lead');
   }
   if (voiceModeEl) {
-    voiceModeEl.textContent = fromConnect ? 'CLI 연결 완료 · API 키 저장' : 'Codex CLI · Whisper';
+    voiceModeEl.textContent = fromConnect ? t('voice.mode.connect') : t('voice.mode');
   }
   voicePanel?.removeAttribute('hidden');
   refreshVoiceStatus();
-  flashAction(fromConnect ? 'API 키 설정' : '마이크 / API 키');
+  flashAction(fromConnect ? t('flash.apiSetup') : t('flash.micApi'));
   voiceApiKeyEl?.focus?.();
 }
 
@@ -274,11 +330,11 @@ async function maybePromptVoiceSetup(result, { force = false } = {}) {
 
 async function startCodexDictation({ latched = false } = {}) {
   if (dictationActive) return;
-  flashAction('Codex로 이동…');
+  flashAction(t('flash.codexJump'));
   const r = await api?.beginVoiceDictation?.();
   if (!r?.ok) {
     // ⌘K가 Cursor 팔레트를 연 경우 등 — Whisper 키 설정으로 유도
-    flashAction(r?.error || 'Codex 앱을 연 뒤 다시');
+    flashAction(r?.error || t('flash.codexApp'));
     openVoicePanel({ fromConnect: false });
     return;
   }
@@ -287,7 +343,7 @@ async function startCodexDictation({ latched = false } = {}) {
   micLatched = latched;
   padEl.classList.add('recording');
   pad3d?.setRecording(true);
-  flashAction(latched ? 'Codex에서 말하세요 (탭으로 전송)' : 'Codex에서 말하세요 · 떼면 전송');
+  flashAction(latched ? t('flash.speakTap') : t('flash.speakHold'));
 }
 
 async function stopCodexDictation({ submit = true } = {}) {
@@ -298,13 +354,13 @@ async function stopCodexDictation({ submit = true } = {}) {
   padEl.classList.remove('recording');
   pad3d?.setRecording(false);
   if (!submit) {
-    flashAction('받아쓰기 취소');
+    flashAction(t('flash.dictationCancel'));
     await api?.endVoiceDictation?.();
     return;
   }
-  flashAction('Codex 전송…');
+  flashAction(t('flash.codexSending'));
   await api?.endVoiceDictation?.();
-  flashAction('Codex 전송');
+  flashAction(t('flash.codexSent'));
 }
 
 function stopMicStream() {
@@ -363,7 +419,7 @@ async function ensureMicPermission({ silent = false } = {}) {
   }
   const ok = await micWarmPromise;
   if (!silent) {
-    flashAction(ok ? 'mic ready' : 'mic permission needed · System Settings');
+    flashAction(ok ? t('flash.micReady') : t('flash.micPerm'));
   }
   return ok;
 }
@@ -384,14 +440,14 @@ function blobToBase64(blob) {
 async function startRecording({ latched = false } = {}) {
   await refreshVoiceStatus();
   if (voiceMode !== 'whisper') {
-    flashAction('API 키 필요 · Whisper');
+    flashAction(t('flash.apiNeedWhisper'));
     openVoicePanel({ fromConnect: true });
     return;
   }
 
   const ok = await ensureMicPermission({ silent: true });
   if (!ok) {
-    flashAction('mic blocked · allow in System Settings');
+    flashAction(t('flash.micBlocked'));
     return;
   }
 
@@ -404,7 +460,7 @@ async function startRecording({ latched = false } = {}) {
       audio: { echoCancellation: true, noiseSuppression: true },
     });
   } catch {
-    flashAction('mic stream failed');
+    flashAction(t('flash.micStream'));
     return;
   }
 
@@ -415,7 +471,7 @@ async function startRecording({ latched = false } = {}) {
       : new MediaRecorder(micStream);
     micMime = mediaRecorder.mimeType || micMime || 'audio/webm';
   } catch {
-    flashAction('MediaRecorder 불가');
+    flashAction(t('flash.recorderNo'));
     stopMicStream();
     return;
   }
@@ -430,12 +486,12 @@ async function startRecording({ latched = false } = {}) {
   padEl.classList.add('recording');
   padEl.classList.remove('processing');
   pad3d?.setRecording(true);
-  flashAction(latched ? 'Codex 녹음 (hands-free)' : 'Codex에 말하는 중…');
+  flashAction(latched ? t('flash.talkingHf') : t('flash.talking'));
 
   try {
     mediaRecorder.start(250);
   } catch {
-    flashAction('녹음 시작 실패');
+    flashAction(t('flash.recFail'));
     stopMicStream();
     state.recording = false;
     padEl.classList.remove('recording');
@@ -451,7 +507,7 @@ async function finishVoiceToCodexFromAudio() {
   state.processing = false;
 
   if (!micChunks.length) {
-    flashAction('녹음 없음 · 더 길게 홀드');
+    flashAction(t('flash.recEmpty'));
     micFinishing = false;
     stopMicStream();
     return;
@@ -462,21 +518,21 @@ async function finishVoiceToCodexFromAudio() {
   stopMicStream();
 
   if (blob.size < 800) {
-    flashAction('너무 짧음 · 1–2초 말하기');
+    flashAction(t('flash.recShort'));
     micFinishing = false;
     return;
   }
 
-  flashAction('Whisper 인식 중…');
+  flashAction(t('flash.whisper'));
   try {
     const base64 = await blobToBase64(blob);
     const result = await api?.transcribe?.({ base64, mimeType: blob.type || micMime });
     if (!result?.ok) {
       if (result?.code === 'NO_API_KEY') {
-        flashAction('API 키 필요');
+        flashAction(t('flash.apiNeed'));
         openVoicePanel({ fromConnect: true });
       } else {
-        flashAction(result?.error || '인식 실패');
+        flashAction(result?.error || t('flash.recogFail'));
       }
       micFinishing = false;
       return;
@@ -486,7 +542,7 @@ async function finishVoiceToCodexFromAudio() {
     flashAction(`→ Codex · ${text.slice(0, 36)}`);
     await api?.voiceToCodex?.(text);
   } catch (e) {
-    flashAction(e?.message || 'voice failed');
+    flashAction(e?.message || t('flash.voiceFail'));
   }
   micFinishing = false;
 }
@@ -507,13 +563,13 @@ function stopRecording({ process = true } = {}) {
   if (!process) {
     stopMicStream();
     micChunks = [];
-    flashAction('mic off');
+    flashAction(t('flash.micOff'));
     return;
   }
 
   state.processing = true;
   padEl.classList.add('processing');
-  flashAction('녹음 저장 중…');
+  flashAction(t('flash.saving'));
 
   const rec = mediaRecorder;
   if (!rec || rec.state === 'inactive') {
@@ -541,7 +597,7 @@ function applyKeyIcons() {
 function openIconPicker(cmd) {
   if (trialBlocks()) return;
   state.pickingCmd = cmd || 'send';
-  pickerTitle.textContent = `Icon · ${state.pickingCmd}`;
+  pickerTitle.textContent = t('picker.title', { cmd: state.pickingCmd });
   const current = state.keyIcons[state.pickingCmd];
   pickerGrid.innerHTML = ICON_ORDER.map((id) => {
     const def = KEYCAP_ICONS[id];
@@ -575,118 +631,119 @@ picker?.addEventListener('click', (e) => {
   if (e.target === picker) closeIconPicker();
 });
 
-/** 사용 설명서 — 동작·팁 (단축키 표는 키 맵핑 페이지) */
-const GUIDE_ITEMS = [
-  { section: '시작' },
-  {
-    key: '↻ / 점',
-    title: 'Codex 연결',
-    text: '클릭 = CLI Connect · Shift+점 = 강제 로그인 · 연결 후 API 키(🎙)',
-  },
-  {
-    key: '🎙',
-    title: '마이크 · Whisper',
-    text: 'Platform API 키(sk-…) 저장 후 음성 → Codex 전송',
-  },
-  { section: '패드' },
-  {
-    visual: 'agents',
-    title: '에이전트 슬롯',
-    text: '첫 CLI=1번 창 · 이후=같은 창 스플릿(⌘D)에서 Codex · 더블탭=포커스',
-  },
-  {
-    key: 'Dial',
-    title: 'Dial',
-    text: '돌리면 reasoning 강도 (minimal → xhigh)',
-  },
-  {
-    key: 'Touch',
-    title: 'Touch',
-    text: '탭 = Codex → Prompts → App 레이어 순환',
-  },
-  {
-    key: 'Joy',
-    title: '조이스틱',
-    text: '레이어마다 액션이 다름 · 방향별 단축키는 키 맵핑',
-  },
-  { section: '팁' },
-  {
-    key: 'Mic',
-    title: '음성',
-    text: '홀드=녹음 · 더블탭=hands-free · 수정키+D=토글',
-  },
-  {
-    key: '우클릭',
-    title: '아이콘 변경',
-    text: '커맨드 키 우클릭 또는 ◆ 버튼으로 아이콘 변경',
-  },
-  {
-    key: '⚙',
-    title: 'Codex 설정',
-    text: '상단 톱니 · sandbox · 승인 · 타임아웃 · .codexignore',
-  },
-  {
-    key: '⌨',
-    title: '수정키',
-    text: '키 맵핑에서 ⇧ Shift 또는 ⌘ Command 선택',
-  },
-  {
-    key: '⌘⇧M',
-    title: '창 숨기기',
-    text: '전역 토글 · 종료는 ⌘⇧Q',
-  },
-];
+function getGuideItems() {
+  return [
+    { section: t('guide.sec.start') },
+    {
+      key: '↻ / ·',
+      title: t('guide.connect.title'),
+      text: t('guide.connect.text'),
+    },
+    {
+      icons: ['mic'],
+      title: t('guide.mic.title'),
+      text: t('guide.mic.text'),
+    },
+    { section: t('guide.sec.pad') },
+    {
+      visual: 'agents',
+      title: t('guide.agents.title'),
+      text: t('guide.agents.text'),
+    },
+    {
+      key: 'Dial',
+      title: 'Dial',
+      text: t('guide.dial.text'),
+    },
+    {
+      key: 'Touch',
+      title: 'Touch',
+      text: t('guide.touch.text'),
+    },
+    {
+      key: 'Joy',
+      title: t('guide.joy.title'),
+      text: t('guide.joy.text'),
+    },
+    { section: t('guide.sec.tips') },
+    {
+      key: 'Mic',
+      title: t('guide.voice.title'),
+      text: t('guide.voice.text'),
+    },
+    {
+      key: t('guide.icon.key'),
+      title: t('guide.icon.title'),
+      text: t('guide.icon.text'),
+    },
+    {
+      key: '⚙',
+      title: t('guide.settings.title'),
+      text: t('guide.settings.text'),
+    },
+    {
+      key: '⌨',
+      title: t('guide.mod.title'),
+      text: t('guide.mod.text'),
+    },
+    {
+      key: '⌘⇧M',
+      title: t('guide.hide.title'),
+      text: t('guide.hide.text'),
+    },
+  ];
+}
 
-/** 키 맵핑 — 단축키·레이어 Joy (수정키 반영) */
+/** Key map — shortcuts & layer Joy (modifier-aware) */
 function buildKeymapItems(g = modGlyph()) {
   return [
-    { section: '에이전트' },
+    { section: t('map.sec.agents') },
     {
       visual: 'agents',
       title: `${g}1 – ${g}6`,
-      text: '없으면 창/스플릿+Codex · 있으면 그 패인으로 포커스(입력 가능)',
+      text: t('map.agents.text'),
     },
-    { section: '하단 키캡' },
+    { section: t('map.sec.keys') },
     {
       icons: ['lightning'],
       title: `${g}Q · Fast`,
-      text: 'reasoning → minimal · 아이콘 바꾸면 다른 액션',
+      text: t('map.fast.text'),
     },
     {
       icons: ['check'],
       title: `${g}W · Approve`,
-      text: '승인',
+      text: t('map.approve.text'),
     },
     {
       icons: ['times'],
       title: `${g}E · Decline`,
-      text: '거절',
+      text: t('map.decline.text'),
     },
     {
       icons: ['fork'],
       title: `${g}R · Fork`,
-      text: '빈 슬롯에 스플릿+분기 · 6/6이면 키 비활성',
+      text: t('map.fork.text'),
     },
     {
       icons: ['mic'],
       title: `${g}D · Mic`,
-      text: '토글 · 키캡 홀드=말하기 · 더블탭=hands-free',
+      text: t('map.mic.text'),
     },
     {
       icons: ['codex'],
       title: `${g}F · Send`,
-      text: 'Continue · 더블탭 = 새 채팅',
+      text: t('map.send.text'),
     },
-    { section: '컨트롤' },
+    { section: t('map.sec.controls') },
     {
       key: `${g}Tab`,
-      title: 'Touch · 레이어',
-      text: 'Codex → Prompts → App 순환',
+      title: t('map.touch.title'),
+      text: t('map.touch.text'),
     },
     {
       key: `${g}↑↓←→`,
-      title: '조이스틱',
-      text: '현재 레이어 Joy 액션 (아래 표)',
+      title: t('map.joy.title'),
+      text: t('map.joy.text'),
     },
     {
       key: 'Dial',
@@ -696,35 +753,35 @@ function buildKeymapItems(g = modGlyph()) {
     { section: 'Joy · Codex' },
     {
       key: '↑ ↓',
-      title: 'Plan / 새 채팅',
-      text: '↑ Plan 토글 · ↓ 새 채팅',
+      title: t('map.joy.codex.ud'),
+      text: t('map.joy.codex.ud.text'),
     },
     {
       key: '← →',
-      title: '에이전트 히스토리',
-      text: '← 이전 · → 다음',
+      title: t('map.joy.codex.lr'),
+      text: t('map.joy.codex.lr.text'),
     },
     { section: 'Joy · Prompts' },
     {
       key: '↑ ↓',
-      title: '리뷰 / 문서',
-      text: '↑ PR 리뷰 · ↓ 문서',
+      title: t('map.joy.prompts.ud'),
+      text: t('map.joy.prompts.ud.text'),
     },
     {
       key: '← →',
-      title: '리팩터 / 디버그',
-      text: '← 리팩터 · → 디버그',
+      title: t('map.joy.prompts.lr'),
+      text: t('map.joy.prompts.lr.text'),
     },
     { section: 'Joy · App' },
     {
       key: '↑ ↓',
-      title: 'Continue / 설명',
-      text: '↑ Continue · ↓ explain',
+      title: t('map.joy.app.ud'),
+      text: t('map.joy.app.ud.text'),
     },
     {
       key: '← →',
-      title: 'Fork / 새 채팅',
-      text: '← Fork · → 새 채팅',
+      title: t('map.joy.app.lr'),
+      text: t('map.joy.app.lr.text'),
     },
   ];
 }
@@ -789,7 +846,7 @@ function openGuide() {
   closeKeymap();
   closeSettings();
   if (!guideBody || !guidePanel) return;
-  guideBody.innerHTML = renderGuideList(GUIDE_ITEMS);
+  guideBody.innerHTML = renderGuideList(getGuideItems());
   guidePanel.hidden = false;
 }
 
@@ -804,9 +861,7 @@ function syncModPickerUI() {
   const hint = document.getElementById('mod-hint');
   if (hint) {
     hint.textContent =
-      mod === 'command'
-        ? '⌘ + QWERDF / 1–6 / 화살표 · ⌘Tab은 OS와 겹칠 수 있음'
-        : '⇧ + QWERDF / 1–6 / 화살표 · OS와 덜 겹침';
+      mod === 'command' ? t('keymap.modHint.command') : t('keymap.modHint.shift');
   }
 }
 
@@ -874,16 +929,18 @@ async function openSettings() {
   try {
     const r = await api?.getCodexSettings?.();
     fillSettingsForm(r?.settings || {});
+    const setLocaleEl = document.getElementById('set-locale');
+    if (setLocaleEl) setLocaleEl.value = state.locale;
     if (settingsHint) {
       settingsHint.textContent = r?.meta?.profilePath
-        ? `프로필 ${r.meta.profile} · 저장 시 ~/.codex 반영`
-        : '저장 시 ~/.codex 에 반영 · 새 CLI 창에 적용';
+        ? t('settings.hint.profile', { profile: r.meta.profile })
+        : t('settings.hint');
     }
   } catch {
     fillSettingsForm({});
   }
   settingsPanel.hidden = false;
-  flashAction('Codex 설정');
+  flashAction(t('flash.settings'));
 }
 
 function closeSettings() {
@@ -895,12 +952,12 @@ document.getElementById('btn-keymap')?.addEventListener('click', openKeymap);
 document.getElementById('mod-shift')?.addEventListener('click', async () => {
   const r = await api?.setPadPrefs?.({ hotkeyModifier: 'shift' });
   applyHotkeyModifier(r?.hotkeyModifier || 'shift');
-  flashAction('수정키 · ⇧ Shift');
+  flashAction(t('flash.modShift'));
 });
 document.getElementById('mod-command')?.addEventListener('click', async () => {
   const r = await api?.setPadPrefs?.({ hotkeyModifier: 'command' });
   applyHotkeyModifier(r?.hotkeyModifier || 'command');
-  flashAction('수정키 · ⌘ Command');
+  flashAction(t('flash.modCmd'));
 });
 document.getElementById('btn-settings')?.addEventListener('click', openSettings);
 document.getElementById('guide-close')?.addEventListener('click', closeGuide);
@@ -921,32 +978,32 @@ document.getElementById('settings-save')?.addEventListener('click', async () => 
   const r = await api?.saveCodexSettings?.(readSettingsForm());
   if (r?.ok) {
     fillSettingsForm(r.settings);
-    flashAction('Codex 설정 저장');
+    flashAction(t('flash.settingsSaved'));
     if (settingsHint) {
       settingsHint.textContent = r.warning
-        ? `저장됨 · 경고: ${r.warning}`
-        : `저장됨 · ${r.profile || 'agent-micro'} · 새 CLI 창부터 적용`;
+        ? t('flash.savedWarn', { warn: r.warning })
+        : t('flash.savedApply', { path: r.profile || 'agent-micro' });
     }
   } else {
-    flashAction('설정 저장 실패');
+    flashAction(t('flash.settingsFail'));
   }
 });
 document.getElementById('settings-ignore')?.addEventListener('click', async () => {
   const r = await api?.writeCodexIgnore?.();
   if (r?.canceled) {
-    flashAction('취소');
+    flashAction(t('flash.canceled'));
     return;
   }
   if (r?.ok) {
-    flashAction(r.created ? `.codexignore 생성` : `.codexignore 이미 있음`);
+    flashAction(r.created ? t('flash.ignoreCreated') : t('flash.ignoreExists'));
     if (settingsHint) settingsHint.textContent = r.path || '';
   } else {
-    flashAction('.codexignore 실패');
+    flashAction(t('flash.ignoreFail'));
   }
 });
 document.getElementById('settings-open-config')?.addEventListener('click', () => {
   api?.openCodexConfig?.();
-  flashAction('config.toml');
+  flashAction(t('flash.configToml'));
 });
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
@@ -1061,11 +1118,11 @@ async function onCmd(cmd) {
     state.lastSendTap = now;
     if (dbl) {
       await api?.newChat();
-      flashAction('Codex · new chat');
+      flashAction(t('flash.newChat'));
       return;
     }
     await api?.send('Continue.');
-    flashAction('Codex · Continue');
+    flashAction(t('flash.continue'));
     return;
   }
 
@@ -1084,7 +1141,7 @@ async function onCmd(cmd) {
   else if (cmd === 'decline') await api?.decline();
   else if (cmd === 'fork') {
     if (!state.canFork) {
-      flashAction('fork · slots full (6/6)');
+      flashAction(t('flash.forkFull'));
       return;
     }
     await api?.fork();
@@ -1106,7 +1163,7 @@ function onDialDelta(d) {
     }
     api?.setReasoning(next);
     hud.reason.textContent = REASONING[next];
-    flashAction(`reasoning · ${REASONING[next]}`);
+    flashAction(t('flash.reasoning', { name: REASONING[next] }));
   }
 }
 
@@ -1118,7 +1175,7 @@ function onJoy(dir) {
   const layer = LAYERS[state.layer] || LAYERS[0];
   const fn = layer.joy?.[dir];
   if (fn) fn();
-  else flashAction(`joy · ${dir}`);
+  else flashAction(t('flash.joy', { dir }));
   // Stick snaps back on window blur when Codex/etc steals focus — don't reset mid-drag
 }
 
@@ -1135,49 +1192,49 @@ try {
     },
     onIconPick: openIconPicker,
     onDialDelta,
-    onDialStart: () => flashAction('reasoning control'),
+    onDialStart: () => flashAction(t('flash.reasoningCtrl')),
     onJoy,
     onTouch: () => {
       if (trialBlocks()) return;
       state.layer = (state.layer + 1) % LAYERS.length;
       pad3d?.setLayer?.(state.layer);
-      flashAction(`layer · ${layerDisplayName(state.layer)}`);
+      flashAction(t('flash.layer', { name: layerDisplayName(state.layer) }));
       render();
     },
   });
   applyKeyIcons();
   render();
-  flashAction('3D keycaps ready');
+  flashAction(t('flash.padReady'));
 } catch (err) {
   console.error(err);
   canvasHost.innerHTML = `<div style="padding:16px;font:12px/1.4 system-ui;color:#b00020;white-space:pre-wrap">3D pad failed:\n${err?.stack || err}</div>`;
-  flashAction('3D error');
+  flashAction(t('flash.padError'));
 }
 
 async function connectAgent({ forceLogin = false } = {}) {
   if (trialBlocks()) {
-    flashAction('무료 기간 종료');
+    flashAction(t('trial.flash'));
     return;
   }
   linkDot?.classList.add('busy');
-  flashAction(forceLogin ? 'Codex 로그인…' : 'CLI connecting…');
+  flashAction(forceLogin ? t('flash.login') : t('flash.connecting'));
   try {
     const result = forceLogin
       ? await api?.connect?.({ forceLogin: true })
       : await api?.reconnect?.();
     state.linkMode = 'cli';
     if (result?.ok === false && result?.reason === 'missing') {
-      flashAction('Codex 없음 · pnpm install');
+      flashAction(t('flash.missing'));
     } else if (result?.ok === false && result?.reason === 'login') {
-      flashAction('Codex 로그인 필요 · ↻ 다시');
+      flashAction(t('flash.needLogin'));
     } else if (result?.ok || result === true) {
       const prompted = await maybePromptVoiceSetup(result);
-      flashAction(prompted ? 'CLI · API 키 설정' : 'Codex CLI connected');
+      flashAction(prompted ? t('flash.cliApi') : t('flash.connected'));
     } else {
-      flashAction('demo · ↻ 로 CLI 연결');
+      flashAction(t('flash.demo'));
     }
   } catch (err) {
-    flashAction(err?.message || 'connect failed');
+    flashAction(err?.message || t('flash.connectFail'));
   } finally {
     linkDot?.classList.remove('busy');
   }
@@ -1257,17 +1314,28 @@ api?.onHotkey?.(({ cmd, phase, dir, index } = {}) => {
 });
 
 api?.onPadPrefs?.((prefs) => {
+  if (prefs?.locale) applyLocale(prefs.locale);
   if (prefs?.hotkeyModifier) applyHotkeyModifier(prefs.hotkeyModifier);
 });
 
 api?.getPadPrefs?.().then((prefs) => {
+  if (prefs?.locale) applyLocale(prefs.locale);
+  else applyStaticI18n();
   if (prefs?.hotkeyModifier) applyHotkeyModifier(prefs.hotkeyModifier);
+});
+
+
+document.getElementById('set-locale')?.addEventListener('change', async (e) => {
+  const locale = normalizeLocale(e.target.value);
+  const r = await api?.setPadPrefs?.({ locale });
+  applyLocale(r?.locale || locale);
+  flashAction(locale === 'ko' ? t('flash.langKo') : t('flash.langEn'));
 });
 
 trialSponsorBtn?.addEventListener('click', async () => {
   const r = await api?.openSponsor?.();
-  if (!r?.ok) flashAction(r?.error || '구매 링크 없음');
-  else flashAction('구매 페이지 열림');
+  if (!r?.ok) flashAction(r?.error || t('trial.buy.none'));
+  else flashAction(t('trial.buy.opened'));
 });
 trialCloseBtn?.addEventListener('click', () => api?.close());
 trialActivateBtn?.addEventListener('click', async () => {
@@ -1276,12 +1344,12 @@ trialActivateBtn?.addEventListener('click', async () => {
   try {
     const r = await api?.activateLicense?.(key);
     if (!r?.ok) {
-      flashAction(r?.error || '활성화 실패');
+      flashAction(r?.errorKey ? t(r.errorKey) : (r?.error || t('trial.activate.fail')));
       return;
     }
     applyTrialLock(r.trial || { locked: false, expired: false, licensed: true });
     if (trialKeyInput) trialKeyInput.value = '';
-    flashAction('라이선스 활성화됨');
+    flashAction(t('trial.activate.ok'));
     api?.getState?.().then(applyBridgeState);
   } finally {
     trialActivateBtn.disabled = false;
@@ -1316,23 +1384,23 @@ document.getElementById('voice-save')?.addEventListener('click', async () => {
   const key = voiceApiKeyEl?.value || '';
   const r = await api?.setVoiceApiKey?.(key);
   if (!r?.ok) {
-    flashAction(r?.error || '저장 실패');
+    flashAction(r?.error || t('flash.saveFail'));
     return;
   }
   if (voiceApiKeyEl) voiceApiKeyEl.value = '';
   await refreshVoiceStatus();
-  flashAction(r.whisperReady ? 'API 키 · Whisper 준비' : '저장됨');
+  flashAction(r.whisperReady ? t('flash.whisperReady') : t('flash.saved'));
   closeVoicePanel();
 });
 document.getElementById('voice-skip')?.addEventListener('click', async () => {
   await api?.skipVoiceSetup?.();
   await refreshVoiceStatus();
   closeVoicePanel();
-  flashAction('나중에 · 키 없이 CLI');
+  flashAction(t('flash.later'));
 });
 document.getElementById('voice-open-keys')?.addEventListener('click', () => {
   api?.openApiKeysPage?.();
-  flashAction('platform.openai.com 열림');
+  flashAction(t('flash.keysOpened'));
 });
 
 api?.onState?.((s) => {
@@ -1355,4 +1423,5 @@ document.addEventListener('focusout', () => {
   setTimeout(syncPadHotkeySuspend, 0);
 }, true);
 
-flashAction('Codex CLI');
+flashAction(t('flash.codexCli'));
+applyStaticI18n();

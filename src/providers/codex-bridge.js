@@ -5,6 +5,12 @@ const readline = require('readline');
 const EventEmitter = require('events');
 const mac = require('../platform/mac');
 const { REASONING, SKILLS, emptyAgent, demo, truncate } = require('./base-bridge');
+const { t } = require('../i18n');
+const padPrefs = require('../pad-prefs');
+
+function lt(key, vars) {
+  return t(padPrefs.getLocale(), key, vars);
+}
 
 const PLATFORM_BIN = {
   'darwin-arm64': {
@@ -134,23 +140,23 @@ class CodexBridge extends EventEmitter {
   async fork() {
     const active = this._activeCount();
     if (active < 1) {
-      this.emitState('fork · no source agent');
+      this.emitState(lt('bridge.forkNoSource'));
       return { ok: false, reason: 'no-source' };
     }
     if (active >= 6) {
-      this.emitState('fork · slots full (6/6)');
+      this.emitState(lt('bridge.forkFull'));
       return { ok: false, reason: 'full' };
     }
 
     const target = this._nextForkSlot();
     if (target < 0) {
-      this.emitState('fork · slots full (6/6)');
+      this.emitState(lt('bridge.forkFull'));
       return { ok: false, reason: 'full' };
     }
 
     const src = this.agents[this.selected];
     if (!src || src.status === 'off') {
-      this.emitState('fork · select a live agent');
+      this.emitState(lt('bridge.forkSelect'));
       return { ok: false, reason: 'no-source' };
     }
 
@@ -168,11 +174,11 @@ class CodexBridge extends EventEmitter {
         const result = await this.request('thread/fork', { threadId: src.threadId });
         threadId = result?.thread?.id || result?.threadId || result?.id;
         if (!threadId) {
-          this.emitState('fork failed · no thread id');
+          this.emitState(lt('bridge.forkNoThread'));
           return { ok: false, reason: 'no-id' };
         }
       } catch (e) {
-        this.emitState(`fork failed · ${e.message}`);
+        this.emitState(lt('bridge.forkFail', { err: e.message }));
         return { ok: false, error: e.message };
       }
     }
@@ -193,7 +199,7 @@ class CodexBridge extends EventEmitter {
       this.emit('log', `fork cli: ${e.message}`);
     }
 
-    this.emitState(`fork → Agent ${target + 1} · split`);
+    this.emitState(lt('bridge.forkOk', { n: target + 1 }));
     return { ok: true, slot: target };
   }
 
@@ -235,10 +241,10 @@ class CodexBridge extends EventEmitter {
   async login() {
     const bin = findCodexNative();
     if (!bin) {
-      this.emitState('codex missing · run pnpm install');
+      this.emitState(lt('bridge.missingInstall'));
       return { ok: false, reason: 'missing' };
     }
-    this.emitState('login · browser opening…');
+    this.emitState(lt('bridge.loginBrowser'));
     this.emit('log', 'Opening Codex login…');
     try {
       await this._runCodex(bin, ['login'], 180000);
@@ -247,10 +253,10 @@ class CodexBridge extends EventEmitter {
     }
     const status = await this.checkLogin();
     if (!status.loggedIn) {
-      this.emitState('login needed · click Connect');
+      this.emitState(lt('bridge.loginNeeded'));
       return { ok: false, reason: 'not-logged-in', ...status };
     }
-    this.emitState('logged in · connecting…');
+    this.emitState(lt('bridge.loggedIn'));
     return { ok: true, ...status };
   }
 
@@ -259,7 +265,7 @@ class CodexBridge extends EventEmitter {
     const bin = findCodexNative();
     if (!bin) {
       this._seedDemo();
-      this.emitState('codex missing · pnpm install');
+      this.emitState(lt('bridge.missing'));
       return { ok: false, reason: 'missing', linkMode: 'cli' };
     }
 
@@ -314,7 +320,7 @@ class CodexBridge extends EventEmitter {
     const bin = findCodexNative();
     if (!bin) {
       this._seedDemo();
-      this.emitState('codex not found · demo');
+      this.emitState(lt('bridge.notFoundDemo'));
       return false;
     }
 
@@ -329,7 +335,7 @@ class CodexBridge extends EventEmitter {
         this.connected = false;
         this.mode = 'offline';
         this._seedDemo();
-        this.emitState('offline · demo mode');
+        this.emitState(lt('bridge.offlineDemo'));
         return false;
       }
     }
@@ -346,7 +352,7 @@ class CodexBridge extends EventEmitter {
       this.selected = live >= 0 ? live : 0;
     }
     await this.refreshThreads().catch((e) => this.emit('log', e.message));
-    this.emitState('connected · cli');
+    this.emitState(lt('bridge.connected'));
     this._poll = setInterval(() => {
       this.refreshThreads().catch(() => {});
     }, 4000);
@@ -415,7 +421,7 @@ class CodexBridge extends EventEmitter {
       this.connected = false;
       this.mode = 'offline';
       this.proc = null;
-      this.emitState(`disconnected (${code})`);
+      this.emitState(lt('bridge.disconnected', { code }));
     });
   }
 
@@ -454,7 +460,7 @@ class CodexBridge extends EventEmitter {
       this.agents[slot].status = 'input';
       this.agents[slot].approvalId = String(id);
       if (params.command) this.agents[slot].name = truncate(params.command, 42);
-      this.emitState('needs approval');
+      this.emitState(lt('bridge.needsApproval'));
       return;
     }
 
@@ -463,7 +469,7 @@ class CodexBridge extends EventEmitter {
       if (idx >= 0) {
         this.agents[idx].status = 'thinking';
         if (params.turnId) this.agents[idx].turnId = params.turnId;
-        this.emitState('thinking');
+        this.emitState(lt('bridge.thinking'));
       }
       return;
     }
@@ -473,7 +479,7 @@ class CodexBridge extends EventEmitter {
       if (idx >= 0) {
         this.agents[idx].status = 'complete';
         this.agents[idx].turnId = null;
-        this.emitState('complete');
+        this.emitState(lt('bridge.complete'));
       }
       return;
     }
@@ -482,7 +488,7 @@ class CodexBridge extends EventEmitter {
       const idx = this._indexForThread(params.threadId);
       if (idx >= 0) {
         this.agents[idx].status = 'error';
-        this.emitState('error');
+        this.emitState(lt('bridge.error'));
       }
     }
   }
@@ -521,7 +527,7 @@ class CodexBridge extends EventEmitter {
 
   async _handshake() {
     await this.request('initialize', {
-      clientInfo: { name: 'codex-micro-electron', version: '1.0.0' },
+      clientInfo: { name: 'agent-micro', version: '1.0.0' },
       capabilities: {
         experimentalApi: true,
         optOutNotificationMethods: [
@@ -593,7 +599,7 @@ class CodexBridge extends EventEmitter {
     try {
       const r = await this.ensureAgentCliWindow(requested, { focus });
       if (r?.mode === 'blocked') {
-        this.emitState(r.error || 'Agent 1→6 순서대로');
+        this.emitState(r.error || lt('bridge.order'));
         return { ok: false, reason: r.reason || 'blocked', slot: requested };
       }
       if (typeof r?.slot === 'number') slot = r.slot;
@@ -604,18 +610,18 @@ class CodexBridge extends EventEmitter {
         this.startThread(this.selected).catch(() => {});
       }
       if (r?.opened && r.mode === 'window') {
-        this.emitState(`CLI · Agent ${slot + 1} 창`);
+        this.emitState(lt('bridge.window', { n: slot + 1 }));
       } else if (r?.opened && (r.mode === 'split' || r.mode === 'tab')) {
-        this.emitState(`CLI · Agent ${slot + 1} 스플릿`);
+        this.emitState(lt('bridge.split', { n: slot + 1 }));
       } else if (r?.focused) {
-        this.emitState(`focus · CLI · Agent ${slot + 1}`);
+        this.emitState(lt('bridge.focus', { n: slot + 1 }));
       } else {
-        this.emitState(`switch · Agent ${slot + 1}`);
+        this.emitState(lt('bridge.switch', { n: slot + 1 }));
       }
       return { ok: true, slot };
     } catch (e) {
       this.emit('log', e?.message || String(e));
-      this.emitState(`CLI 창 실패 · ${e?.message || e}`);
+      this.emitState(lt('bridge.windowFail', { err: e?.message || e }));
       return { ok: false, error: e?.message || String(e) };
     }
   }
@@ -670,14 +676,14 @@ class CodexBridge extends EventEmitter {
         approvalId: null,
       };
       this.selected = slot;
-      this.emitState('new thread');
+      this.emitState(lt('bridge.newThread'));
     }
   }
 
   async approve() {
     const a = this.agents[this.selected];
     if (!a?.approvalId) {
-      this.emitState('nothing to approve');
+      this.emitState(lt('bridge.nothingApprove'));
       return;
     }
     if (this.connected && !String(a.approvalId).startsWith('demo')) {
@@ -687,13 +693,13 @@ class CodexBridge extends EventEmitter {
     this.approvals.delete(a.approvalId);
     a.approvalId = null;
     a.status = 'thinking';
-    this.emitState('approved');
+    this.emitState(lt('bridge.approved'));
   }
 
   async decline() {
     const a = this.agents[this.selected];
     if (!a?.approvalId) {
-      this.emitState('nothing to decline');
+      this.emitState(lt('bridge.nothingDecline'));
       return;
     }
     if (this.connected && !String(a.approvalId).startsWith('demo')) {
@@ -703,7 +709,7 @@ class CodexBridge extends EventEmitter {
     this.approvals.delete(a.approvalId);
     a.approvalId = null;
     a.status = 'idle';
-    this.emitState('declined');
+    this.emitState(lt('bridge.declined'));
   }
 
   async send(text) {
@@ -711,10 +717,10 @@ class CodexBridge extends EventEmitter {
     const a = this.agents[this.selected];
     if (!this.connected) {
       a.status = 'thinking';
-      this.emitState('sent (demo)');
+      this.emitState(lt('bridge.sentDemo'));
       setTimeout(() => {
         a.status = 'complete';
-        this.emitState('complete');
+        this.emitState(lt('bridge.complete'));
       }, 2200);
       return;
     }
@@ -724,7 +730,7 @@ class CodexBridge extends EventEmitter {
         await this.startThread(this.selected);
       } catch (e) {
         a.status = 'error';
-        this.emitState(`new thread failed · ${e.message}`);
+        this.emitState(lt('bridge.newThreadFail', { err: e.message }));
         return;
       }
     }
@@ -742,7 +748,7 @@ class CodexBridge extends EventEmitter {
         cur.name = truncate(prompt, 42);
       };
       markThinking();
-      this.emitState('sent · cli');
+      this.emitState(lt('bridge.sentCli'));
       let result;
       try {
         result = await startTurn(this.agents[this.selected].threadId);
@@ -750,7 +756,7 @@ class CodexBridge extends EventEmitter {
         if (/thread not found|unknown thread/i.test(e.message)) {
           await this.startThread(this.selected);
           markThinking();
-          this.emitState('retry turn');
+          this.emitState(lt('bridge.retryTurn'));
           result = await startTurn(this.agents[this.selected].threadId);
         } else {
           throw e;
@@ -760,7 +766,7 @@ class CodexBridge extends EventEmitter {
     } catch (e) {
       this.agents[this.selected].status = 'error';
       this.emit('log', `send: ${e.message}`);
-      this.emitState(`send failed · ${e.message}`);
+      this.emitState(lt('bridge.sendFail', { err: e.message }));
     }
   }
 
@@ -770,7 +776,7 @@ class CodexBridge extends EventEmitter {
     if (this.connected) {
       this.request('config/set', { key: 'model_reasoning_effort', value }).catch(() => {});
     }
-    this.emitState(`reasoning · ${value}`);
+    this.emitState(lt('bridge.reasoning', { value }));
     return value;
   }
 
@@ -778,7 +784,7 @@ class CodexBridge extends EventEmitter {
     this.fastMode = !this.fastMode;
     if (this.fastMode) this.setReasoning(0);
     else if (this.reasoningIndex === 0) this.setReasoning(2);
-    this.emitState(this.fastMode ? 'fast mode on' : 'fast mode off');
+    this.emitState(this.fastMode ? lt('bridge.fastOn') : lt('bridge.fastOff'));
     return this.fastMode;
   }
 
@@ -799,14 +805,14 @@ class CodexBridge extends EventEmitter {
         }
       }
     }
-    this.emitState(this.planMode ? 'plan mode on' : 'plan mode off');
+    this.emitState(this.planMode ? lt('bridge.planOn') : lt('bridge.planOff'));
     return this.planMode;
   }
 
   async skill(name) {
     const text = SKILLS[name] || SKILLS.continue;
     await this.send(text);
-    this.emitState(`skill · ${name}`);
+    this.emitState(lt('bridge.skill', { name }));
   }
 
   async newChat() {
@@ -818,7 +824,7 @@ class CodexBridge extends EventEmitter {
     }
     this.agents[slot] = demo('New task', 'idle');
     this.selected = slot;
-    this.emitState(`new chat (demo) · Agent ${slot + 1}`);
+    this.emitState(lt('bridge.newChatDemo', { n: slot + 1 }));
   }
 
   async desktopAction(action) {
@@ -830,35 +836,35 @@ class CodexBridge extends EventEmitter {
         this.select((this.selected + 1) % 6);
         break;
       case 'sidebar':
-        this.emitState('sidebar');
+        this.emitState(lt('bridge.sidebar'));
         break;
       case 'composer':
         focusChatGPT();
-        this.emitState('composer');
+        this.emitState(lt('bridge.composer'));
         break;
       case 'newChat':
       case 'newDesktopChat':
         await this.newChat();
         break;
       default:
-        this.emitState(`unknown · ${action}`);
+        this.emitState(lt('bridge.unknown', { action }));
     }
   }
 
   async voiceToCodex(text) {
     const body = String(text || '').trim();
     if (!body) {
-      this.emitState('empty voice');
+      this.emitState(lt('bridge.emptyVoice'));
       return { ok: false, reason: 'empty' };
     }
 
     try {
       await this.send(body);
-      this.emitState('voice → cli');
+      this.emitState(lt('bridge.voiceCli'));
       return { ok: true, mode: 'cli' };
     } catch (e) {
       this.emit('log', `voice cli: ${e.message}`);
-      this.emitState('voice failed');
+      this.emitState(lt('bridge.voiceFail'));
       return { ok: false, error: e.message };
     }
   }
@@ -867,14 +873,14 @@ class CodexBridge extends EventEmitter {
   async beginVoiceDictation() {
     try {
       const r = await mac.beginCodexDictation();
-      this.emitState('Codex에서 말하세요');
+      this.emitState(lt('bridge.speak'));
       return { ok: true, mode: 'codex-dictation', app: r?.app };
     } catch (e) {
       this.emit('log', e.message);
       const hint =
         e.code === 'NO_CODEX_APP' || e.code === 'WRONG_APP'
           ? e.message
-          : 'dictation failed · Codex 앱 + Accessibility?';
+          : lt('bridge.dictationFail');
       this.emitState(hint);
       return { ok: false, error: hint, code: e.code || 'DICTATION' };
     }
@@ -883,11 +889,11 @@ class CodexBridge extends EventEmitter {
   async endVoiceDictation() {
     try {
       await mac.submitCodexComposer();
-      this.emitState('Codex 전송');
+      this.emitState(lt('bridge.sent'));
       return { ok: true };
     } catch (e) {
       this.emit('log', e.message);
-      this.emitState('submit failed');
+      this.emitState(lt('bridge.submitFail'));
       return { ok: false, error: e.message };
     }
   }

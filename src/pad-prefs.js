@@ -1,12 +1,15 @@
 /**
- * Agent Micro pad preferences (hotkey modifier, etc.)
+ * Agent Micro pad preferences (hotkey modifier, locale, etc.)
  */
 const fs = require('fs');
 const path = require('path');
+const { normalizeLocale } = require('./i18n');
 
 const DEFAULTS = {
   /** @type {'shift' | 'command'} */
   hotkeyModifier: 'shift',
+  /** @type {'en' | 'ko'} */
+  locale: 'en',
 };
 
 let userDataDir = null;
@@ -25,6 +28,7 @@ function normalize(raw) {
   const mod = String(raw?.hotkeyModifier || '').toLowerCase();
   return {
     hotkeyModifier: mod === 'command' || mod === 'cmd' || mod === 'meta' ? 'command' : 'shift',
+    locale: normalizeLocale(raw?.locale ?? DEFAULTS.locale),
   };
 }
 
@@ -64,6 +68,14 @@ function setHotkeyModifier(mod) {
   return save({ hotkeyModifier: mod });
 }
 
+function getLocale() {
+  return load().locale;
+}
+
+function setLocale(locale) {
+  return save({ locale });
+}
+
 function modifierGlyph(mod = getHotkeyModifier()) {
   return mod === 'command' ? '⌘' : '⇧';
 }
@@ -78,6 +90,8 @@ module.exports = {
   save,
   getHotkeyModifier,
   setHotkeyModifier,
+  getLocale,
+  setLocale,
   modifierGlyph,
   acceleratorPrefix,
   DEFAULTS,

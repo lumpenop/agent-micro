@@ -5,7 +5,8 @@ import { iconSvgDocument } from './icons.mjs';
 import { playKeyDown, playKeyUp, playDialTick, playJoyTick } from './key-sounds.mjs';
 
 const STATUS_COLOR = {
-  idle: 0x7eb0e8,
+  // default frost disc — cool gray with a hint of blue
+  idle: 0x8fa5b4,
   thinking: 0x2b9dff,
   complete: 0x2edf72,
   input: 0xffc53d,
@@ -14,10 +15,10 @@ const STATUS_COLOR = {
 };
 
 const LAYOUT = [
-  ['dial', 'agent:0', 'agent:1', 'joy'],
+  ['touch', 'agent:0', 'agent:1', 'dial'],
   ['agent:2', 'agent:3', 'agent:4', 'agent:5'],
   ['cmd:fast', 'cmd:approve', 'cmd:decline', 'cmd:fork'],
-  ['touch', 'cmd:mic', null, 'cmd:send'], // mic spans 2 via special case
+  ['joy', 'cmd:mic', null, 'cmd:send'], // mic spans 2 via special case
 ];
 
 /** Per-icon face size — codex/mic settled halfway from last tweak */
@@ -513,21 +514,6 @@ export function createPad3D(container, handlers = {}) {
   wellRim.receiveShadow = true;
   scene.add(wellRim);
 
-  // screws
-  for (const [x, z] of [
-    [-2.15, -2.15],
-    [2.15, -2.15],
-    [-2.15, 2.15],
-    [2.15, 2.15],
-  ]) {
-    const screw = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.08, 0.08, 0.06, 16),
-      new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8, roughness: 0.35 })
-    );
-    screw.position.set(x, 0.2, z);
-    scene.add(screw);
-  }
-
   const interactives = [];
   const agents = [];
   const cmds = {};
@@ -609,7 +595,8 @@ export function createPad3D(container, handlers = {}) {
 
   dialGroup.add(dialBase, dialKnob);
   // slightly left of the agent column
-  dialGroup.position.set(originX - 0.02, 0.28, originZ);
+  // Top-right (swapped with Touch)
+  dialGroup.position.set(originX + gap * 3 + 0.02, 0.28, originZ);
   dialGroup.userData = { type: 'dial', knob: dialKnob };
   dialBase.userData = { type: 'dial' };
   dialKnob.userData = { type: 'dial' };
@@ -678,6 +665,9 @@ export function createPad3D(container, handlers = {}) {
   joyDimple.scale.set(1, 0.4, 1);
   joyDimple.position.y = 0.4;
   joyStick.add(joyBoot, joyShaft, joyCap, joyDimple);
+  // Rest lean (camera-aware) — flipped from first pass
+  const JOY_REST_TILT_X = -0.16;
+  const JOY_REST_TILT_Z = 0.05;
   // Tall invisible hit volume — wins over neighboring agent keys (keys sit higher)
   const joyHit = new THREE.Mesh(
     new THREE.CylinderGeometry(0.48, 0.48, 0.7, 24),
@@ -686,14 +676,15 @@ export function createPad3D(container, handlers = {}) {
   joyHit.position.y = 0.28;
   joyHit.userData = { type: 'joy' };
   joyGroup.add(joyBase, joyGate, joyStick, joyHit);
-  joyGroup.position.set(originX + gap * 3, 0.28, originZ);
+  // Bottom-left (swapped with Touch)
+  joyGroup.position.set(originX - 0.02, 0.28, originZ + gap * 3 + 0.04);
   joyGroup.userData = { type: 'joy', stick: joyStick };
   joyBase.userData = { type: 'joy' };
   joyStick.userData = { type: 'joy' };
   scene.add(joyGroup);
   interactives.push(joyBase, joyStick, joyHit);
 
-  // touch pad (bottom-left) + 3 layer LEDs beside it (like the real Micro)
+  // touch pad (top-right) + 3 layer LEDs beside it
   const touchGroup = new THREE.Group();
 
   // circular capacitive pad
@@ -752,7 +743,8 @@ export function createPad3D(container, handlers = {}) {
   touchHit.position.set(0, 0.08, 0);
   touchGroup.add(touchHit);
 
-  touchGroup.position.set(originX + 0.08, 0.28, originZ + gap * 3);
+  // Top-left (swapped with Dial)
+  touchGroup.position.set(originX + 0.08, 0.28, originZ);
   touch.userData = { type: 'touch', baseY: 0.06 };
   touchHit.userData = { type: 'touch' };
   touchGroup.userData = { type: 'touch', leds: touchLeds, cap: touch, lights: ledLights };
@@ -824,7 +816,7 @@ export function createPad3D(container, handlers = {}) {
     scene.add(spr);
     return spr;
   }
-  makeLabel("Let's build", 0, 2.35);
+  makeLabel('Agent Micro', 0, 2.35);
 
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
@@ -844,10 +836,12 @@ export function createPad3D(container, handlers = {}) {
     const nx = x / max;
     const nz = z / max;
     joyStick.position.x = x * 0.55;
-    joyStick.position.z = z * 0.55;
-    joyStick.rotation.z = -nx * 0.62;
-    joyStick.rotation.x = nz * 0.62;
+    joyStick.position.z = z * 0.55 - 0.012; // slight bias matching rest lean
+    joyStick.rotation.z = JOY_REST_TILT_Z - nx * 0.62;
+    joyStick.rotation.x = JOY_REST_TILT_X + nz * 0.62;
   }
+
+  applyJoyPose(0, 0);
 
   /** Snap stick to center (e.g. when app loses focus to Codex / other windows). */
   function resetJoy() {

@@ -179,4 +179,4 @@ API 키를 저장한 뒤 사용합니다.
 
 ---
 
-Agent Micro — Codex를 손 가까이에.
+Agent Micro — Codex CLI를 손끝에.
