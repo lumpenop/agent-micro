@@ -221,6 +221,7 @@ function keycapMesh({ wide = false, frost = false, iconId = null } = {}) {
     glow.rotation.x = -Math.PI / 2;
     glow.position.y = h * 0.2;
     glow.renderOrder = 5;
+    glow.raycast = () => {}; // don't steal joystick / neighbor hits
     mesh.add(glow);
     mesh.userData.glow = glow;
 
@@ -503,13 +504,20 @@ export function createPad3D(container, handlers = {}) {
   joyDimple.scale.set(1, 0.4, 1);
   joyDimple.position.y = 0.4;
   joyStick.add(joyBoot, joyShaft, joyCap, joyDimple);
-  joyGroup.add(joyBase, joyGate, joyStick);
+  // Tall invisible hit volume — wins over neighboring agent keys (keys sit higher)
+  const joyHit = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.48, 0.48, 0.7, 24),
+    new THREE.MeshBasicMaterial({ visible: false })
+  );
+  joyHit.position.y = 0.28;
+  joyHit.userData = { type: 'joy' };
+  joyGroup.add(joyBase, joyGate, joyStick, joyHit);
   joyGroup.position.set(originX + gap * 3, 0.28, originZ);
   joyGroup.userData = { type: 'joy', stick: joyStick };
   joyBase.userData = { type: 'joy' };
   joyStick.userData = { type: 'joy' };
   scene.add(joyGroup);
-  interactives.push(joyBase, joyStick);
+  interactives.push(joyBase, joyStick, joyHit);
 
   // touch pad (bottom-left) + 3 layer LEDs beside it (like the real Micro)
   const touchGroup = new THREE.Group();
@@ -713,9 +721,17 @@ export function createPad3D(container, handlers = {}) {
     raycaster.setFromCamera(pointer, camera);
     const hits = raycaster.intersectObjects(interactives, true);
     if (!hits.length) return null;
-    let obj = hits[0].object;
-    while (obj && !obj.userData?.type) obj = obj.parent;
-    return obj;
+    const resolved = [];
+    for (const hit of hits) {
+      let obj = hit.object;
+      while (obj && !obj.userData?.type) obj = obj.parent;
+      if (obj?.userData?.type && !resolved.includes(obj)) resolved.push(obj);
+    }
+    // Prefer stick/dial/touch over keycaps — keys sit higher and steal edge hits
+    const control = resolved.find((o) =>
+      o.userData.type === 'joy' || o.userData.type === 'dial' || o.userData.type === 'touch'
+    );
+    return control || resolved[0] || null;
   }
 
   const _dialScreen = new THREE.Vector3();
@@ -795,6 +811,7 @@ export function createPad3D(container, handlers = {}) {
     if (obj.userData.type === 'joy') {
       joyDragging = true;
       playKeyDown('joy', 'joy');
+      e.preventDefault();
       return;
     }
     pressVisual(obj, true);
@@ -814,6 +831,7 @@ export function createPad3D(container, handlers = {}) {
       dialKnob.rotation.y -= (cw * Math.PI) / 180;
       if (Math.abs(cw) > 2) playDialTick(cw);
       handlers.onDialDelta?.(cw);
+      e.preventDefault();
       return;
     }
     if (joyDragging) {
@@ -841,6 +859,8 @@ export function createPad3D(container, handlers = {}) {
         playJoyTick(dir);
         handlers.onJoy?.(dir);
       }
+      e.preventDefault();
+      return;
     }
   });
 
@@ -851,7 +871,7 @@ export function createPad3D(container, handlers = {}) {
       pressed = null;
       return;
     }
-    if (joyDragging) {
+    if (joyDragging || pressed?.userData?.type === 'joy') {
       playKeyUp('joy', 'joy');
       joyDragging = false;
       joyTx = 0;
@@ -863,9 +883,11 @@ export function createPad3D(container, handlers = {}) {
     const downObj = pressed;
     pressVisual(downObj, false);
     playKeyUp(soundKindFor(downObj), soundIdFor(downObj));
-    const obj = pick(e) || downObj;
-    const t = obj.userData?.type || downObj.userData?.type;
-    if (t === 'agent') handlers.onAgent?.(obj.userData.index ?? downObj.userData.index);
+    // Activate based on where the press started — not where it ended
+    // (dragging off a key onto an agent must not fire that agent)
+    const obj = downObj;
+    const t = obj.userData?.type;
+    if (t === 'agent') handlers.onAgent?.(obj.userData.index);
     if (t === 'cmd') {
       const cmd = obj.userData.cmd ?? downObj.userData.cmd;
       if (downObj.userData?.disabled || obj.userData?.disabled) {

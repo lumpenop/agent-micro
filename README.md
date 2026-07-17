@@ -63,7 +63,7 @@ pnpm start
 | Agent ×6 | 탭 = 전환 · 더블탭 = 에이전트 앱 포커스 |
 | ⚡ Fast | reasoning → minimal |
 | ✓ / ✕ | Approve / Decline |
-| Fork | `thread/fork` (Codex) |
+| Fork | `thread/fork` → 다음 빈 슬롯 + CLI 스플릿 (UI는 6/6일 때만 비활성) |
 | Mic | 홀드 = PTT · 더블탭 = hands-free |
 | Send | Continue · 더블탭 = new chat |
 | Dial | reasoning effort |

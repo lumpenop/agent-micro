@@ -939,10 +939,14 @@ function render() {
   linkDot.classList.toggle('demo', !state.connected);
   pad3d.setCmdActive('fast', state.fastMode);
   const forkOk =
-    typeof state.canFork === 'boolean'
-      ? state.canFork
-      : state.agents.some((a) => !a || a.status === 'off');
+    typeof state.canFork === 'boolean' ? state.canFork : canForkFromAgents(state.agents);
   pad3d.setCmdEnabled?.('fork', forkOk);
+}
+
+function canForkFromAgents(agents) {
+  const list = Array.isArray(agents) ? agents : [];
+  // UI: only disable at 6/6 — keep the key looking live otherwise
+  return list.some((a) => !a || a.status === 'off') || list.length < 6;
 }
 
 function applyBridgeState(s) {
@@ -957,7 +961,7 @@ function applyBridgeState(s) {
   state.planMode = !!s.planMode;
   if (typeof s.canFork === 'boolean') state.canFork = s.canFork;
   else if (Array.isArray(s.agents)) {
-    state.canFork = s.agents.some((a) => !a || a.status === 'off');
+    state.canFork = canForkFromAgents(s.agents);
   }
   if (Array.isArray(s.agents)) state.agents = s.agents;
   if (s.action) flashAction(s.action);

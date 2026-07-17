@@ -108,8 +108,13 @@ class CodexBridge extends EventEmitter {
       fastMode: this.fastMode,
       planMode: this.planMode,
       agents: this.agents.map((a) => ({ ...a })),
-      canFork: this._nextForkSlot() >= 0,
+      canFork: this._canFork(),
     };
+  }
+
+  /** How many agent slots are live (not off). */
+  _activeCount() {
+    return this.agents.filter((a) => a && a.status !== 'off').length;
   }
 
   /** First empty agent slot (status off), or -1 if all 6 are in use. */
@@ -117,11 +122,26 @@ class CodexBridge extends EventEmitter {
     return this.agents.findIndex((a) => !a || a.status === 'off');
   }
 
+  /** UI: gray out only when all 6 slots are live. */
+  _canFork() {
+    return this._nextForkSlot() >= 0;
+  }
+
   /**
    * Fork current thread into the next empty slot, open/focus its CLI split.
-   * Disabled when all 6 agents are occupied.
+   * UI stays enabled until 6/6; runtime still needs a live source agent.
    */
   async fork() {
+    const active = this._activeCount();
+    if (active < 1) {
+      this.emitState('fork · no source agent');
+      return { ok: false, reason: 'no-source' };
+    }
+    if (active >= 6) {
+      this.emitState('fork · slots full (6/6)');
+      return { ok: false, reason: 'full' };
+    }
+
     const target = this._nextForkSlot();
     if (target < 0) {
       this.emitState('fork · slots full (6/6)');
@@ -130,7 +150,7 @@ class CodexBridge extends EventEmitter {
 
     const src = this.agents[this.selected];
     if (!src || src.status === 'off') {
-      this.emitState('fork · no source agent');
+      this.emitState('fork · select a live agent');
       return { ok: false, reason: 'no-source' };
     }
 
@@ -315,6 +335,16 @@ class CodexBridge extends EventEmitter {
     }
 
     this.connected = true;
+    // Clear demo placeholders only — keep live CLI agents across soft reconnect
+    this.agents = this.agents.map((a) =>
+      !a || a.status === 'off' || String(a.threadId || '').startsWith('demo')
+        ? emptyAgent()
+        : a
+    );
+    if (this.agents[this.selected]?.status === 'off') {
+      const live = this.agents.findIndex((a) => a.status !== 'off');
+      this.selected = live >= 0 ? live : 0;
+    }
     await this.refreshThreads().catch((e) => this.emit('log', e.message));
     this.emitState('connected · cli');
     this._poll = setInterval(() => {
@@ -507,7 +537,7 @@ class CodexBridge extends EventEmitter {
     if (!this.connected) return;
     let result;
     try {
-      result = await this.request('thread/list', { limit: 6 });
+      result = await this.request('thread/list', { limit: 24 });
     } catch {
       try {
         result = await this.request('thread/list', {});
@@ -517,22 +547,24 @@ class CodexBridge extends EventEmitter {
     }
 
     const threads = normalizeThreads(result);
+    const byId = new Map(threads.map((t) => [t.id, t]));
+
+    // Only sync slots we already own (CLI / fork / select).
+    // Never pack global history into empty keys — that made fork look "full" at 6/6
+    // even when only 1–5 Codex · Agent panes were open.
     for (let i = 0; i < 6; i++) {
-      const t = threads[i];
       const prev = this.agents[i];
-      // Don't clobber an in-flight turn with stale list data
-      if (prev.status === 'thinking' || prev.status === 'input') {
-        continue;
-      }
-      if (!t) {
-        if (!prev.approvalId && prev.status !== 'complete') this.agents[i] = emptyAgent();
-        continue;
-      }
+      if (prev.status === 'thinking' || prev.status === 'input') continue;
+      if (!prev.threadId || String(prev.threadId).startsWith('demo')) continue;
+
+      const t = byId.get(prev.threadId);
+      if (!t) continue;
+
       const status = prev.approvalId
         ? 'input'
-        : mapThreadStatus(t) || (prev.threadId === t.id ? prev.status : 'idle');
+        : mapThreadStatus(t) || prev.status || 'idle';
       this.agents[i] = {
-        name: t.title || t.preview || t.cwd || `Thread ${i + 1}`,
+        name: t.title || t.preview || t.cwd || prev.name || `Agent ${i + 1}`,
         status,
         threadId: t.id,
         turnId: prev.turnId,
