@@ -1,9 +1,9 @@
 :root {
-  --pad: 356px;
-  /* visible white chassis is inset in the canvas — info matches that face */
-  --keyboard: 304px;
+  /* Canvas fits the 3D chassis tightly — keyboard on-screen size stays ~same */
+  --pad: 318px;
+  --keyboard: 300px;
   --gap: 9px;
-  --radius-pad: 36px;
+  --radius-pad: 34px;
   --radius-cap: 14px;
   --ink: #141414;
   --idle: #f2f2f0;
@@ -48,8 +48,9 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 0 4px 2px;
-  gap: 2px;
+  justify-content: flex-start;
+  padding: 2px 4px 4px;
+  gap: 0;
 }
 
 .drag { -webkit-app-region: drag; }
@@ -60,9 +61,11 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 2px;
-  min-height: 28px;
+  padding: 0 4px;
+  min-height: 24px;
+  margin-bottom: 2px;
   opacity: 0.7;
+  flex: 0 0 auto;
 }
 
 .chrome-title {
@@ -140,8 +143,9 @@ button {
   position: relative;
   width: var(--pad);
   height: var(--pad);
-  flex-shrink: 0;
-  filter: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.18));
+  flex: 0 0 auto;
+  margin: 0;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.16));
 }
 
 .pad-3d {
@@ -1292,7 +1296,7 @@ button {
   flex: 0 0 auto;
   align-self: center;
   box-sizing: border-box;
-  margin-top: 0;
+  margin-top: 4px;
   padding: 7px 10px 5px;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.42);

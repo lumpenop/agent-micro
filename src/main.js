@@ -322,9 +322,9 @@ async function ensureMicAccess() {
 
 function createWindow() {
   const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
-  // 356 pad + thin shell padding — keyboard size unchanged
-  const winW = 368;
-  const winH = 528;
+  // Fit chrome + tight pad + hud (keyboard on-screen size unchanged)
+  const winW = 330;
+  const winH = 478;
 
   mainWindow = new BrowserWindow({
     width: winW,

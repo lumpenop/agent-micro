@@ -414,12 +414,12 @@ export function createPad3D(container, handlers = {}) {
   const scene = new THREE.Scene();
   scene.background = null;
 
-  const w = Math.max(container.clientWidth || 0, 360);
-  const h = Math.max(container.clientHeight || 0, 360);
+  const w = Math.max(container.clientWidth || 0, 280);
+  const h = Math.max(container.clientHeight || 0, 280);
 
-  // Near top-down — less tilt so key centers read true
+  // Near top-down — framed tight to the chassis (less transparent letterbox)
   const camera = new THREE.PerspectiveCamera(28, w / h, 0.1, 100);
-  camera.position.set(0, 12.2, 1.55);
+  camera.position.set(0, 10.85, 1.35);
   camera.lookAt(0, 0, 0);
 
   const renderer = new THREE.WebGLRenderer({
