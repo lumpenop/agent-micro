@@ -67,6 +67,22 @@ function iconTexFill(iconId) {
   return 0.64;
 }
 
+/** Canvas nudge after bbox-center — asymmetric glyphs need optical weight fix */
+function iconTexNudge(iconId) {
+  switch (iconId) {
+    case 'lightning':
+      return { x: 0.018, y: -0.012 };
+    case 'send':
+      return { x: -0.022, y: 0.018 };
+    case 'mic':
+      return { x: 0, y: -0.02 };
+    case 'fork':
+      return { x: 0, y: -0.012 };
+    default:
+      return { x: 0, y: 0 };
+  }
+}
+
 function makeIconTexture(iconId) {
   const size = 256;
   const canvas = document.createElement('canvas');
@@ -124,8 +140,9 @@ function makeIconTexture(iconId) {
       const scale = target / side;
       const dw = bw * scale;
       const dh = bh * scale;
-      const dx = (size - dw) * 0.5;
-      const dy = (size - dh) * 0.5;
+      const nudge = iconTexNudge(iconId);
+      const dx = (size - dw) * 0.5 + size * nudge.x;
+      const dy = (size - dh) * 0.5 + size * nudge.y;
       ctx.drawImage(scratch, minX, minY, bw, bh, dx, dy, dw, dh);
     }
     tex.needsUpdate = true;
@@ -155,9 +172,9 @@ function placeAgentGlow(agentMesh) {
   const y = CAP.h * 0.5 + 0.014;
   // Light perspective counter — keep disc in the visual middle of the key
   glow.position.set(
-    -agentMesh.position.x * 0.028,
+    -agentMesh.position.x * 0.02,
     y,
-    -agentMesh.position.z * 0.032 + 0.038
+    -agentMesh.position.z * 0.022 + 0.03
   );
   glow.scale.set(1, 1, 1);
   // Rebuild geometry if radius constant changed at runtime
@@ -165,6 +182,18 @@ function placeAgentGlow(agentMesh) {
     glow.geometry?.dispose?.();
     glow.geometry = new THREE.CircleGeometry(CAP.glowR, 48);
   }
+}
+
+/** Same perspective counter for cream-key icons + face dish. */
+function placeKeyIcon(keyMesh) {
+  const icon = keyMesh?.userData?.iconMesh;
+  if (!icon || !keyMesh) return;
+  const faceY = keyMesh.userData.faceY ?? CAP.h * 0.42 + 0.01;
+  const x = -keyMesh.position.x * 0.02;
+  const z = -keyMesh.position.z * 0.022 + CAP.faceZ;
+  icon.position.set(x, faceY + 0.006, z);
+  const dish = keyMesh.userData.dish;
+  if (dish) dish.position.set(x, faceY, z);
 }
 
 let _capTopTex = null;
@@ -350,8 +379,9 @@ function keycapMesh({ wide = false, frost = false, iconId = null } = {}) {
     return mesh;
   }
 
-  // —— Cream: matte sculpt, a bit more volume, not glossy ——
-  const geo = new RoundedBoxGeometry(w * 0.97, h * 0.78, d * 0.97, CAP.segs, r);
+  // —— Cream: matte sculpt — slightly softer corners than frost (reads sharper at 0.97× footprint)
+  const creamR = r * 1.12;
+  const geo = new RoundedBoxGeometry(w * 0.97, h * 0.78, d * 0.97, CAP.segs, creamR);
   const mat = new THREE.MeshStandardMaterial({
     map: capTopTexture(false),
     color: 0xffffff,
@@ -379,7 +409,7 @@ function keycapMesh({ wide = false, frost = false, iconId = null } = {}) {
   mesh.add(shadow);
 
   const skirt = new THREE.Mesh(
-    new RoundedBoxGeometry(w * 1.03, h * 0.42, d * 1.03, CAP.segs, r * 0.95),
+    new RoundedBoxGeometry(w * 1.03, h * 0.42, d * 1.03, CAP.segs, creamR * 0.95),
     new THREE.MeshStandardMaterial({
       color: 0xc8c2b4,
       roughness: 0.78,
@@ -391,7 +421,7 @@ function keycapMesh({ wide = false, frost = false, iconId = null } = {}) {
   mesh.add(skirt);
 
   const top = new THREE.Mesh(
-    new RoundedBoxGeometry(w * 0.9, h * 0.2, d * 0.9, CAP.segs, r * 0.88),
+    new RoundedBoxGeometry(w * 0.9, h * 0.2, d * 0.9, CAP.segs, creamR * 0.95),
     new THREE.MeshStandardMaterial({
       map: capTopTexture(false),
       color: 0xffffff,
@@ -421,6 +451,8 @@ function keycapMesh({ wide = false, frost = false, iconId = null } = {}) {
   dish.renderOrder = 3;
   dish.raycast = () => {};
   mesh.add(dish);
+  mesh.userData.dish = dish;
+  mesh.userData.faceY = faceY;
 
   if (iconId) {
     const tex = makeIconTexture(iconId);
@@ -436,6 +468,7 @@ function keycapMesh({ wide = false, frost = false, iconId = null } = {}) {
     mesh.add(iconMesh);
     mesh.userData.iconMesh = iconMesh;
     mesh.userData.iconWide = wide;
+    mesh.userData.iconId = iconId;
   }
 
   mesh.userData.restY = 0;
@@ -450,10 +483,10 @@ export function createPad3D(container, handlers = {}) {
   const w = Math.max(container.clientWidth || 0, 280);
   const h = Math.max(container.clientHeight || 0, 280);
 
-  // Near top-down — same framing as pre-border (dial/touch scale)
+  // Near top-down — flatter pitch so the outer rim reads square (was 10.85 / 1.35)
   const camera = new THREE.PerspectiveCamera(28, w / h, 0.1, 100);
-  camera.position.set(0, 10.85, 1.35);
-  camera.lookAt(0, 0, 0);
+  camera.position.set(0, 11.2, 1.02);
+  camera.lookAt(0, 0, 0.05);
 
   const renderer = new THREE.WebGLRenderer({
     antialias: true,
@@ -476,7 +509,7 @@ export function createPad3D(container, handlers = {}) {
   renderer.domElement.style.width = '100%';
   renderer.domElement.style.height = '100%';
   renderer.domElement.style.display = 'block';
-  renderer.domElement.style.borderRadius = '36px';
+  renderer.domElement.style.borderRadius = '34px';
 
   // lights — soft matte key (volume without gloss)
   const amb = new THREE.AmbientLight(0xffffff, 0.38);
@@ -504,10 +537,10 @@ export function createPad3D(container, handlers = {}) {
   const hemi = new THREE.HemisphereLight(0xf5f7fa, 0x6a7380, 0.42);
   scene.add(hemi);
 
-  // Outer bezel — modest rim only (was 5.65 / too thick). Soft corners, still under dial/keys.
+  // Outer bezel — modest rim; corner radius eased so perspective doesn't oval the front edge
   const CHASSIS_BASE = 0xb8c4d0;
   const chassis = new THREE.Mesh(
-    roundedSlabGeometry(5.28, 5.28, 0.4, 0.62, 20),
+    roundedSlabGeometry(5.28, 5.28, 0.4, 0.52, 20),
     new THREE.MeshPhysicalMaterial({
       color: CHASSIS_BASE,
       roughness: 0.34,
@@ -666,14 +699,14 @@ export function createPad3D(container, handlers = {}) {
   scene.add(dialGroup);
   interactives.push(dialBase, dialKnob);
 
-  // joystick — midway between soft gray and touch-pad charcoal
+  // joystick — a touch darker charcoal (still above touch-pad black)
   const joyGroup = new THREE.Group();
   const joyWell = new THREE.Mesh(
     new THREE.CircleGeometry(0.44, 48),
     new THREE.MeshBasicMaterial({
       color: 0x000000,
       transparent: true,
-      opacity: 0.33,
+      opacity: 0.4,
       depthWrite: false,
     })
   );
@@ -683,7 +716,7 @@ export function createPad3D(container, handlers = {}) {
 
   const joyFloor = new THREE.Mesh(
     new THREE.CircleGeometry(0.33, 48),
-    new THREE.MeshStandardMaterial({ color: 0x252a30, roughness: 0.88, metalness: 0.04 })
+    new THREE.MeshStandardMaterial({ color: 0x1a1e24, roughness: 0.88, metalness: 0.04 })
   );
   joyFloor.rotation.x = -Math.PI / 2;
   joyFloor.position.y = 0.055;
@@ -691,11 +724,11 @@ export function createPad3D(container, handlers = {}) {
 
   const joyBase = new THREE.Mesh(
     new THREE.CylinderGeometry(0.37, 0.39, 0.1, 48),
-    new THREE.MeshStandardMaterial({ color: 0x2f363c, roughness: 0.82, metalness: 0.05 })
+    new THREE.MeshStandardMaterial({ color: 0x242a30, roughness: 0.82, metalness: 0.05 })
   );
   const joyGate = new THREE.Mesh(
     new THREE.TorusGeometry(0.32, 0.024, 10, 48),
-    new THREE.MeshStandardMaterial({ color: 0x5a636c, roughness: 0.72, metalness: 0.08 })
+    new THREE.MeshStandardMaterial({ color: 0x4a525a, roughness: 0.72, metalness: 0.08 })
   );
   joyGate.rotation.x = Math.PI / 2;
   joyGate.position.y = 0.06;
@@ -703,26 +736,26 @@ export function createPad3D(container, handlers = {}) {
   const joyStick = new THREE.Group();
   const joyBoot = new THREE.Mesh(
     new THREE.SphereGeometry(0.155, 28, 20),
-    new THREE.MeshStandardMaterial({ color: 0x3a424a, roughness: 0.9, metalness: 0.03 })
+    new THREE.MeshStandardMaterial({ color: 0x2e353c, roughness: 0.9, metalness: 0.03 })
   );
   joyBoot.scale.set(1, 0.55, 1);
   joyBoot.position.y = 0.065;
   const joyShaft = new THREE.Mesh(
     new THREE.CylinderGeometry(0.058, 0.072, 0.24, 24),
-    new THREE.MeshStandardMaterial({ color: 0x5a646e, roughness: 0.78, metalness: 0.04 })
+    new THREE.MeshStandardMaterial({ color: 0x4a525a, roughness: 0.78, metalness: 0.04 })
   );
   joyShaft.position.y = 0.18;
   joyShaft.castShadow = false;
   const joyCap = new THREE.Mesh(
     new THREE.SphereGeometry(0.145, 32, 24),
-    new THREE.MeshStandardMaterial({ color: 0x454e56, roughness: 0.8, metalness: 0.04 })
+    new THREE.MeshStandardMaterial({ color: 0x383f46, roughness: 0.8, metalness: 0.04 })
   );
   joyCap.scale.set(1, 0.72, 1);
   joyCap.position.y = 0.32;
   joyCap.castShadow = true;
   const joyDimple = new THREE.Mesh(
     new THREE.SphereGeometry(0.1, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.45),
-    new THREE.MeshStandardMaterial({ color: 0x2e343a, roughness: 0.85, side: THREE.BackSide })
+    new THREE.MeshStandardMaterial({ color: 0x22282e, roughness: 0.85, side: THREE.BackSide })
   );
   joyDimple.rotation.x = Math.PI;
   joyDimple.scale.set(1, 0.4, 1);
@@ -848,6 +881,7 @@ export function createPad3D(container, handlers = {}) {
     const x = wide ? originX + gap * 1.5 : originX + gap * col;
     m.position.set(x, 0.42, originZ + gap * row);
     m.userData = { ...m.userData, type: 'cmd', cmd: name, baseY: 0.42 };
+    placeKeyIcon(m);
     scene.add(m);
     cmds[name] = m;
     interactives.push(m);
@@ -1241,6 +1275,8 @@ export function createPad3D(container, handlers = {}) {
       const s = iconPlaneSize(iconId, !!m.userData.iconWide);
       m.userData.iconMesh.geometry?.dispose?.();
       m.userData.iconMesh.geometry = new THREE.PlaneGeometry(s, s);
+      m.userData.iconId = iconId;
+      placeKeyIcon(m);
     },
     setCmdActive(cmd, on) {
       const m = cmds[cmd];
