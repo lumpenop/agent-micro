@@ -1219,7 +1219,6 @@ state.provider = 'codex';
 state.linkMode = 'cli';
 api?.getState?.().then(applyBridgeState);
 
-document.getElementById('btn-voice')?.addEventListener('click', () => openVoicePanel());
 document.getElementById('voice-close')?.addEventListener('click', async () => {
   const s = await api?.voiceStatus?.();
   if (s?.needsSetup) await api?.skipVoiceSetup?.();

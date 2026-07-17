@@ -3,7 +3,7 @@
 Work Louder × OpenAI **Codex Micro** 스타일 플로팅 맥로패드.
 
 **Codex CLI 전용**입니다. Connect = `app-server` · 키/조이스틱/마이크 모두 CLI로 전송합니다.  
-연결 후 Whisper용 **API 키(`sk-…`)** 설정을 안내합니다 (상단 🎙).
+연결 후 Whisper용 **API 키(`sk-…`)** 설정을 안내합니다.
 
 나중에 “어떤 에이전트를 쓸지” 고르는 UI가 필요하면 그린필드로 붙이세요 (`src/providers/create-bridge.js` 주석 참고).
 
@@ -39,7 +39,6 @@ pnpm start
 |------|------|
 | **↻** / 제목 옆 **점** | CLI Connect / Reconnect (`app-server`) |
 | Shift + 점 | Codex 강제 로그인 (브라우저) |
-| **🎙** | API 키(`sk-…`) · Whisper |
 | **⇧Q W E R D F** | Fast · Approve · Decline · Fork · Mic · Send |
 | **⇧Tab** | Touch · 레이어 전환 |
 | **⇧↑ ↓ ← →** | 조이스틱 (현재 레이어 액션) |
