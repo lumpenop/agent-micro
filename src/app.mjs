@@ -534,12 +534,6 @@ document.getElementById('icon-picker-close')?.addEventListener('click', closeIco
 picker?.addEventListener('click', (e) => {
   if (e.target === picker) closeIconPicker();
 });
-document.getElementById('btn-icons')?.addEventListener('click', () => {
-  closeGuide();
-  closeKeymap();
-  closeSettings();
-  openIconPicker(state.pickingCmd || 'send');
-});
 
 /** 사용 설명서 — 동작·팁 (단축키 표는 키 맵핑 페이지) */
 const GUIDE_ITEMS = [

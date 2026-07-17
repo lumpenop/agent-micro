@@ -27,9 +27,6 @@
           <button type="button" class="chrome-btn" id="btn-settings" title="Codex 설정">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
-          <button type="button" class="chrome-btn" id="btn-icons" title="Icon picker">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41l-7.59-7.59a2.41 2.41 0 0 0-3.41 0Z"/></svg>
-          </button>
           <button type="button" class="chrome-btn" id="btn-reconnect" title="Codex CLI Connect">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
           </button>
@@ -55,7 +52,9 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
             </button>
           </div>
-          <div class="icon-picker-grid" id="icon-picker-grid"></div>
+          <div class="modal-scroll">
+            <div class="icon-picker-grid" id="icon-picker-grid"></div>
+          </div>
           <p class="icon-picker-hint">아이콘이 키 동작에 연결됩니다 · 우클릭으로 변경</p>
         </div>
       </div>
@@ -71,7 +70,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
             </button>
           </div>
-          <div class="guide-body" id="guide-body"></div>
+          <div class="guide-body modal-scroll" id="guide-body"></div>
           <div class="guide-foot">
             <span>⌘⇧M 숨기기</span>
             <span class="guide-dot on"></span>
@@ -94,15 +93,17 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
             </button>
           </div>
-          <div class="mod-picker" id="mod-picker" role="group" aria-label="수정키">
-            <span class="mod-picker-label">수정키</span>
-            <div class="mod-picker-btns">
-              <button type="button" class="mod-btn" data-mod="shift" id="mod-shift">⇧ Shift</button>
-              <button type="button" class="mod-btn" data-mod="command" id="mod-command">⌘ Command</button>
+          <div class="modal-scroll keymap-scroll">
+            <div class="mod-picker" id="mod-picker" role="group" aria-label="수정키">
+              <span class="mod-picker-label">수정키</span>
+              <div class="mod-picker-btns">
+                <button type="button" class="mod-btn" data-mod="shift" id="mod-shift">⇧ Shift</button>
+                <button type="button" class="mod-btn" data-mod="command" id="mod-command">⌘ Command</button>
+              </div>
+              <p class="mod-picker-hint" id="mod-hint">패드·CLI 단축키에 쓰는 키 · 바로 적용</p>
             </div>
-            <p class="mod-picker-hint" id="mod-hint">패드·CLI 단축키에 쓰는 키 · 바로 적용</p>
+            <div class="guide-body" id="keymap-body"></div>
           </div>
-          <div class="guide-body" id="keymap-body"></div>
           <div class="guide-foot">
             <span>종료 ⌘⇧Q</span>
             <button type="button" class="guide-link" id="keymap-to-guide">← 사용 설명서</button>
@@ -154,6 +155,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
             </button>
           </div>
+          <div class="modal-scroll settings-scroll">
           <p class="provider-lead">Codex CLI 동작 · 저장 시 ~/.codex 에 반영되고 새 CLI 창부터 적용됩니다.</p>
           <div class="settings-body" id="settings-body">
             <div class="settings-field">
@@ -219,6 +221,7 @@
             </div>
 
             <p class="settings-hint" id="settings-hint">저장 시 ~/.codex 에 반영 · 새 CLI 창에 적용</p>
+          </div>
           </div>
           <div class="voice-actions">
             <button type="button" class="voice-btn primary" id="settings-save">저장</button>

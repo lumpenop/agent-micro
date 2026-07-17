@@ -488,6 +488,40 @@ button {
   fill: none;
 }
 
+/* ——— Modal scroll (thin, quiet) ——— */
+.modal-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(16, 20, 26, 0.16) transparent;
+}
+
+.modal-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+.modal-scroll::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 4px 0;
+}
+
+.modal-scroll::-webkit-scrollbar-thumb {
+  background: rgba(16, 20, 26, 0.14);
+  border-radius: 999px;
+}
+
+.modal-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 20, 26, 0.28);
+}
+
+.modal-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* ——— Icon picker ——— */
 .icon-picker {
   position: fixed;
@@ -508,7 +542,9 @@ button {
 .icon-picker-card {
   width: min(340px, calc(100% - 28px));
   max-height: min(420px, calc(100% - 36px));
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 12px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.82);
@@ -520,6 +556,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex: 0 0 auto;
   margin-bottom: 10px;
   font-size: 12px;
   font-weight: 600;
@@ -592,6 +629,7 @@ button {
 }
 
 .icon-picker-hint {
+  flex: 0 0 auto;
   margin-top: 10px;
   font-size: 10px;
   color: rgba(0, 0, 0, 0.45);
@@ -615,6 +653,7 @@ button {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  flex: 0 0 auto;
   gap: 12px;
   margin-bottom: 12px;
   padding: 0 4px 12px;
@@ -646,7 +685,7 @@ button {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 0 2px;
+  padding: 0 2px 2px;
 }
 
 .guide-group {
@@ -811,6 +850,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
   flex-wrap: wrap;
   gap: 6px 8px;
   margin-top: 12px;
@@ -857,9 +897,8 @@ button {
   color: rgba(16, 20, 26, 0.9);
 }
 
-.keymap-card .guide-body {
-  max-height: min(320px, calc(100vh - 220px));
-  overflow-y: auto;
+.keymap-scroll {
+  padding-right: 2px;
 }
 
 .mod-picker {
@@ -1063,7 +1102,18 @@ button {
 .settings-card {
   width: min(372px, calc(100% - 28px));
   max-height: min(520px, calc(100% - 28px));
-  overflow: auto;
+  overflow: hidden;
+}
+
+.settings-scroll {
+  padding-right: 2px;
+}
+
+.settings-card .voice-actions {
+  flex: 0 0 auto;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .settings-body {
