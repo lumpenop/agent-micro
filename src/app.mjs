@@ -24,7 +24,7 @@ const STORAGE_KEY = 'agent-micro-key-icons-v1';
 const CUSTOM_ICONS_KEY = 'agent-micro-custom-icons-v1';
 const MAX_CUSTOM_ICONS = 32;
 
-/** All layers → Codex CLI (app-server) */
+/** Joystick layers → visible Agent CLI (send/skill) or slot nav */
 const LAYERS = [
   {
     name: 'Codex',
@@ -58,40 +58,6 @@ const LAYERS = [
 function layerDisplayName(layerIndex) {
   return LAYERS[layerIndex]?.name || `L${layerIndex + 1}`;
 }
-
-/** Icon → Codex actions (all brands map to Codex for now) */
-const ICON_ACTIONS = {
-  lightning: () => api?.toggleFast(),
-  check: () => api?.approve(),
-  times: () => api?.decline(),
-  fork: () => api?.fork(),
-  split: () => api?.fork(),
-  send: () => api?.send('Continue.'),
-  rocket: () => api?.skill('ship'),
-  spark: () => api?.skill('continue'),
-  brain: () => api?.togglePlan(),
-  terminal: () => api?.desktop('composer'),
-  bot: () => api?.skill('review'),
-  cpu: () => api?.toggleFast(),
-  command: () => api?.desktop('composer'),
-  cloud: () => api?.reconnect(),
-  wand: () => api?.skill('refactor'),
-  hexagon: () => api?.skill('debug'),
-  audio: () => startRecording({ latched: true }),
-  mic: () => startRecording({ latched: true }),
-  codex: () => api?.send('Continue.'),
-  chatgpt: () => api?.send('Continue.'),
-  claude: () => api?.send('Continue.'),
-  anthropic: () => api?.send('Continue.'),
-  cursor: () => api?.send('Continue.'),
-  gemini: () => api?.send('Continue.'),
-  grok: () => api?.send('Continue.'),
-  deepseek: () => api?.send('Continue.'),
-  mistral: () => api?.send('Continue.'),
-  perplexity: () => api?.send('Continue.'),
-  qwen: () => api?.send('Continue.'),
-  kimi: () => api?.send('Continue.'),
-};
 
 function loadCustomIconsFromStorage() {
   try {
@@ -1128,17 +1094,6 @@ async function onAgent(index) {
   if (dbl) pad3d?.resetJoy?.();
 }
 
-async function runIconAction(cmd) {
-  const iconId = state.keyIcons[cmd];
-  const fn = ICON_ACTIONS[iconId];
-  if (fn) {
-    const r = fn();
-    if (r && typeof r.then === 'function') await r;
-    return true;
-  }
-  return false;
-}
-
 /** Mic PTT: hold = talk · double-tap = hands-free latch */
 function onMicPress() {
   if (padBlocks()) return;
@@ -1183,16 +1138,7 @@ async function onCmd(cmd) {
     return;
   }
 
-  // default command + icon override for non-mic keys
-  if (cmd === 'fast' || cmd === 'approve' || cmd === 'decline' || cmd === 'fork') {
-    const iconId = state.keyIcons[cmd];
-    const defaults = { fast: 'lightning', approve: 'check', decline: 'times', fork: 'fork' };
-    if (iconId && iconId !== defaults[cmd] && ICON_ACTIONS[iconId]) {
-      await runIconAction(cmd);
-      return;
-    }
-  }
-
+  // Icons are display-only — cmd binding never changes
   if (cmd === 'fast') await api?.toggleFast();
   else if (cmd === 'approve') await api?.approve();
   else if (cmd === 'decline') await api?.decline();

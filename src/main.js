@@ -546,12 +546,28 @@ ipcMain.handle('voice:beginDictation', async () => {
   if (!bridge?.beginVoiceDictation) {
     return { ok: false, error: 'dictation not supported' };
   }
+  // Keep pad visible but not key-focusable so dictation lands in the CLI
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setFocusable(false);
+  } catch {
+    /* ignore */
+  }
   return bridge.beginVoiceDictation();
 });
 ipcMain.handle('voice:endDictation', async () => {
   if (trialLocked()) return trialDenied();
-  const r = (await bridge?.endVoiceDictation?.()) || { ok: false };
-  refocusPad(280);
+  let r = { ok: false };
+  try {
+    r = (await bridge?.endVoiceDictation?.()) || { ok: false };
+  } finally {
+    try {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setFocusable(true);
+    } catch {
+      /* ignore */
+    }
+    // After text commits + Return — then bring pad back
+    refocusPad(500);
+  }
   return r;
 });
 
@@ -566,21 +582,39 @@ ipcMain.handle('codex:select', async (_e, index, focus) => {
   setTimeout(() => syncPadHotkeyContext(), 400);
   return r;
 });
-ipcMain.handle('codex:approve', () => {
+async function withCliFocus(run) {
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setFocusable(false);
+  } catch {
+    /* ignore */
+  }
+  try {
+    return await run();
+  } finally {
+    try {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setFocusable(true);
+    } catch {
+      /* ignore */
+    }
+    refocusPad(450);
+  }
+}
+
+ipcMain.handle('codex:approve', async () => {
   if (trialLocked()) return trialDenied();
-  return bridge?.approve();
+  return withCliFocus(() => bridge?.approve());
 });
-ipcMain.handle('codex:decline', () => {
+ipcMain.handle('codex:decline', async () => {
   if (trialLocked()) return trialDenied();
-  return bridge?.decline();
+  return withCliFocus(() => bridge?.decline());
 });
-ipcMain.handle('codex:fork', () => {
+ipcMain.handle('codex:fork', async () => {
   if (trialLocked()) return trialDenied();
-  return bridge?.fork();
+  return withCliFocus(() => bridge?.fork());
 });
-ipcMain.handle('codex:send', (_e, text) => {
+ipcMain.handle('codex:send', async (_e, text) => {
   if (trialLocked()) return trialDenied();
-  return bridge?.send(text);
+  return withCliFocus(() => bridge?.send(text));
 });
 ipcMain.handle('codex:setReasoning', (_e, index) => {
   if (trialLocked()) return trialDenied();
@@ -594,13 +628,14 @@ ipcMain.handle('codex:togglePlan', () => {
   if (trialLocked()) return trialDenied();
   return bridge?.togglePlan();
 });
-ipcMain.handle('codex:skill', (_e, name) => {
+ipcMain.handle('codex:skill', async (_e, name) => {
   if (trialLocked()) return trialDenied();
-  return bridge?.skill(name);
+  // skill → send() into CLI; must steal pad focus like Send
+  return withCliFocus(() => bridge?.skill(name));
 });
-ipcMain.handle('codex:newChat', () => {
+ipcMain.handle('codex:newChat', async () => {
   if (trialLocked()) return trialDenied();
-  return bridge?.newChat();
+  return withCliFocus(() => bridge?.newChat());
 });
 ipcMain.handle('codex:desktop', async (_e, action) => {
   if (trialLocked()) return trialDenied();

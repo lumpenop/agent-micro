@@ -688,93 +688,86 @@ class CodexBridge extends EventEmitter {
     }
   }
 
+  /** Approve in the visible Agent CLI (key `y`) — not hidden app-server. */
   async approve() {
-    const a = this.agents[this.selected];
-    if (!a?.approvalId) {
-      this.emitState(lt('bridge.nothingApprove'));
-      return;
+    const slot = this.selected;
+    const a = this.agents[slot];
+    try {
+      const focus = await this.ensureAgentCliWindow(slot, { focus: true });
+      if (!focus?.ok) {
+        this.emitState(focus?.error || focus?.reason || lt('bridge.dictationFail'));
+        return { ok: false, code: 'NO_CLI', slot };
+      }
+      await mac.cliApprove(slot);
+      if (a?.approvalId) {
+        this.approvals.delete(a.approvalId);
+        a.approvalId = null;
+      }
+      if (a) a.status = 'thinking';
+      this.emitState(lt('bridge.approved'));
+      return { ok: true, slot, mode: 'cli' };
+    } catch (e) {
+      this.emit('log', `approve cli: ${e.message}`);
+      this.emitState(e.code === 'NO_CLI' ? e.message : lt('bridge.sendFail', { err: e.message }));
+      return { ok: false, error: e.message, slot };
     }
-    if (this.connected && !String(a.approvalId).startsWith('demo')) {
-      const rid = a.approvalId;
-      this.respond(/^\d+$/.test(rid) ? Number(rid) : rid, { decision: 'accept' });
-    }
-    this.approvals.delete(a.approvalId);
-    a.approvalId = null;
-    a.status = 'thinking';
-    this.emitState(lt('bridge.approved'));
   }
 
+  /** Decline in the visible Agent CLI (key `n`). */
   async decline() {
-    const a = this.agents[this.selected];
-    if (!a?.approvalId) {
-      this.emitState(lt('bridge.nothingDecline'));
-      return;
+    const slot = this.selected;
+    const a = this.agents[slot];
+    try {
+      const focus = await this.ensureAgentCliWindow(slot, { focus: true });
+      if (!focus?.ok) {
+        this.emitState(focus?.error || focus?.reason || lt('bridge.dictationFail'));
+        return { ok: false, code: 'NO_CLI', slot };
+      }
+      await mac.cliDecline(slot);
+      if (a?.approvalId) {
+        this.approvals.delete(a.approvalId);
+        a.approvalId = null;
+      }
+      if (a) a.status = 'idle';
+      this.emitState(lt('bridge.declined'));
+      return { ok: true, slot, mode: 'cli' };
+    } catch (e) {
+      this.emit('log', `decline cli: ${e.message}`);
+      this.emitState(e.code === 'NO_CLI' ? e.message : lt('bridge.sendFail', { err: e.message }));
+      return { ok: false, error: e.message, slot };
     }
-    if (this.connected && !String(a.approvalId).startsWith('demo')) {
-      const rid = a.approvalId;
-      this.respond(/^\d+$/.test(rid) ? Number(rid) : rid, { decision: 'decline' });
-    }
-    this.approvals.delete(a.approvalId);
-    a.approvalId = null;
-    a.status = 'idle';
-    this.emitState(lt('bridge.declined'));
   }
 
+  /**
+   * Send prompt into the visible Agent CLI terminal (paste + Return).
+   * Does not use the hidden app-server turn/start path.
+   */
   async send(text) {
     const prompt = text || 'Continue.';
-    const a = this.agents[this.selected];
-    if (!this.connected) {
-      a.status = 'thinking';
-      this.emitState(lt('bridge.sentDemo'));
-      setTimeout(() => {
-        a.status = 'complete';
-        this.emitState(lt('bridge.complete'));
-      }, 2200);
-      return;
-    }
-
-    if (!a.threadId || String(a.threadId).startsWith('demo') || a.status === 'off') {
-      try {
-        await this.startThread(this.selected);
-      } catch (e) {
-        a.status = 'error';
-        this.emitState(lt('bridge.newThreadFail', { err: e.message }));
-        return;
-      }
-    }
-
-    const startTurn = (threadId) =>
-      this.request('turn/start', {
-        threadId,
-        input: [{ type: 'text', text: prompt }],
-      });
+    const slot = this.selected;
+    const a = this.agents[slot];
 
     try {
-      const markThinking = () => {
-        const cur = this.agents[this.selected];
-        cur.status = 'thinking';
-        cur.name = truncate(prompt, 42);
-      };
-      markThinking();
-      this.emitState(lt('bridge.sentCli'));
-      let result;
-      try {
-        result = await startTurn(this.agents[this.selected].threadId);
-      } catch (e) {
-        if (/thread not found|unknown thread/i.test(e.message)) {
-          await this.startThread(this.selected);
-          markThinking();
-          this.emitState(lt('bridge.retryTurn'));
-          result = await startTurn(this.agents[this.selected].threadId);
-        } else {
-          throw e;
-        }
+      const focus = await this.ensureAgentCliWindow(slot, { focus: true });
+      if (!focus?.ok) {
+        const hint = focus?.error || focus?.reason || lt('bridge.dictationFail');
+        this.emitState(hint);
+        if (a) a.status = 'error';
+        return { ok: false, code: 'NO_CLI', slot };
       }
-      this.agents[this.selected].turnId = result?.turn?.id || result?.turnId || null;
+
+      await mac.submitToCli(slot, prompt);
+      if (a) {
+        a.status = 'thinking';
+        a.name = truncate(prompt, 42);
+      }
+      this.emitState(lt('bridge.sentCli'));
+      return { ok: true, slot, mode: 'cli' };
     } catch (e) {
-      this.agents[this.selected].status = 'error';
-      this.emit('log', `send: ${e.message}`);
-      this.emitState(lt('bridge.sendFail', { err: e.message }));
+      if (a) a.status = 'error';
+      this.emit('log', `send cli: ${e.message}`);
+      this.emitState(e.code === 'NO_CLI' ? e.message : lt('bridge.sendFail', { err: e.message }));
+      return { ok: false, error: e.message, slot };
     }
   }
 
@@ -826,13 +819,24 @@ class CodexBridge extends EventEmitter {
   async newChat() {
     const empty = this.agents.findIndex((a) => a.status === 'off');
     const slot = empty === -1 ? this.selected : empty;
-    if (this.connected) {
-      await this.startThread(slot);
-      return;
-    }
-    this.agents[slot] = demo('New task', 'idle');
     this.selected = slot;
+    if (this.connected) {
+      try {
+        await this.startThread(slot);
+      } catch (e) {
+        this.emit('log', `newChat thread: ${e.message}`);
+      }
+    } else {
+      this.agents[slot] = demo('New task', 'idle');
+    }
+    // Always open/focus the visible CLI for that slot
+    try {
+      await this.ensureAgentCliWindow(slot, { focus: true });
+    } catch (e) {
+      this.emit('log', `newChat cli: ${e.message}`);
+    }
     this.emitState(lt('bridge.newChatDemo', { n: slot + 1 }));
+    return { ok: true, slot, mode: 'cli' };
   }
 
   async desktopAction(action) {
@@ -920,7 +924,12 @@ class CodexBridge extends EventEmitter {
   async endVoiceDictation() {
     const slot = this.selected;
     try {
-      await mac.submitCodexComposer({ slot });
+      // Stop dictation first so Ghostty/Terminal flush spoken text, then Return
+      if (typeof mac.endCodexDictation === 'function') {
+        await mac.endCodexDictation({ slot });
+      } else {
+        await mac.submitCodexComposer({ slot });
+      }
       this.emitState(lt('bridge.sent'));
       return { ok: true, slot };
     } catch (e) {

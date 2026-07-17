@@ -1,8 +1,9 @@
 /**
- * macOS helpers — focus Codex Desktop + inject shortcuts via System Events.
- * Requires Accessibility permission for keystrokes.
+ * macOS helpers — Agent CLI (Ghostty/Terminal) + legacy Codex Desktop keystrokes.
+ * Requires Accessibility permission.
  *
- * All pad actions go through this desktop path (not CLI app-server).
+ * Pad control plane (send / approve / mic) targets the visible CLI terminal.
+ * Codex Desktop helpers remain for App-layer shortcuts only.
  */
 const { execFile } = require('child_process');
 const fs = require('fs');
@@ -201,6 +202,7 @@ async function pasteText(text) {
 /**
  * Focus Codex composer, paste text, press Return.
  * Avoids relying on ⌘K when the field may already be focused; still tries ⌘K once.
+ * @deprecated Desktop path — prefer submitToCli for pad Send.
  */
 async function submitToCodex(text) {
   const body = String(text || '').trim();
@@ -226,6 +228,161 @@ async function submitToCodex(text) {
 }
 
 /**
+ * Focus the Agent CLI slot (visible terminal). Throws NO_CLI if missing.
+ * @param {number} slot
+ */
+async function focusCliSlot(slot) {
+  const index = Math.max(0, Math.min(5, Number(slot) || 0));
+  let f = await focusCodexCliWindow(index, { fast: true, activate: true });
+  if (!f.ok) f = await focusCodexCliWindow(index, { fast: false, activate: true });
+  if (!f.ok) {
+    const err = new Error(`Agent ${index + 1} CLI 창을 먼저 여세요`);
+    err.code = 'NO_CLI';
+    throw err;
+  }
+  await delay(140);
+  const front = await frontmostAppName();
+  const term = await getDefaultTerminalApp();
+  if (!looksLikeTerminalFrontmost(front, term)) {
+    await focusCodexCliWindow(index, { fast: false, activate: true });
+    await delay(180);
+  }
+  return { ok: true, slot: index };
+}
+
+/**
+ * Key into the selected Agent CLI terminal (not Codex Desktop).
+ * @param {number} slot
+ * @param {string} key
+ * @param {Array<'command'|'option'|'shift'|'control'>} [mods]
+ */
+async function cliKeystroke(slot, key, mods = []) {
+  await focusCliSlot(slot);
+  await sendKey(key, mods);
+  return { ok: true, slot: Math.max(0, Math.min(5, Number(slot) || 0)) };
+}
+
+/**
+ * Paste text into Agent CLI composer and press Return.
+ * Ghostty: prefer native `input text` + enter; else clipboard ⌘V.
+ * @param {number} slot
+ * @param {string} text
+ */
+async function submitToCli(slot, text) {
+  const body = String(text || '').trim();
+  if (!body) return { ok: false, reason: 'empty' };
+  const index = Math.max(0, Math.min(5, Number(slot) || 0));
+  await focusCliSlot(index);
+
+  const app = cachedDefaultTerminal || (await getDefaultTerminalApp());
+  const kind = terminalKind(app);
+  const knownId = slotTerminalIds.get(index);
+  const asBody = asEscape(body);
+
+  if (kind === 'ghostty' && knownId) {
+    try {
+      const appName = asEscape(app.name || 'Ghostty');
+      const out = await osa(
+        `
+        tell application "${appName}"
+          activate
+          set targetId to "${asEscape(String(knownId))}"
+          repeat with term in terminals
+            try
+              if (id of term as text) is targetId then
+                focus term
+                input text "${asBody}" to term
+                delay 0.08
+                send key "enter" to term
+                return "ok"
+              end if
+            end try
+          end repeat
+          return "missing"
+        end tell`,
+        { timeout: 5000 }
+      );
+      if (out === 'ok') return { ok: true, slot: index, mode: 'ghostty-input' };
+    } catch {
+      /* fall through to clipboard */
+    }
+  }
+
+  const clipBody = asEscape(body).replace(/\r/g, '').replace(/\n/g, '\\n');
+  await osa(`set the clipboard to "${clipBody}"`);
+  await delay(70);
+  await sendKey('v', ['command']);
+  await delay(120);
+  await sendKey('return');
+  return { ok: true, slot: index, mode: 'clipboard' };
+}
+
+/** CLI TUI approval keys (Codex interactive). */
+async function cliApprove(slot) {
+  return cliKeystroke(slot, 'y');
+}
+
+async function cliDecline(slot) {
+  return cliKeystroke(slot, 'n');
+}
+
+/** Double-tap Fn/Globe — macOS dictation shortcut when Edit menu has no item (Ghostty/Terminal). */
+async function tapDictationHotkey() {
+  await osa(`
+    tell application "System Events"
+      key code 63
+      delay 0.12
+      key code 63
+    end tell
+  `);
+}
+
+/**
+ * Start / stop macOS dictation in the frontmost app.
+ * Ghostty/Terminal usually lack Edit → Start Dictation, so Fn/Globe ×2 is the real path.
+ * @param {'start'|'stop'} mode
+ */
+async function triggerDictationMenu(mode = 'start') {
+  const startEn = 'Start Dictation';
+  const stopEn = 'Stop Dictation';
+  const startKo = '받아쓰기 시작';
+  const stopKo = mode === 'stop' ? '받아쓰기 중단' : '받아쓰기 시작';
+  const en = mode === 'stop' ? stopEn : startEn;
+  const ko = mode === 'stop' ? stopKo : startKo;
+  // Korean Stop can be 중단 or 중지 depending on macOS version
+  const koAlt = mode === 'stop' ? '받아쓰기 중지' : startKo;
+
+  try {
+    await osa(`
+      tell application "System Events"
+        set frontApp to name of first application process whose frontmost is true
+        try
+          click menu item "${en}" of menu "Edit" of menu bar 1 of process frontApp
+        on error
+          try
+            click menu item "${ko}" of menu "편집" of menu bar 1 of process frontApp
+          on error
+            try
+              click menu item "${koAlt}" of menu "편집" of menu bar 1 of process frontApp
+            on error
+              key code 63
+              delay 0.12
+              key code 63
+            end try
+          end try
+        end try
+      end tell
+    `);
+  } catch {
+    try {
+      await tapDictationHotkey();
+    } catch {
+      /* user can enable dictation manually */
+    }
+  }
+}
+
+/**
  * Speak into the focused app via macOS dictation (usually Ghostty CLI pane).
  * Prefer focusing a CLI slot first — see beginVoiceDictation in the bridge.
  * Does NOT send ⌘K (Cursor palette).
@@ -234,7 +391,8 @@ async function submitToCodex(text) {
 async function beginCodexDictation(opts = {}) {
   const slot = Number.isFinite(Number(opts.slot)) ? Math.max(0, Math.min(5, Number(opts.slot))) : null;
 
-  if (!opts.alreadyFocused && slot != null) {
+  if (slot != null) {
+    // Always re-activate CLI — pad click often still owns key focus
     let f = await focusCodexCliWindow(slot, { fast: true, activate: true });
     if (!f.ok) f = await focusCodexCliWindow(slot, { fast: false, activate: true });
     if (!f.ok) {
@@ -244,36 +402,37 @@ async function beginCodexDictation(opts = {}) {
     }
   }
 
-  await delay(140);
-  const front = await frontmostAppName();
-
-  try {
-    await osa(`
-      tell application "System Events"
-        set frontApp to name of first application process whose frontmost is true
-        try
-          click menu item "Start Dictation" of menu "Edit" of menu bar 1 of process frontApp
-        on error
-          try
-            click menu item "받아쓰기 시작" of menu "편집" of menu bar 1 of process frontApp
-          on error
-            key code 63
-            delay 0.08
-            key code 63
-          end try
-        end try
-      end tell
-    `);
-  } catch {
-    try {
-      await osa('tell application "System Events" to key code 63');
-      await delay(80);
-      await osa('tell application "System Events" to key code 63');
-    } catch {
-      /* user can enable dictation manually */
-    }
+  // Let terminal become key window before injecting the dictation hotkey
+  await delay(280);
+  let front = await frontmostAppName();
+  const term = await getDefaultTerminalApp();
+  if (!looksLikeTerminalFrontmost(front, term) && slot != null) {
+    await focusCodexCliWindow(slot, { fast: false, activate: true });
+    await delay(200);
+    front = await frontmostAppName();
   }
+
+  await triggerDictationMenu('start');
+  await delay(120);
   return { ok: true, app: front || '', slot };
+}
+
+/**
+ * Stop dictation (commits buffered text — required for Ghostty), then Return.
+ * @param {{ slot?: number, focusDesktop?: boolean }} [opts]
+ */
+async function endCodexDictation(opts = {}) {
+  const slot = Number.isFinite(Number(opts.slot)) ? Math.max(0, Math.min(5, Number(opts.slot))) : null;
+  if (slot != null) {
+    let f = await focusCodexCliWindow(slot, { fast: true, activate: true });
+    if (!f.ok) f = await focusCodexCliWindow(slot, { fast: false, activate: true });
+  }
+  await delay(100);
+  // End session first — otherwise Return submits empty / cancels without inserting
+  await triggerDictationMenu('stop');
+  await delay(480);
+  await sendKey('return');
+  return true;
 }
 
 /**
@@ -1062,7 +1221,13 @@ module.exports = {
   DESKTOP_ACTIONS,
   pasteText,
   submitToCodex,
+  focusCliSlot,
+  cliKeystroke,
+  submitToCli,
+  cliApprove,
+  cliDecline,
   beginCodexDictation,
+  endCodexDictation,
   submitCodexComposer,
   cliWindowTitle,
   getDefaultTerminalApp,
