@@ -761,9 +761,9 @@ export function createPad3D(container, handlers = {}) {
   joyDimple.scale.set(1, 0.4, 1);
   joyDimple.position.y = 0.4;
   joyStick.add(joyBoot, joyShaft, joyCap, joyDimple);
-  // Rest lean (camera-aware) — flipped from first pass
-  const JOY_REST_TILT_X = -0.16;
-  const JOY_REST_TILT_Z = 0.05;
+  // Rest lean — very light; keep stick visually centered in the gate
+  const JOY_REST_TILT_X = -0.06;
+  const JOY_REST_TILT_Z = 0.02;
   // Tall invisible hit volume — wins over neighboring agent keys (keys sit higher)
   const joyHit = new THREE.Mesh(
     new THREE.CylinderGeometry(0.48, 0.48, 0.7, 24),
@@ -928,14 +928,27 @@ export function createPad3D(container, handlers = {}) {
   let raf = 0;
 
   function applyJoyPose(x, z) {
-    // light, snappy tilt — more throw, less drag feel
+    // light, snappy tilt — vertical throw rides a slightly left-shifted axis
     const max = 0.2;
     const nx = x / max;
     const nz = z / max;
-    joyStick.position.x = x * 0.55;
-    joyStick.position.z = z * 0.55 - 0.012; // slight bias matching rest lean
+    const axisLeft = Math.abs(z) * 0.12;
+    joyStick.position.x = x * 0.55 - axisLeft;
+    joyStick.position.z = z * 0.55;
     joyStick.rotation.z = JOY_REST_TILT_Z - nx * 0.62;
     joyStick.rotation.x = JOY_REST_TILT_X + nz * 0.62;
+  }
+
+  /** Screen-space center of the joy socket — nudged left for up/down axis */
+  function joyScreenCenter() {
+    _dialScreen.set(-0.03, 0.08, 0);
+    joyGroup.localToWorld(_dialScreen);
+    _dialScreen.project(camera);
+    const rect = renderer.domElement.getBoundingClientRect();
+    return {
+      x: rect.left + ((_dialScreen.x + 1) / 2) * rect.width,
+      y: rect.top + ((-_dialScreen.y + 1) / 2) * rect.height,
+    };
   }
 
   applyJoyPose(0, 0);
@@ -1101,12 +1114,7 @@ export function createPad3D(container, handlers = {}) {
       return;
     }
     if (joyDragging) {
-      const rect = renderer.domElement.getBoundingClientRect();
-      _dialScreen.set(0, 0.35, 0);
-      joyGroup.localToWorld(_dialScreen);
-      _dialScreen.project(camera);
-      const cx = rect.left + ((_dialScreen.x + 1) / 2) * rect.width;
-      const cy = rect.top + ((-_dialScreen.y + 1) / 2) * rect.height;
+      const { x: cx, y: cy } = joyScreenCenter();
       // smaller divisor = more throw per pixel (lighter feel)
       let dx = (e.clientX - cx) / 36;
       let dy = (e.clientY - cy) / 36;
