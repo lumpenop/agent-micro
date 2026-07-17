@@ -4,7 +4,7 @@
   --keyboard: 304px;
   --gap: 9px;
   --radius-pad: 36px;
-  --radius-cap: 12px;
+  --radius-cap: 14px;
   --ink: #141414;
   --idle: #f2f2f0;
   --thinking: #4aa3ff;
@@ -358,32 +358,29 @@ button {
   grid-column: span 2;
 }
 
-/* Frosted translucent agent caps (PC) */
+/* Frosted caps — milky translucent, soft light falloff (no corner paint) */
 .keycap.frost .cap-side {
-  background: linear-gradient(180deg, rgba(190, 200, 210, 0.55), rgba(150, 160, 175, 0.7));
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
+  background: linear-gradient(180deg, rgba(190, 205, 220, 0.6), rgba(150, 168, 185, 0.75));
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
 }
 
 .keycap.frost .cap-top {
   background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.72) 0%, rgba(236, 242, 248, 0.38) 55%, rgba(210, 220, 230, 0.45) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.7);
+    radial-gradient(130% 100% at 40% 28%, rgba(255, 255, 255, 0.82) 0%, rgba(232, 242, 250, 0.55) 55%, rgba(198, 218, 236, 0.48) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.65);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.85),
-    inset 0 -10px 18px rgba(160, 175, 190, 0.22),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.2),
-    0 6px 10px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(8px) saturate(1.15);
-  -webkit-backdrop-filter: blur(8px) saturate(1.15);
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    0 5px 12px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px) saturate(1.1);
+  -webkit-backdrop-filter: blur(10px) saturate(1.1);
 }
 
 .keycap.frost .cap-top::before {
   content: "";
   position: absolute;
-  inset: 5px 6px auto 6px;
-  height: 38%;
-  border-radius: 8px 8px 40% 40%;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), transparent);
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.35), transparent 42%);
   pointer-events: none;
 }
 
@@ -411,12 +408,11 @@ button {
 
 .keycap.agent.selected .cap-top {
   background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.82) 100%);
+    radial-gradient(130% 100% at 40% 28%, rgba(255, 255, 255, 0.95) 0%, rgba(240, 246, 252, 0.8) 55%, rgba(220, 234, 246, 0.7) 100%);
   box-shadow:
     inset 0 1px 0 #fff,
-    inset 0 -8px 14px rgba(180, 190, 200, 0.15),
-    0 0 0 1px rgba(255, 255, 255, 0.85),
-    0 8px 16px rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(255, 255, 255, 0.8),
+    0 5px 12px rgba(0, 0, 0, 0.1),
     0 0 28px color-mix(in srgb, var(--glow, var(--idle)) 40%, transparent);
 }
 
@@ -437,36 +433,29 @@ button {
   50% { transform: scale(1.28); filter: brightness(1.3); }
 }
 
-/* Solid PBT-style command caps */
+/* Solid caps — soft light falloff only, no corner fill */
 .keycap.solid .cap-side {
   background: linear-gradient(180deg, #d8d8d4, #bdbdb8);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
 }
 
 .keycap.solid .cap-top {
-  background: linear-gradient(180deg, #fcfcfa 0%, #f0f0ec 48%, #e4e4df 100%);
-  border: 1px solid rgba(210, 210, 204, 0.95);
+  background:
+    radial-gradient(130% 100% at 40% 28%, #ffffff 0%, #f5f3ed 55%, #e6e2d8 100%);
+  border: 1px solid rgba(210, 210, 204, 0.9);
   color: var(--ink);
   box-shadow:
     inset 0 1px 0 #fff,
-    inset 0 -3px 5px rgba(0, 0, 0, 0.04),
-    0 5px 10px rgba(0, 0, 0, 0.12);
+    0 5px 12px rgba(0, 0, 0, 0.1);
 }
 
 .keycap.solid .cap-top::before {
   content: "";
   position: absolute;
-  inset: 4px 5px auto 5px;
-  height: 34%;
-  border-radius: 8px 8px 45% 45%;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), transparent);
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.4), transparent 42%);
   pointer-events: none;
-}
-
-.keycap.solid .cap-top {
-  /* concave dish like physical keycaps */
-  background:
-    radial-gradient(120% 90% at 50% 35%, #ffffff 0%, #f5f5f1 42%, #e6e6e0 100%);
 }
 
 .keycap.solid .cap-icon {

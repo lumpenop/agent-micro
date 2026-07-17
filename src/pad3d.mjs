@@ -51,31 +51,52 @@ function makeIconTexture(iconId) {
   return tex;
 }
 
+/** Shared keycap shell — every 1u key uses identical size + rounding */
+const CAP = {
+  w: 0.92,
+  h: 0.52,
+  d: 0.92,
+  r: 0.18,
+  segs: 5,
+  wideW: 1.95,
+};
+
 let _capTopTex = null;
 let _capTopFrostTex = null;
 function capTopTexture(frost = false) {
-  // offset radial gradient → domed, shaded key top
+  // Full-bleed soft lighting only — NEVER clip a roundRect (that paints black corners on UVs)
   const cached = frost ? _capTopFrostTex : _capTopTex;
   if (cached) return cached;
+  const size = 256;
   const c = document.createElement('canvas');
-  c.width = c.height = 256;
+  c.width = c.height = size;
   const ctx = c.getContext('2d');
-  const g = ctx.createRadialGradient(104, 92, 16, 128, 128, 165);
+
+  const base = ctx.createRadialGradient(108, 96, 12, 128, 128, 180);
   if (frost) {
-    g.addColorStop(0, '#ffffff');
-    g.addColorStop(0.55, '#e8f2fc');
-    g.addColorStop(0.85, '#c5daf0');
-    g.addColorStop(1, '#a8c6e4');
+    base.addColorStop(0, '#ffffff');
+    base.addColorStop(0.5, '#eaf2f9');
+    base.addColorStop(0.85, '#d2e2f0');
+    base.addColorStop(1, '#c0d4e6');
   } else {
-    g.addColorStop(0, '#ffffff');
-    g.addColorStop(0.55, '#f6f3ec');
-    g.addColorStop(0.85, '#e2ded3');
-    g.addColorStop(1, '#ccc7ba');
+    base.addColorStop(0, '#ffffff');
+    base.addColorStop(0.5, '#f6f4ee');
+    base.addColorStop(0.85, '#e8e4da');
+    base.addColorStop(1, '#ddd8ce');
   }
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 256, 256);
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, size, size);
+
+  // gentle top-left light falloff (no hard edge paint)
+  const lip = ctx.createLinearGradient(0, 0, 0, size * 0.55);
+  lip.addColorStop(0, frost ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.4)');
+  lip.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = lip;
+  ctx.fillRect(0, 0, size, size);
+
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
   if (frost) _capTopFrostTex = tex;
   else _capTopTex = tex;
   return tex;
@@ -83,7 +104,6 @@ function capTopTexture(frost = false) {
 
 let _glowTex = null;
 function glowTexture() {
-  // larger bright core, short falloff → readable disc through clear frost
   if (_glowTex) return _glowTex;
   const size = 128;
   const c = document.createElement('canvas');
@@ -103,105 +123,82 @@ function glowTexture() {
 }
 
 function keycapMesh({ wide = false, frost = false, iconId = null } = {}) {
-  const w = wide ? 1.95 : 0.92;
-  const h = 0.52;
-  const d = 0.92;
-  const geo = new RoundedBoxGeometry(w, h, d, 5, 0.16);
-  let mat;
+  const w = wide ? CAP.wideW : CAP.w;
+  const h = CAP.h;
+  const d = CAP.d;
+  const r = CAP.r;
+  // Rounding comes from geometry; shading comes from lights + soft materials
+  const geo = new RoundedBoxGeometry(w, h, d, CAP.segs, r);
 
-  if (frost) {
-    mat = new THREE.MeshPhysicalMaterial({
-      color: 0xc4daf2,
-      roughness: 0.16,
-      metalness: 0.02,
-      transparent: true,
-      opacity: 0.24,
-      clearcoat: 0.65,
-      clearcoatRoughness: 0.2,
-      transmission: 0,
-      depthWrite: true,
-    });
-  } else {
-    mat = new THREE.MeshStandardMaterial({
-      color: 0xfffef8,
-      roughness: 0.42,
-      metalness: 0.04,
-    });
-  }
+  const mat = frost
+    ? new THREE.MeshPhysicalMaterial({
+        map: capTopTexture(true),
+        color: 0xffffff,
+        roughness: 0.35,
+        metalness: 0.02,
+        transparent: true,
+        opacity: 0.55,
+        clearcoat: 0.2,
+        clearcoatRoughness: 0.5,
+        transmission: 0,
+        depthWrite: true,
+      })
+    : new THREE.MeshStandardMaterial({
+        map: capTopTexture(false),
+        color: 0xffffff,
+        roughness: 0.45,
+        metalness: 0.03,
+      });
 
   const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
 
-  // darker skirt so keys read against the plate
+  // slightly darker skirt — natural side shade from light angle, not painted corners
   const skirt = new THREE.Mesh(
-    new RoundedBoxGeometry(w * 0.98, h * 0.55, d * 0.98, 4, 0.12),
+    new RoundedBoxGeometry(w * 0.98, h * 0.55, d * 0.98, CAP.segs, r * 0.9),
     frost
       ? new THREE.MeshPhysicalMaterial({
-          color: 0x6f9bc0,
-          roughness: 0.38,
+          color: 0x9bb6cc,
+          roughness: 0.5,
           transparent: true,
-          opacity: 0.26,
+          opacity: 0.28,
+          depthWrite: false,
         })
       : new THREE.MeshStandardMaterial({
-          color: 0xc2bdb1,
+          color: 0xc8c3b8,
           roughness: 0.62,
-          metalness: 0.06,
+          metalness: 0.04,
         })
   );
   skirt.position.y = -h * 0.12;
   mesh.add(skirt);
 
-  // concave dish — must stay inside the cap top or keys read as circles
-  const dish = new THREE.Mesh(
-    new THREE.SphereGeometry(0.38, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.42),
-    frost
-      ? new THREE.MeshPhysicalMaterial({
-          color: 0xffffff,
-          roughness: 0.12,
-          transparent: true,
-          opacity: 0.12,
-          side: THREE.BackSide,
-        })
-      : new THREE.MeshStandardMaterial({
-          color: 0xf0ebe3,
-          roughness: 0.5,
-          side: THREE.BackSide,
-        })
-  );
-  dish.rotation.x = Math.PI;
-  dish.position.y = h * 0.42;
-  dish.scale.set(wide ? 2.0 : 1, 0.22, 1);
-  mesh.add(dish);
-
-  const topGeo = new RoundedBoxGeometry(w * 0.86, 0.04, d * 0.86, 3, 0.1);
-  const topMat = frost
-    ? new THREE.MeshPhysicalMaterial({
-        map: capTopTexture(true),
-        roughness: 0.14,
-        transparent: true,
-        opacity: 0.16,
-        clearcoat: 0.5,
+  // frost inner core — reads as milky translucent shell
+  if (frost) {
+    const core = new THREE.Mesh(
+      new RoundedBoxGeometry(w * 0.7, h * 0.38, d * 0.7, 4, r * 0.65),
+      new THREE.MeshStandardMaterial({
+        color: 0x6e7e8c,
+        roughness: 0.72,
+        metalness: 0.06,
       })
-    : new THREE.MeshStandardMaterial({
-        map: capTopTexture(false),
-        roughness: 0.32,
-      });
-  const top = new THREE.Mesh(topGeo, topMat);
-  top.position.y = h * 0.48;
-  mesh.add(top);
+    );
+    core.position.y = -h * 0.04;
+    mesh.add(core);
+  }
 
-  // soft contact shadow under each key (kept inside the footprint)
+  // soft contact shadow under key (elliptical falloff, no hard corner paint)
   const contact = new THREE.Mesh(
-    new THREE.CircleGeometry(0.44, 28),
+    new THREE.CircleGeometry(wide ? 0.9 : 0.46, 32),
     new THREE.MeshBasicMaterial({
       color: 0x000000,
       transparent: true,
-      opacity: 0.22,
+      opacity: 0.18,
       depthWrite: false,
     })
   );
-  if (wide) contact.scale.x = 2.05;
+  if (wide) contact.scale.set(1.15, 1, 0.55);
   contact.rotation.x = -Math.PI / 2;
   contact.position.y = -h * 0.52;
   mesh.add(contact);
@@ -224,21 +221,20 @@ function keycapMesh({ wide = false, frost = false, iconId = null } = {}) {
   }
 
   if (frost) {
-    // status LED — larger, sharper disc through clearer frost
     const glow = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.58, 0.58),
+      new THREE.PlaneGeometry(0.5, 0.5),
       new THREE.MeshBasicMaterial({
         map: glowTexture(),
         color: 0xf2f2f0,
         transparent: true,
-        opacity: 0.7,
+        opacity: 0.85,
         toneMapped: false,
         depthTest: false,
         depthWrite: false,
       })
     );
     glow.rotation.x = -Math.PI / 2;
-    glow.position.y = h * 0.3;
+    glow.position.y = h * 0.2;
     glow.renderOrder = 5;
     mesh.add(glow);
     mesh.userData.glow = glow;
@@ -633,28 +629,6 @@ export function createPad3D(container, handlers = {}) {
     cmds[name] = m;
     interactives.push(m);
   });
-
-  // edge labels via sprites
-  function makeLabel(text, x, z, rotY) {
-    const c = document.createElement('canvas');
-    c.width = 512;
-    c.height = 64;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = 'rgba(40,45,55,0.45)';
-    ctx.font = '28px "SF Pro Text", Avenir, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, 256, 32);
-    const tex = new THREE.CanvasTexture(c);
-    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
-    const spr = new THREE.Sprite(mat);
-    spr.scale.set(2.2, 0.28, 1);
-    spr.position.set(x, 0.35, z);
-    // sprites face camera; for edge feel place them
-    scene.add(spr);
-    return spr;
-  }
-  makeLabel("Let's build", 0, 2.35, 0);
 
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
