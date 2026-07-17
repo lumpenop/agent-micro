@@ -228,12 +228,21 @@ class CodexBridge extends EventEmitter {
     }
     try {
       const out = await this._runCodex(bin, ['login', 'status'], 8000);
-      const loggedIn = /logged in/i.test(out);
+      const detail = out.trim();
+      // Stale / switched ChatGPT session — status text may still look OK, or error in stdout
+      const stale =
+        /access token could not be refreshed|logged out|sign in again|not logged in|unauthorized/i.test(
+          detail
+        );
+      const loggedIn = !stale && /logged in/i.test(detail);
       this._loggedIn = loggedIn;
-      return { hasCodex: true, loggedIn, detail: out.trim() };
+      return { hasCodex: true, loggedIn, stale, detail };
     } catch (err) {
+      const detail = String(err.message || '');
+      const stale =
+        /access token could not be refreshed|logged out|sign in again|unauthorized/i.test(detail);
       this._loggedIn = false;
-      return { hasCodex: true, loggedIn: false, detail: err.message };
+      return { hasCodex: true, loggedIn: false, stale, detail };
     }
   }
 
@@ -875,6 +884,18 @@ class CodexBridge extends EventEmitter {
   async beginVoiceDictation() {
     const slot = this.selected;
     try {
+      const login = await this.checkLogin();
+      if (!login.hasCodex) {
+        const hint = lt('bridge.missingInstall');
+        this.emitState(hint);
+        return { ok: false, error: hint, code: 'MISSING', slot };
+      }
+      if (!login.loggedIn) {
+        const hint = login.stale ? lt('bridge.authStale') : lt('bridge.loginNeeded');
+        this.emitState(hint);
+        return { ok: false, error: hint, code: 'AUTH', stale: !!login.stale, slot };
+      }
+
       // Ensure selected CLI is frontmost before dictation starts
       const focus = await this.ensureAgentCliWindow(slot, { focus: true });
       if (!focus?.ok) {

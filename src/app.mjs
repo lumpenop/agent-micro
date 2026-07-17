@@ -373,9 +373,16 @@ let dictationActive = false;
 /** Mic = macOS dictation into the selected Agent CLI pane (no Whisper). */
 async function startRecording({ latched = false } = {}) {
   if (dictationActive) return;
+  if (padBlocks()) return;
   flashAction(t('flash.codexJump'));
   const r = await api?.beginVoiceDictation?.();
   if (!r?.ok) {
+    if (r?.code === 'AUTH') {
+      flashAction(r.stale ? t('flash.authStale') : t('flash.needLogin'));
+      // Stale ChatGPT token — force browser re-login then unlock
+      await connectAgent({ forceLogin: true });
+      return;
+    }
     flashAction(r?.error || t('flash.codexApp'));
     return;
   }
