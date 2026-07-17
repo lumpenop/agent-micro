@@ -2,14 +2,8 @@
 
 Work Louder × OpenAI **Codex Micro** 스타일 플로팅 맥로패드.
 
-**Codex 전용**입니다. 연결 시 **Desktop / CLI**를 고릅니다.
-
-| 모드 | 동작 |
-|------|------|
-| **Desktop** | Codex 앱 단축키·붙여넣기 (조이스틱과 동일) |
-| **CLI** | `app-server` 스레드/승인 · 이어서 **API 키(sk-…)** 설정 · Whisper |
-
-상단 ⊞ 또는 ↻ 길게 = 모드 선택. 🎙 = API 키/마이크.
+**Codex CLI 전용**입니다. Connect = `app-server` · 키/조이스틱/마이크 모두 CLI로 전송합니다.  
+연결 후 Whisper용 **API 키(`sk-…`)** 설정을 안내합니다 (상단 🎙).
 
 나중에 “어떤 에이전트를 쓸지” 고르는 UI가 필요하면 그린필드로 붙이세요 (`src/providers/create-bridge.js` 주석 참고).
 
@@ -31,17 +25,27 @@ pnpm install   # Electron + @openai/codex
 pnpm start
 ```
 
-단축키: `⌘⇧M` — 창 숨기기/보이기
+단축키: `⌘⇧M` — 창 숨기기/보이기 (전역)  
+패드 단축키(**⇧QWERDF · ⇧1–6 · ⇧화살표 · ⇧Tab**)는 패드 창 또는 이 패드로 연 CLI 터미널에서 동작합니다.
 
 - 초록 점 = Codex 연결됨
 - 노란 점 = demo fallback
 
-## Codex 연결
+## Codex CLI 연결
+
+앱 안 **?** = 사용 설명서 · **키보드** 아이콘 = 키 맵핑.
 
 | 조작 | 동작 |
 |------|------|
-| **↻** / 제목 옆 **점** | Codex Connect / Reconnect |
+| **↻** / 제목 옆 **점** | CLI Connect / Reconnect (`app-server`) |
 | Shift + 점 | Codex 강제 로그인 (브라우저) |
+| **🎙** | API 키(`sk-…`) · Whisper |
+| **⇧Q W E R D F** | Fast · Approve · Decline · Fork · Mic · Send |
+| **⇧Tab** | Touch · 레이어 전환 |
+| **⇧↑ ↓ ← →** | 조이스틱 (현재 레이어 액션) |
+| **⇧1–6** | 투명 에이전트 키 (좌상단→우하단) |
+
+종료: **⌘⇧Q**
 
 설치: `pnpm install` (`@openai/codex`) · 로그인: Connect → ChatGPT 브라우저 로그인
 

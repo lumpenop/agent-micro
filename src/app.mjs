@@ -116,7 +116,14 @@ const state = {
   agents: Array.from({ length: 6 }, () => ({ name: '—', status: 'off' })),
   keyIcons: loadKeyIcons(),
   pickingCmd: null,
+  /** @type {'shift' | 'command'} */
+  hotkeyModifier: 'shift',
+  canFork: true,
 };
+
+function modGlyph(mod = state.hotkeyModifier) {
+  return mod === 'command' ? '⌘' : '⇧';
+}
 
 const padEl = document.getElementById('pad');
 const canvasHost = document.getElementById('pad-canvas');
@@ -188,6 +195,10 @@ async function refreshVoiceStatus() {
 }
 
 function openVoicePanel({ fromConnect = false } = {}) {
+  closeGuide();
+  closeKeymap();
+  closeSettings();
+  closeIconPicker();
   if (voiceTitleEl) {
     voiceTitleEl.textContent = fromConnect ? 'CLI · API 키' : 'API 키 · 마이크';
   }
@@ -333,14 +344,9 @@ function blobToBase64(blob) {
 
 async function startRecording({ latched = false } = {}) {
   await refreshVoiceStatus();
-  // CLI: Whisper + API key. Desktop: app dictation unless key saved.
-  if (state.linkMode === 'cli' && voiceMode !== 'whisper') {
-    flashAction('CLI · API 키 필요');
-    openVoicePanel({ fromConnect: true });
-    return;
-  }
   if (voiceMode !== 'whisper') {
-    await startCodexDictation({ latched });
+    flashAction('API 키 필요 · Whisper');
+    openVoicePanel({ fromConnect: true });
     return;
   }
 
@@ -428,9 +434,8 @@ async function finishVoiceToCodexFromAudio() {
     const result = await api?.transcribe?.({ base64, mimeType: blob.type || micMime });
     if (!result?.ok) {
       if (result?.code === 'NO_API_KEY') {
-        flashAction('API 키 없음 · Codex 받아쓰기로 전환');
-        voiceMode = 'codex-dictation';
-        openVoicePanel();
+        flashAction('API 키 필요');
+        openVoicePanel({ fromConnect: true });
       } else {
         flashAction(result?.error || '인식 실패');
       }
@@ -458,6 +463,7 @@ function stopRecording({ process = true } = {}) {
   micLatched = false;
   padEl.classList.remove('recording');
   pad3d?.setRecording(false);
+  pad3d?.releasePress?.('mic');
 
   if (!process) {
     stopMicStream();
@@ -530,78 +536,50 @@ picker?.addEventListener('click', (e) => {
 });
 document.getElementById('btn-icons')?.addEventListener('click', () => {
   closeGuide();
+  closeKeymap();
+  closeSettings();
   openIconPicker(state.pickingCmd || 'send');
 });
 
+/** 사용 설명서 — 동작·팁 (단축키 표는 키 맵핑 페이지) */
 const GUIDE_ITEMS = [
-  { section: '키캡' },
+  { section: '시작' },
+  {
+    key: '↻ / 점',
+    title: 'Codex 연결',
+    text: '클릭 = CLI Connect · Shift+점 = 강제 로그인 · 연결 후 API 키(🎙)',
+  },
+  {
+    key: '🎙',
+    title: '마이크 · Whisper',
+    text: 'Platform API 키(sk-…) 저장 후 음성 → Codex 전송',
+  },
+  { section: '패드' },
   {
     visual: 'agents',
     title: '에이전트 슬롯',
-    text: '투명 키 ×6 · 탭 = 전환 · 더블탭 = 에이전트 앱 포커스',
+    text: '첫 CLI=1번 창 · 이후=같은 창 스플릿(⌘D)에서 Codex · 더블탭=포커스',
   },
-  {
-    icons: ['lightning'],
-    title: 'Fast mode',
-    text: 'reasoning을 minimal로 · 아이콘 바꾸면 다른 액션',
-  },
-  {
-    icons: ['check', 'times'],
-    title: 'Approve / Decline',
-    text: '승인 요청 수락 또는 거절',
-  },
-  {
-    icons: ['fork'],
-    title: 'Fork',
-    text: '현재 스레드를 분기해 새 작업으로',
-  },
-  {
-    icons: ['mic'],
-    title: 'Codex 음성',
-    text: '홀드 = Codex에 말하기 · 떼면 앱+스레드 전송 · 더블탭 = hands-free',
-  },
-  {
-    icons: ['codex'],
-    title: 'Send',
-    text: 'Codex Continue · 더블탭 = 새 채팅',
-  },
-  { section: '컨트롤' },
   {
     key: 'Dial',
-    title: '볼륨 / Reasoning',
+    title: 'Dial',
     text: '돌리면 reasoning 강도 (minimal → xhigh)',
+  },
+  {
+    key: 'Touch',
+    title: 'Touch',
+    text: '탭 = Codex → Prompts → App 레이어 순환',
   },
   {
     key: 'Joy',
     title: '조이스틱',
-    text: '레이어마다 다름 — 아래 Touch 참고',
-  },
-  {
-    key: 'Touch',
-    title: '터치 패드',
-    text: '탭 = Codex → Prompts → App 레이어 순환',
-  },
-  { section: '레이어 · Joy (Codex)' },
-  {
-    key: 'Codex',
-    title: '기본',
-    text: '↑ Plan · → 히스토리 → · ↓ 사이드바 · ← 히스토리 ←',
-  },
-  {
-    key: 'Prompts',
-    title: '프롬프트',
-    text: '↑ PR 리뷰 · → 디버그 · ↓ 문서 · ← 리팩터',
-  },
-  {
-    key: 'App',
-    title: 'Codex 앱',
-    text: '↑ Composer · → 새 채팅 · ↓ 사이드바 · ← 히스토리 ←',
+    text: '레이어마다 액션이 다름 · 방향별 단축키는 키 맵핑',
   },
   { section: '팁' },
   {
     key: 'Mic',
-    title: 'Codex 음성',
-    text: '홀드=녹음 · Whisper 인식 · Codex 전송 (OPENAI_API_KEY)',
+    title: '음성',
+    text: '홀드=녹음 · 더블탭=hands-free · 수정키+D=토글',
   },
   {
     key: '우클릭',
@@ -609,14 +587,118 @@ const GUIDE_ITEMS = [
     text: '커맨드 키 우클릭 또는 ◆ 버튼으로 아이콘 변경',
   },
   {
-    key: '↻ / 점',
-    title: 'Codex 연결',
-    text: '클릭 = Codex 연결 · Shift+점 = 강제 로그인',
+    key: '⚙',
+    title: 'Codex 설정',
+    text: '상단 톱니 · sandbox · 승인 · 타임아웃 · .codexignore',
+  },
+  {
+    key: '⌨',
+    title: '수정키',
+    text: '키 맵핑에서 ⇧ Shift 또는 ⌘ Command 선택',
+  },
+  {
+    key: '⌘⇧M',
+    title: '창 숨기기',
+    text: '전역 토글 · 종료는 ⌘⇧Q',
   },
 ];
 
+/** 키 맵핑 — 단축키·레이어 Joy (수정키 반영) */
+function buildKeymapItems(g = modGlyph()) {
+  return [
+    { section: '에이전트' },
+    {
+      visual: 'agents',
+      title: `${g}1 – ${g}6`,
+      text: '없으면 창/스플릿+Codex · 있으면 그 패인으로 포커스(입력 가능)',
+    },
+    { section: '하단 키캡' },
+    {
+      icons: ['lightning'],
+      title: `${g}Q · Fast`,
+      text: 'reasoning → minimal · 아이콘 바꾸면 다른 액션',
+    },
+    {
+      icons: ['check'],
+      title: `${g}W · Approve`,
+      text: '승인',
+    },
+    {
+      icons: ['times'],
+      title: `${g}E · Decline`,
+      text: '거절',
+    },
+    {
+      icons: ['fork'],
+      title: `${g}R · Fork`,
+      text: '빈 슬롯에 스플릿+분기 · 6/6이면 키 비활성',
+    },
+    {
+      icons: ['mic'],
+      title: `${g}D · Mic`,
+      text: '토글 · 키캡 홀드=말하기 · 더블탭=hands-free',
+    },
+    {
+      icons: ['codex'],
+      title: `${g}F · Send`,
+      text: 'Continue · 더블탭 = 새 채팅',
+    },
+    { section: '컨트롤' },
+    {
+      key: `${g}Tab`,
+      title: 'Touch · 레이어',
+      text: 'Codex → Prompts → App 순환',
+    },
+    {
+      key: `${g}↑↓←→`,
+      title: '조이스틱',
+      text: '현재 레이어 Joy 액션 (아래 표)',
+    },
+    {
+      key: 'Dial',
+      title: 'Dial',
+      text: 'reasoning: minimal → low → medium → high → xhigh',
+    },
+    { section: 'Joy · Codex' },
+    {
+      key: '↑ ↓',
+      title: 'Plan / 새 채팅',
+      text: '↑ Plan 토글 · ↓ 새 채팅',
+    },
+    {
+      key: '← →',
+      title: '에이전트 히스토리',
+      text: '← 이전 · → 다음',
+    },
+    { section: 'Joy · Prompts' },
+    {
+      key: '↑ ↓',
+      title: '리뷰 / 문서',
+      text: '↑ PR 리뷰 · ↓ 문서',
+    },
+    {
+      key: '← →',
+      title: '리팩터 / 디버그',
+      text: '← 리팩터 · → 디버그',
+    },
+    { section: 'Joy · App' },
+    {
+      key: '↑ ↓',
+      title: 'Continue / 설명',
+      text: '↑ Continue · ↓ explain',
+    },
+    {
+      key: '← →',
+      title: 'Fork / 새 채팅',
+      text: '← Fork · → 새 채팅',
+    },
+  ];
+}
+
 const guidePanel = document.getElementById('guide-panel');
 const guideBody = document.getElementById('guide-body');
+const keymapPanel = document.getElementById('keymap-panel');
+const keymapBody = document.getElementById('keymap-body');
 
 function guideAgentsVisual() {
   // matches pad layout: row0 empty|A0|A1|empty · row1 A2–A5
@@ -648,12 +730,10 @@ function guideKeyHtml(item) {
   return `<div class="guide-item-key">${String(item.key || '').replace(/\n/g, '<br>')}</div>`;
 }
 
-function openGuide() {
-  closeIconPicker();
-  if (!guideBody || !guidePanel) return;
+function renderGuideList(items) {
   let html = '';
   let open = false;
-  for (const item of GUIDE_ITEMS) {
+  for (const item of items) {
     if (item.section) {
       if (open) html += '</div>';
       html += `<div class="guide-group"><div class="guide-section">${item.section}</div>`;
@@ -666,7 +746,15 @@ function openGuide() {
     </div>`;
   }
   if (open) html += '</div>';
-  guideBody.innerHTML = html;
+  return html;
+}
+
+function openGuide() {
+  closeIconPicker();
+  closeKeymap();
+  closeSettings();
+  if (!guideBody || !guidePanel) return;
+  guideBody.innerHTML = renderGuideList(GUIDE_ITEMS);
   guidePanel.hidden = false;
 }
 
@@ -674,14 +762,160 @@ function closeGuide() {
   if (guidePanel) guidePanel.hidden = true;
 }
 
+function syncModPickerUI() {
+  const mod = state.hotkeyModifier === 'command' ? 'command' : 'shift';
+  document.getElementById('mod-shift')?.classList.toggle('is-active', mod === 'shift');
+  document.getElementById('mod-command')?.classList.toggle('is-active', mod === 'command');
+  const hint = document.getElementById('mod-hint');
+  if (hint) {
+    hint.textContent =
+      mod === 'command'
+        ? '⌘ + QWERDF / 1–6 / 화살표 · ⌘Tab은 OS와 겹칠 수 있음'
+        : '⇧ + QWERDF / 1–6 / 화살표 · OS와 덜 겹침';
+  }
+}
+
+function applyHotkeyModifier(mod) {
+  const next = mod === 'command' ? 'command' : 'shift';
+  state.hotkeyModifier = next;
+  syncModPickerUI();
+  if (keymapBody && keymapPanel && !keymapPanel.hidden) {
+    keymapBody.innerHTML = renderGuideList(buildKeymapItems());
+  }
+}
+
+function openKeymap() {
+  closeIconPicker();
+  closeGuide();
+  closeSettings();
+  if (!keymapBody || !keymapPanel) return;
+  syncModPickerUI();
+  keymapBody.innerHTML = renderGuideList(buildKeymapItems());
+  keymapPanel.hidden = false;
+}
+
+function closeKeymap() {
+  if (keymapPanel) keymapPanel.hidden = true;
+}
+
+/* ——— Codex CLI settings panel ——— */
+const settingsPanel = document.getElementById('settings-panel');
+const setSandbox = document.getElementById('set-sandbox');
+const setApproval = document.getElementById('set-approval');
+const setStartup = document.getElementById('set-startup');
+const setTool = document.getElementById('set-tool');
+const setJob = document.getElementById('set-job');
+const setProxy = document.getElementById('set-proxy');
+const settingsHint = document.getElementById('settings-hint');
+
+function readSettingsForm() {
+  return {
+    sandbox_mode: setSandbox?.value || 'workspace-write',
+    approval_policy: setApproval?.value || 'on-request',
+    startup_timeout_sec: Number(setStartup?.value) || 30,
+    tool_timeout_sec: Number(setTool?.value) || 60,
+    job_max_runtime_seconds: Number(setJob?.value) || 1800,
+    network_proxy: !!setProxy?.checked,
+  };
+}
+
+function fillSettingsForm(s = {}) {
+  if (setSandbox) setSandbox.value = s.sandbox_mode || 'workspace-write';
+  if (setApproval) setApproval.value = s.approval_policy || 'on-request';
+  if (setStartup) setStartup.value = String(s.startup_timeout_sec ?? 30);
+  if (setTool) setTool.value = String(s.tool_timeout_sec ?? 60);
+  if (setJob) setJob.value = String(s.job_max_runtime_seconds ?? 1800);
+  if (setProxy) setProxy.checked = !!s.network_proxy;
+}
+
+async function openSettings() {
+  closeIconPicker();
+  closeGuide();
+  closeKeymap();
+  closeVoicePanel();
+  if (!settingsPanel) return;
+  try {
+    const r = await api?.getCodexSettings?.();
+    fillSettingsForm(r?.settings || {});
+    if (settingsHint) {
+      settingsHint.textContent = r?.meta?.profilePath
+        ? `프로필 ${r.meta.profile} · 저장 시 ~/.codex 반영`
+        : '저장 시 ~/.codex 에 반영 · 새 CLI 창에 적용';
+    }
+  } catch {
+    fillSettingsForm({});
+  }
+  settingsPanel.hidden = false;
+  flashAction('Codex 설정');
+}
+
+function closeSettings() {
+  if (settingsPanel) settingsPanel.hidden = true;
+}
+
 document.getElementById('btn-help')?.addEventListener('click', openGuide);
+document.getElementById('btn-keymap')?.addEventListener('click', openKeymap);
+document.getElementById('mod-shift')?.addEventListener('click', async () => {
+  const r = await api?.setPadPrefs?.({ hotkeyModifier: 'shift' });
+  applyHotkeyModifier(r?.hotkeyModifier || 'shift');
+  flashAction('수정키 · ⇧ Shift');
+});
+document.getElementById('mod-command')?.addEventListener('click', async () => {
+  const r = await api?.setPadPrefs?.({ hotkeyModifier: 'command' });
+  applyHotkeyModifier(r?.hotkeyModifier || 'command');
+  flashAction('수정키 · ⌘ Command');
+});
+document.getElementById('btn-settings')?.addEventListener('click', openSettings);
 document.getElementById('guide-close')?.addEventListener('click', closeGuide);
+document.getElementById('keymap-close')?.addEventListener('click', closeKeymap);
+document.getElementById('settings-close')?.addEventListener('click', closeSettings);
+document.getElementById('guide-to-keymap')?.addEventListener('click', openKeymap);
+document.getElementById('keymap-to-guide')?.addEventListener('click', openGuide);
 guidePanel?.addEventListener('click', (e) => {
   if (e.target === guidePanel) closeGuide();
+});
+keymapPanel?.addEventListener('click', (e) => {
+  if (e.target === keymapPanel) closeKeymap();
+});
+settingsPanel?.addEventListener('click', (e) => {
+  if (e.target === settingsPanel) closeSettings();
+});
+document.getElementById('settings-save')?.addEventListener('click', async () => {
+  const r = await api?.saveCodexSettings?.(readSettingsForm());
+  if (r?.ok) {
+    fillSettingsForm(r.settings);
+    flashAction('Codex 설정 저장');
+    if (settingsHint) {
+      settingsHint.textContent = r.warning
+        ? `저장됨 · 경고: ${r.warning}`
+        : `저장됨 · ${r.profile || 'agent-micro'} · 새 CLI 창부터 적용`;
+    }
+  } else {
+    flashAction('설정 저장 실패');
+  }
+});
+document.getElementById('settings-ignore')?.addEventListener('click', async () => {
+  const r = await api?.writeCodexIgnore?.();
+  if (r?.canceled) {
+    flashAction('취소');
+    return;
+  }
+  if (r?.ok) {
+    flashAction(r.created ? `.codexignore 생성` : `.codexignore 이미 있음`);
+    if (settingsHint) settingsHint.textContent = r.path || '';
+  } else {
+    flashAction('.codexignore 실패');
+  }
+});
+document.getElementById('settings-open-config')?.addEventListener('click', () => {
+  api?.openCodexConfig?.();
+  flashAction('config.toml');
 });
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeGuide();
+    closeKeymap();
+    closeSettings();
     closeIconPicker();
   }
 });
@@ -696,27 +930,35 @@ function render() {
   hud.status.textContent = statusLabel(current.status || 'off');
   hud.reason.textContent = REASONING[state.reasoningIndex];
   const layerName = layerDisplayName(state.layer);
-  const link = state.linkMode === 'cli' ? 'CLI' : 'Desktop';
   hud.link.textContent = state.connected
-    ? `Codex · ${link} · ${layerName}`
+    ? `Codex CLI · ${state.mode} · ${layerName}`
     : state.mode === 'offline'
-      ? `demo · ${link} · ${layerName}`
-      : `Codex · ${link} · ${layerName}`;
+      ? `demo · CLI · ${layerName}`
+      : `Codex CLI · ${state.mode} · ${layerName}`;
   linkDot.classList.toggle('on', state.connected);
   linkDot.classList.toggle('demo', !state.connected);
   pad3d.setCmdActive('fast', state.fastMode);
+  const forkOk =
+    typeof state.canFork === 'boolean'
+      ? state.canFork
+      : state.agents.some((a) => !a || a.status === 'off');
+  pad3d.setCmdEnabled?.('fork', forkOk);
 }
 
 function applyBridgeState(s) {
   if (!s) return;
   state.connected = !!s.connected;
   state.mode = s.mode || 'offline';
-  if (s.linkMode) state.linkMode = s.linkMode;
+  state.linkMode = 'cli';
   state.provider = 'codex';
   state.selected = s.selected ?? state.selected;
   state.reasoningIndex = s.reasoningIndex ?? state.reasoningIndex;
   state.fastMode = !!s.fastMode;
   state.planMode = !!s.planMode;
+  if (typeof s.canFork === 'boolean') state.canFork = s.canFork;
+  else if (Array.isArray(s.agents)) {
+    state.canFork = s.agents.some((a) => !a || a.status === 'off');
+  }
   if (Array.isArray(s.agents)) state.agents = s.agents;
   if (s.action) flashAction(s.action);
   render();
@@ -795,7 +1037,13 @@ async function onCmd(cmd) {
   if (cmd === 'fast') await api?.toggleFast();
   else if (cmd === 'approve') await api?.approve();
   else if (cmd === 'decline') await api?.decline();
-  else if (cmd === 'fork') await api?.fork();
+  else if (cmd === 'fork') {
+    if (!state.canFork) {
+      flashAction('fork · slots full (6/6)');
+      return;
+    }
+    await api?.fork();
+  }
 }
 
 let dialAcc = 0;
@@ -859,31 +1107,22 @@ try {
 }
 
 async function connectAgent({ forceLogin = false } = {}) {
-  const modeInfo = await api?.getMode?.();
-  if (modeInfo?.needsPick) {
-    openModePicker();
-    return;
-  }
   linkDot?.classList.add('busy');
-  flashAction(forceLogin ? 'Codex 로그인…' : 'Codex connecting…');
+  flashAction(forceLogin ? 'Codex 로그인…' : 'CLI connecting…');
   try {
     const result = forceLogin
       ? await api?.connect?.({ forceLogin: true })
       : await api?.reconnect?.();
-    if (result?.linkMode) state.linkMode = result.linkMode;
+    state.linkMode = 'cli';
     if (result?.ok === false && result?.reason === 'missing') {
       flashAction('Codex 없음 · pnpm install');
     } else if (result?.ok === false && result?.reason === 'login') {
       flashAction('Codex 로그인 필요 · ↻ 다시');
     } else if (result?.ok || result === true) {
       const prompted = await maybePromptVoiceSetup(result);
-      flashAction(
-        prompted
-          ? 'CLI · API 키 설정'
-          : `Codex · ${state.linkMode === 'cli' ? 'CLI' : 'Desktop'}`
-      );
+      flashAction(prompted ? 'CLI · API 키 설정' : 'Codex CLI connected');
     } else {
-      flashAction('demo · 모드/↻ 로 연결');
+      flashAction('demo · ↻ 로 CLI 연결');
     }
   } catch (err) {
     flashAction(err?.message || 'connect failed');
@@ -899,34 +1138,9 @@ linkDot?.addEventListener('click', (e) => {
   connectAgent({ forceLogin: e.shiftKey });
 });
 
-let reconnectHoldTimer = null;
-let reconnectHoldFired = false;
-const btnReconnect = document.getElementById('btn-reconnect');
-btnReconnect?.addEventListener('pointerdown', () => {
-  reconnectHoldFired = false;
-  reconnectHoldTimer = setTimeout(() => {
-    reconnectHoldTimer = null;
-    reconnectHoldFired = true;
-    openModePicker();
-  }, 550);
-});
-btnReconnect?.addEventListener('pointerup', () => {
-  if (reconnectHoldTimer) clearTimeout(reconnectHoldTimer);
-  reconnectHoldTimer = null;
-});
-btnReconnect?.addEventListener('pointerleave', () => {
-  if (reconnectHoldTimer) clearTimeout(reconnectHoldTimer);
-  reconnectHoldTimer = null;
-});
-btnReconnect?.addEventListener('click', () => {
-  if (reconnectHoldFired) {
-    reconnectHoldFired = false;
-    return;
-  }
+document.getElementById('btn-reconnect')?.addEventListener('click', () => {
   connectAgent();
 });
-
-document.getElementById('btn-mode')?.addEventListener('click', () => openModePicker());
 
 api?.onState?.(applyBridgeState);
 api?.onLog?.((m) => {
@@ -935,13 +1149,70 @@ api?.onLog?.((m) => {
 api?.onMicStatus?.((s) => {
   if (s?.granted) micGranted = true;
 });
-api?.onNeedModePick?.(() => openModePicker());
-state.provider = 'codex';
-api?.getMode?.().then((info) => {
-  if (info?.resolved) state.linkMode = info.resolved;
-  if (info?.needsPick) openModePicker();
-  render();
+
+/** Mod+QWERDF / Tab / arrows / 1–6 — pad or our CLI context */
+api?.onHotkey?.(({ cmd, phase, dir, index } = {}) => {
+  if (!cmd) return;
+  const g = modGlyph();
+
+  if (cmd === 'agent') {
+    const i = Math.max(0, Math.min(5, Number(index) || 0));
+    pad3d?.simulatePress?.(`agent:${i}`);
+    onAgent(i);
+    flashAction(`${g}${i + 1} · Agent ${i + 1}`);
+    return;
+  }
+
+  if (cmd === 'joy') {
+    const d = dir || 'up';
+    pad3d?.nudgeJoy?.(d);
+    onJoy(d);
+    flashAction(`${g}${{ up: '↑', down: '↓', left: '←', right: '→' }[d] || d}`);
+    return;
+  }
+
+  if (cmd === 'touch') {
+    pad3d?.simulatePress?.('touch');
+    state.layer = (state.layer + 1) % LAYERS.length;
+    pad3d?.setLayer?.(state.layer);
+    flashAction(`${g}Tab · layer · ${layerDisplayName(state.layer)}`);
+    render();
+    return;
+  }
+
+  if (cmd === 'mic') {
+    if (phase === 'toggle') {
+      if (state.recording) {
+        pad3d?.simulatePress?.('mic', { phase: 'up' });
+        stopRecording({ process: true });
+        flashAction(`${g}D · mic off`);
+      } else {
+        pad3d?.simulatePress?.('mic', { phase: 'down', sticky: true });
+        startRecording({ latched: true });
+        flashAction(`${g}D · mic on`);
+      }
+      return;
+    }
+    pad3d?.simulatePress?.('mic');
+    onMicPress();
+    return;
+  }
+
+  pad3d?.simulatePress?.(cmd);
+  flashAction(`${g} · ${cmd}`);
+  onCmd(cmd);
 });
+
+api?.onPadPrefs?.((prefs) => {
+  if (prefs?.hotkeyModifier) applyHotkeyModifier(prefs.hotkeyModifier);
+});
+
+api?.getPadPrefs?.().then((prefs) => {
+  if (prefs?.hotkeyModifier) applyHotkeyModifier(prefs.hotkeyModifier);
+});
+
+state.provider = 'codex';
+state.linkMode = 'cli';
 api?.getState?.().then(applyBridgeState);
 
 document.getElementById('btn-voice')?.addEventListener('click', () => openVoicePanel());
@@ -966,11 +1237,31 @@ document.getElementById('voice-skip')?.addEventListener('click', async () => {
   await api?.skipVoiceSetup?.();
   await refreshVoiceStatus();
   closeVoicePanel();
-  flashAction(state.linkMode === 'cli' ? '나중에 · 키 없이 CLI' : '나중에');
+  flashAction('나중에 · 키 없이 CLI');
 });
 document.getElementById('voice-open-keys')?.addEventListener('click', () => {
   api?.openApiKeysPage?.();
   flashAction('platform.openai.com 열림');
 });
 
-flashAction('Codex · Desktop / CLI');
+api?.onState?.((s) => {
+  if (s?.connected) maybePromptVoiceSetup();
+});
+
+/** While typing in inputs, don't treat ⇧Q/D/1… as pad shortcuts */
+function isEditableEl(el) {
+  if (!el || !el.tagName) return false;
+  const tag = el.tagName.toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+  if (el.isContentEditable) return true;
+  return false;
+}
+function syncPadHotkeySuspend() {
+  api?.suspendPadHotkeys?.(isEditableEl(document.activeElement));
+}
+document.addEventListener('focusin', syncPadHotkeySuspend, true);
+document.addEventListener('focusout', () => {
+  setTimeout(syncPadHotkeySuspend, 0);
+}, true);
+
+flashAction('Codex CLI');

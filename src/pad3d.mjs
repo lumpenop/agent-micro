@@ -2,6 +2,7 @@ import * as THREE from './vendor/three.mjs';
 import { RoundedBoxGeometry } from './vendor/geometries/RoundedBoxGeometry.mjs';
 import { RoomEnvironment } from './vendor/RoomEnvironment.mjs';
 import { iconSvgDocument } from './icons.mjs';
+import { playKeyDown, playKeyUp, playDialTick, playJoyTick } from './key-sounds.mjs';
 
 const STATUS_COLOR = {
   idle: 0x7eb0e8,
@@ -771,24 +772,45 @@ export function createPad3D(container, handlers = {}) {
   }
   setTouchLayer(0);
 
+  function soundIdFor(obj) {
+    const t = obj?.userData?.type;
+    if (t === 'agent') return `agent:${obj.userData.index}`;
+    if (t === 'cmd') return `cmd:${obj.userData.cmd}`;
+    return t || 'key';
+  }
+
+  function soundKindFor(obj) {
+    const t = obj?.userData?.type;
+    if (t === 'cmd') return obj.userData.cmd || 'cmd';
+    if (t === 'agent') return 'agent';
+    if (t === 'touch') return 'touch';
+    if (t === 'dial') return 'dial';
+    if (t === 'joy') return 'joy';
+    return 'cmd';
+  }
+
   renderer.domElement.addEventListener('pointerdown', (e) => {
     const obj = pick(e);
     if (!obj) return;
+    if (obj.userData?.disabled) return;
     pressed = obj;
     renderer.domElement.setPointerCapture(e.pointerId);
 
     if (obj.userData.type === 'dial') {
       dialDragging = true;
       dialLastAngle = pointerAngle(e);
+      playKeyDown('dial', 'dial');
       handlers.onDialStart?.();
       e.preventDefault();
       return;
     }
     if (obj.userData.type === 'joy') {
       joyDragging = true;
+      playKeyDown('joy', 'joy');
       return;
     }
     pressVisual(obj, true);
+    playKeyDown(soundKindFor(obj), soundIdFor(obj));
     // Mic: press-to-talk starts on down
     if (obj.userData.type === 'cmd' && obj.userData.cmd === 'mic') {
       handlers.onCmdPress?.('mic');
@@ -802,6 +824,7 @@ export function createPad3D(container, handlers = {}) {
       const cw = shortestDelta(dialLastAngle, a);
       dialLastAngle = a;
       dialKnob.rotation.y -= (cw * Math.PI) / 180;
+      if (Math.abs(cw) > 2) playDialTick(cw);
       handlers.onDialDelta?.(cw);
       return;
     }
@@ -827,6 +850,7 @@ export function createPad3D(container, handlers = {}) {
       if (dist > 0.07) {
         const dir =
           Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
+        playJoyTick(dir);
         handlers.onJoy?.(dir);
       }
     }
@@ -834,11 +858,13 @@ export function createPad3D(container, handlers = {}) {
 
   renderer.domElement.addEventListener('pointerup', (e) => {
     if (dialDragging) {
+      playKeyUp('dial', 'dial');
       dialDragging = false;
       pressed = null;
       return;
     }
     if (joyDragging) {
+      playKeyUp('joy', 'joy');
       joyDragging = false;
       joyTx = 0;
       joyTz = 0;
@@ -848,12 +874,15 @@ export function createPad3D(container, handlers = {}) {
     if (!pressed) return;
     const downObj = pressed;
     pressVisual(downObj, false);
+    playKeyUp(soundKindFor(downObj), soundIdFor(downObj));
     const obj = pick(e) || downObj;
     const t = obj.userData?.type || downObj.userData?.type;
     if (t === 'agent') handlers.onAgent?.(obj.userData.index ?? downObj.userData.index);
     if (t === 'cmd') {
       const cmd = obj.userData.cmd ?? downObj.userData.cmd;
-      if (cmd === 'mic') handlers.onCmdRelease?.('mic');
+      if (downObj.userData?.disabled || obj.userData?.disabled) {
+        /* ignore disabled keys */
+      } else if (cmd === 'mic') handlers.onCmdRelease?.('mic');
       else handlers.onCmd?.(cmd);
     }
     if (t === 'touch') handlers.onTouch?.();
@@ -962,12 +991,90 @@ export function createPad3D(container, handlers = {}) {
       m.material.emissive = new THREE.Color(on ? 0x224466 : 0x000000);
       m.material.emissiveIntensity = on ? 0.15 : 0;
     },
+    /** Gray out / ignore a command key (e.g. fork when 6/6). */
+    setCmdEnabled(cmd, enabled) {
+      const m = cmds[cmd];
+      if (!m) return;
+      const on = !!enabled;
+      m.userData.disabled = !on;
+      if (m.userData._baseColor == null) {
+        m.userData._baseColor = m.material.color.getHex();
+      }
+      m.material.color.setHex(on ? m.userData._baseColor : 0xb0aea8);
+      m.material.opacity = on ? 1 : 0.45;
+      m.material.transparent = !on;
+      m.material.needsUpdate = true;
+      if (m.userData.iconMesh?.material) {
+        m.userData.iconMesh.material.opacity = on ? 1 : 0.28;
+        m.userData.iconMesh.material.transparent = true;
+        m.userData.iconMesh.material.needsUpdate = true;
+      }
+    },
     setRecording(on) {
       chassis.material.emissive = new THREE.Color(on ? 0x1ecf9a : 0x000000);
       chassis.material.emissiveIntensity = on ? 0.12 : 0;
     },
     setLayer(layer) {
       setTouchLayer(((layer % 3) + 3) % 3);
+    },
+    /**
+     * Hotkey feedback: press motion + 청축 sound (same as pointer).
+     * @param {string} target - cmd id ('fast'|'approve'|…) or 'touch'
+     * @param {{ holdMs?: number, sticky?: boolean, phase?: 'down'|'up'|'pulse' }} [opts]
+     */
+    simulatePress(target, opts = {}) {
+      const phase = opts.phase || 'pulse';
+      const holdMs = opts.holdMs ?? 100;
+      let obj = null;
+      if (target === 'touch') obj = touchGroup;
+      else if (typeof target === 'string' && target.startsWith('agent:')) {
+        const i = Number(target.slice(6));
+        obj = agents[i] || null;
+      } else obj = cmds[target] || null;
+      if (!obj || obj.userData?.disabled) return false;
+
+      const kind = soundKindFor(obj);
+      const id = soundIdFor(obj);
+
+      if (phase === 'down' || phase === 'pulse') {
+        pressVisual(obj, true);
+        playKeyDown(kind, id);
+      }
+      if (phase === 'up') {
+        pressVisual(obj, false);
+        if (!opts.silent) playKeyUp(kind, id);
+        return true;
+      }
+      if (phase === 'pulse' && !opts.sticky) {
+        setTimeout(() => {
+          pressVisual(obj, false);
+          playKeyUp(kind, id);
+        }, holdMs);
+      }
+      return true;
+    },
+    /** Silent unpress (e.g. mic recording ended) */
+    releasePress(target) {
+      return this.simulatePress(target, { phase: 'up', silent: true });
+    },
+    /** ⌘+arrow: tilt stick + sound, then spring back */
+    nudgeJoy(dir = 'up', holdMs = 120) {
+      const throwAmt = 0.16;
+      const map = {
+        up: { x: 0, z: -throwAmt },
+        down: { x: 0, z: throwAmt },
+        left: { x: -throwAmt, z: 0 },
+        right: { x: throwAmt, z: 0 },
+      };
+      const t = map[dir] || map.up;
+      joyTx = t.x;
+      joyTz = t.z;
+      playJoyTick(dir);
+      setTimeout(() => {
+        joyTx = 0;
+        joyTz = 0;
+      }, holdMs);
+      return true;
     },
     resetJoy,
     dispose() {

@@ -108,7 +108,73 @@ class CodexBridge extends EventEmitter {
       fastMode: this.fastMode,
       planMode: this.planMode,
       agents: this.agents.map((a) => ({ ...a })),
+      canFork: this._nextForkSlot() >= 0,
     };
+  }
+
+  /** First empty agent slot (status off), or -1 if all 6 are in use. */
+  _nextForkSlot() {
+    return this.agents.findIndex((a) => !a || a.status === 'off');
+  }
+
+  /**
+   * Fork current thread into the next empty slot, open/focus its CLI split.
+   * Disabled when all 6 agents are occupied.
+   */
+  async fork() {
+    const target = this._nextForkSlot();
+    if (target < 0) {
+      this.emitState('fork · slots full (6/6)');
+      return { ok: false, reason: 'full' };
+    }
+
+    const src = this.agents[this.selected];
+    if (!src || src.status === 'off') {
+      this.emitState('fork · no source agent');
+      return { ok: false, reason: 'no-source' };
+    }
+
+    let threadId = src.threadId;
+    let name = `${src.name || 'Agent'} · fork`;
+    let status = 'idle';
+
+    if (!this.connected || !threadId || String(threadId).startsWith('demo')) {
+      // Demo / offline: copy slot state into empty agent
+      name = `${src.name || 'Agent'} · continued`;
+      status = 'thinking';
+      threadId = src.threadId || `demo-fork-${Date.now()}`;
+    } else {
+      try {
+        const result = await this.request('thread/fork', { threadId: src.threadId });
+        threadId = result?.thread?.id || result?.threadId || result?.id;
+        if (!threadId) {
+          this.emitState('fork failed · no thread id');
+          return { ok: false, reason: 'no-id' };
+        }
+      } catch (e) {
+        this.emitState(`fork failed · ${e.message}`);
+        return { ok: false, error: e.message };
+      }
+    }
+
+    this.agents[target] = {
+      name,
+      status,
+      threadId,
+      turnId: null,
+      approvalId: null,
+    };
+    this.selected = target;
+
+    // Always open/focus CLI split for the fork target (Agent N pane)
+    try {
+      await this.ensureAgentCliWindow(target, { focus: true });
+    } catch (e) {
+      this.emit('log', `fork cli: ${e.message}`);
+    }
+
+    this.emitState(`fork → Agent ${target + 1} · split`);
+    return { ok: true, slot: target };
   }
 
   emitState(action) {
@@ -487,16 +553,74 @@ class CodexBridge extends EventEmitter {
     ];
   }
 
-  select(index, { focus = false } = {}) {
-    this.selected = Math.max(0, Math.min(5, index));
-    const a = this.agents[this.selected];
-    if (a.status === 'complete') a.status = 'idle';
+  async select(index, { focus = false } = {}) {
+    const requested = Math.max(0, Math.min(5, index));
 
-    if (a.status === 'off' && this.connected) {
-      this.startThread(this.selected).catch(() => {});
+    // CLI: first open → Agent 1 window · later → split (⌘D) + Codex
+    let slot = requested;
+    try {
+      const r = await this.ensureAgentCliWindow(requested, { focus });
+      if (typeof r?.slot === 'number') slot = r.slot;
+      this.selected = slot;
+      const a = this.agents[this.selected];
+      if (a.status === 'complete') a.status = 'idle';
+      if (a.status === 'off' && this.connected) {
+        this.startThread(this.selected).catch(() => {});
+      }
+      if (r?.opened && r.mode === 'window') {
+        this.emitState(`CLI · Agent ${slot + 1} 창`);
+      } else if (r?.opened && (r.mode === 'split' || r.mode === 'tab')) {
+        this.emitState(`CLI · Agent ${slot + 1} 스플릿`);
+      } else if (r?.focused) {
+        this.emitState(`focus · CLI · Agent ${slot + 1}`);
+      } else {
+        this.emitState(
+          slot === requested
+            ? `switch · Agent ${slot + 1}`
+            : `switch · Agent ${slot + 1} (⇧${requested + 1}→${slot + 1})`
+        );
+      }
+    } catch (e) {
+      this.selected = requested;
+      this.emit('log', e?.message || String(e));
+      this.emitState(`CLI 창 실패 · ${e?.message || e}`);
     }
-    if (focus) focusChatGPT();
-    this.emitState(focus ? `focus · Agent ${index + 1}` : `switch · Agent ${index + 1}`);
+  }
+
+  /** Shell command to launch interactive Codex CLI in Terminal. */
+  _codexCliCommand() {
+    const bin = findCodexNative();
+    let base = 'codex';
+    if (!bin) {
+      /* PATH fallback */
+    } else if (typeof bin === 'object' && bin.type === 'node') {
+      const node = process.execPath.replace(/'/g, `'\\''`);
+      const script = String(bin.path).replace(/'/g, `'\\''`);
+      base = `ELECTRON_RUN_AS_NODE=1 '${node}' '${script}'`;
+    } else {
+      base = `'${String(bin).replace(/'/g, `'\\''`)}'`;
+    }
+    try {
+      const { withCliFlags } = require('../codex-settings');
+      return withCliFlags(base);
+    } catch {
+      return base;
+    }
+  }
+
+  /**
+   * Ensure Terminal has a Codex CLI window for this agent slot.
+   * @param {number} slot
+   * @param {{ focus?: boolean }} [opts]
+   */
+  async ensureAgentCliWindow(slot, opts = {}) {
+    if (process.platform !== 'darwin') {
+      return { ok: false, error: 'macOS only' };
+    }
+    return mac.ensureCodexCliWindow(slot, {
+      focus: !!opts.focus,
+      command: this._codexCliCommand(),
+    });
   }
 
   async startThread(slot = this.selected) {
@@ -547,41 +671,6 @@ class CodexBridge extends EventEmitter {
     a.approvalId = null;
     a.status = 'idle';
     this.emitState('declined');
-  }
-
-  async fork() {
-    const src = this.agents[this.selected];
-    if (!this.connected || !src.threadId || String(src.threadId).startsWith('demo')) {
-      const empty = this.agents.findIndex((a) => a.status === 'off');
-      const target = empty === -1 ? (this.selected + 1) % 6 : empty;
-      this.agents[target] = {
-        name: `${src.name} · continued`,
-        status: 'thinking',
-        threadId: src.threadId,
-        turnId: null,
-        approvalId: null,
-      };
-      this.selected = target;
-      this.emitState(`fork → Agent ${target + 1}`);
-      return;
-    }
-    try {
-      const result = await this.request('thread/fork', { threadId: src.threadId });
-      const id = result?.thread?.id || result?.threadId || result?.id;
-      const empty = this.agents.findIndex((a) => a.status === 'off');
-      const target = empty === -1 ? (this.selected + 1) % 6 : empty;
-      this.agents[target] = {
-        name: `${src.name} · fork`,
-        status: 'idle',
-        threadId: id,
-        turnId: null,
-        approvalId: null,
-      };
-      this.selected = target;
-      this.emitState(`fork → Agent ${target + 1}`);
-    } catch (e) {
-      this.emitState(`fork failed · ${e.message}`);
-    }
   }
 
   async send(text) {

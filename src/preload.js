@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('codexDesktop', {
   minimize: () => ipcRenderer.invoke('window:minimize'),
   close: () => ipcRenderer.invoke('window:close'),
+  suspendPadHotkeys: (suspended) => ipcRenderer.invoke('window:suspendPadHotkeys', suspended),
 
   getState: () => ipcRenderer.invoke('codex:getState'),
   select: (index, focus) => ipcRenderer.invoke('codex:select', index, focus),
@@ -33,6 +34,12 @@ contextBridge.exposeInMainWorld('codexDesktop', {
   openApiKeysPage: () => ipcRenderer.invoke('voice:openApiKeysPage'),
   beginVoiceDictation: () => ipcRenderer.invoke('voice:beginDictation'),
   endVoiceDictation: () => ipcRenderer.invoke('voice:endDictation'),
+  getCodexSettings: () => ipcRenderer.invoke('codexSettings:get'),
+  saveCodexSettings: (partial) => ipcRenderer.invoke('codexSettings:save', partial),
+  writeCodexIgnore: () => ipcRenderer.invoke('codexSettings:writeIgnore'),
+  openCodexConfig: () => ipcRenderer.invoke('codexSettings:openConfig'),
+  getPadPrefs: () => ipcRenderer.invoke('padPrefs:get'),
+  setPadPrefs: (partial) => ipcRenderer.invoke('padPrefs:set', partial),
 
   onState: (cb) => {
     const handler = (_e, state) => cb(state);
@@ -48,5 +55,15 @@ contextBridge.exposeInMainWorld('codexDesktop', {
     const handler = (_e, status) => cb(status);
     ipcRenderer.on('mic:status', handler);
     return () => ipcRenderer.removeListener('mic:status', handler);
+  },
+  onHotkey: (cb) => {
+    const handler = (_e, payload) => cb(payload);
+    ipcRenderer.on('hotkey', handler);
+    return () => ipcRenderer.removeListener('hotkey', handler);
+  },
+  onPadPrefs: (cb) => {
+    const handler = (_e, prefs) => cb(prefs);
+    ipcRenderer.on('padPrefs:changed', handler);
+    return () => ipcRenderer.removeListener('padPrefs:changed', handler);
   },
 });
