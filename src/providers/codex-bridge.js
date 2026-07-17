@@ -869,32 +869,44 @@ class CodexBridge extends EventEmitter {
     }
   }
 
-  /** No Whisper key: talk inside already-logged-in Codex app (system dictation). */
+  /**
+   * macOS dictation into the selected Agent CLI pane.
+   * Focuses that slot first when pad (or another app) is frontmost.
+   */
   async beginVoiceDictation() {
+    const slot = this.selected;
     try {
-      const r = await mac.beginCodexDictation();
+      // Ensure selected CLI is frontmost before dictation starts
+      const focus = await this.ensureAgentCliWindow(slot, { focus: true });
+      if (!focus?.ok) {
+        const hint = focus?.error || focus?.reason || lt('bridge.dictationFail');
+        this.emitState(hint);
+        return { ok: false, error: hint, code: focus?.reason || 'NO_CLI', slot };
+      }
+      const r = await mac.beginCodexDictation({ slot, alreadyFocused: true });
       this.emitState(lt('bridge.speak'));
-      return { ok: true, mode: 'codex-dictation', app: r?.app };
+      return { ok: true, mode: 'codex-dictation', app: r?.app, slot };
     } catch (e) {
       this.emit('log', e.message);
       const hint =
-        e.code === 'NO_CODEX_APP' || e.code === 'WRONG_APP'
+        e.code === 'NO_CODEX_APP' || e.code === 'WRONG_APP' || e.code === 'NO_CLI'
           ? e.message
           : lt('bridge.dictationFail');
       this.emitState(hint);
-      return { ok: false, error: hint, code: e.code || 'DICTATION' };
+      return { ok: false, error: hint, code: e.code || 'DICTATION', slot };
     }
   }
 
   async endVoiceDictation() {
+    const slot = this.selected;
     try {
-      await mac.submitCodexComposer();
+      await mac.submitCodexComposer({ slot });
       this.emitState(lt('bridge.sent'));
-      return { ok: true };
+      return { ok: true, slot };
     } catch (e) {
       this.emit('log', e.message);
       this.emitState(lt('bridge.submitFail'));
-      return { ok: false, error: e.message };
+      return { ok: false, error: e.message, slot };
     }
   }
 }

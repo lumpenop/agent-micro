@@ -439,9 +439,9 @@ function blobToBase64(blob) {
 
 async function startRecording({ latched = false } = {}) {
   await refreshVoiceStatus();
+  // No Whisper key → macOS dictation into the selected Agent CLI window
   if (voiceMode !== 'whisper') {
-    flashAction(t('flash.apiNeedWhisper'));
-    openVoicePanel({ fromConnect: true });
+    await startCodexDictation({ latched });
     return;
   }
 

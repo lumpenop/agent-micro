@@ -226,12 +226,26 @@ async function submitToCodex(text) {
 }
 
 /**
- * Speak into already-logged-in Codex via macOS dictation.
- * Does NOT send ⌘K — that opens Cursor's command palette when focus is wrong.
+ * Speak into the focused app via macOS dictation (usually Ghostty CLI pane).
+ * Prefer focusing a CLI slot first — see beginVoiceDictation in the bridge.
+ * Does NOT send ⌘K (Cursor palette).
+ * @param {{ slot?: number, alreadyFocused?: boolean }} [opts]
  */
-async function beginCodexDictation() {
-  const focus = await ensureCodexFocused();
-  await delay(120);
+async function beginCodexDictation(opts = {}) {
+  const slot = Number.isFinite(Number(opts.slot)) ? Math.max(0, Math.min(5, Number(opts.slot))) : null;
+
+  if (!opts.alreadyFocused && slot != null) {
+    let f = await focusCodexCliWindow(slot, { fast: true, activate: true });
+    if (!f.ok) f = await focusCodexCliWindow(slot, { fast: false, activate: true });
+    if (!f.ok) {
+      const err = new Error(`Agent ${slot + 1} CLI 창을 먼저 여세요`);
+      err.code = 'NO_CLI';
+      throw err;
+    }
+  }
+
+  await delay(140);
+  const front = await frontmostAppName();
 
   try {
     await osa(`
@@ -259,11 +273,21 @@ async function beginCodexDictation() {
       /* user can enable dictation manually */
     }
   }
-  return { ok: true, app: focus.app };
+  return { ok: true, app: front || '', slot };
 }
 
-async function submitCodexComposer() {
-  await ensureCodexFocused();
+/**
+ * Submit whatever is in the frontmost composer (CLI / Codex).
+ * @param {{ slot?: number, focusDesktop?: boolean }} [opts]
+ */
+async function submitCodexComposer(opts = {}) {
+  const slot = Number.isFinite(Number(opts.slot)) ? Math.max(0, Math.min(5, Number(opts.slot))) : null;
+  if (opts.focusDesktop) {
+    await ensureCodexFocused();
+  } else if (slot != null) {
+    let f = await focusCodexCliWindow(slot, { fast: true, activate: true });
+    if (!f.ok) f = await focusCodexCliWindow(slot, { fast: false, activate: true });
+  }
   await delay(80);
   await sendKey('return');
   return true;
