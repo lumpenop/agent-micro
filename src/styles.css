@@ -57,11 +57,12 @@ button {
 .no-drag { -webkit-app-region: no-drag; }
 
 .chrome {
-  width: var(--pad);
+  width: var(--keyboard);
+  max-width: var(--pad);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 4px;
+  padding: 0 2px;
   min-height: 24px;
   margin-bottom: 2px;
   opacity: 0.7;
@@ -557,7 +558,7 @@ button {
   align-items: center;
   justify-content: space-between;
   flex: 0 0 auto;
-  margin-bottom: 10px;
+  margin-bottom: 7px;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -630,7 +631,7 @@ button {
 
 .icon-picker-hint {
   flex: 0 0 auto;
-  margin-top: 10px;
+  margin-top: 7px;
   font-size: 10px;
   color: rgba(0, 0, 0, 0.45);
   text-align: center;
@@ -655,8 +656,8 @@ button {
   justify-content: space-between;
   flex: 0 0 auto;
   gap: 12px;
-  margin-bottom: 12px;
-  padding: 0 4px 12px;
+  margin-bottom: 8px;
+  padding: 0 4px 8px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
@@ -853,8 +854,8 @@ button {
   flex: 0 0 auto;
   flex-wrap: wrap;
   gap: 6px 8px;
-  margin-top: 12px;
-  padding-top: 10px;
+  margin-top: 8px;
+  padding-top: 8px;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
   font-size: 10px;
   color: rgba(0, 0, 0, 0.42);
@@ -1111,8 +1112,8 @@ button {
 
 .settings-card .voice-actions {
   flex: 0 0 auto;
-  margin-top: 10px;
-  padding-top: 10px;
+  margin-top: 8px;
+  padding-top: 8px;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
