@@ -1,9 +1,7 @@
 /**
- * Codex-only bridge entry.
- *
- * Multi-agent picker (Claude / Cursor / Gemini / …) is intentionally NOT here.
- * When we add “어떤 걸 쓸지 고르기”, build that UI + bridges from scratch —
- * do not revive the old provider registry / provider.json switching layer.
+ * Codex CLI bridge only (app-server).
+ * Multi-agent / Desktop-vs-CLI pickers are intentionally not here —
+ * add those greenfield later if needed.
  */
 const { CodexBridge, focusChatGPT } = require('./codex-bridge');
 
@@ -18,9 +16,7 @@ function focusCodexDesktop() {
 module.exports = {
   createCodexBridge,
   focusCodexDesktop,
-  /** @deprecated use createCodexBridge */
   createBridge: createCodexBridge,
-  /** @deprecated use focusCodexDesktop */
   focusProviderApp: focusCodexDesktop,
   focusChatGPT,
 };

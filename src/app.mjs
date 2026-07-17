@@ -10,14 +10,13 @@ const REASONING = ['minimal', 'low', 'medium', 'high', 'xhigh'];
 const api = window.codexDesktop;
 const STORAGE_KEY = 'codex-micro-key-icons-v4-codex';
 
-/** Codex-dedicated layers */
-/** All layers → Codex desktop shortcuts / composer paste */
+/** All layers → Codex CLI (app-server) */
 const LAYERS = [
   {
     name: 'Codex',
     joy: {
       up: () => api?.togglePlan(),
-      down: () => api?.desktop('sidebar'),
+      down: () => api?.newChat(),
       left: () => api?.desktop('historyBack'),
       right: () => api?.desktop('historyForward'),
     },
@@ -34,10 +33,10 @@ const LAYERS = [
   {
     name: 'App',
     joy: {
-      up: () => api?.desktop('composer'),
-      down: () => api?.desktop('sidebar'),
-      left: () => api?.desktop('historyBack'),
-      right: () => api?.desktop('newChat'),
+      up: () => api?.send('Continue.'),
+      down: () => api?.skill('explain'),
+      left: () => api?.fork(),
+      right: () => api?.newChat(),
     },
   },
 ];
@@ -108,7 +107,7 @@ const state = {
   layer: 0,
   connected: false,
   mode: 'offline',
-  linkMode: 'desktop',
+  linkMode: 'cli',
   provider: 'codex',
   lastAgentTap: { index: -1, at: 0 },
   lastMicTap: 0,
@@ -194,13 +193,11 @@ function openVoicePanel({ fromConnect = false } = {}) {
   }
   if (voiceLeadEl) {
     voiceLeadEl.textContent = fromConnect
-      ? 'CLI 모드 연결이 끝났습니다. Whisper/전송용 Platform API 키(sk-…)를 저장하세요.'
-      : 'CLI 모드에서 마이크(Whisper)와 API 호출에 쓰는 OpenAI 키입니다.';
+      ? 'Codex CLI 연결이 끝났습니다. Whisper용 Platform API 키(sk-…)를 저장하세요.'
+      : '마이크(Whisper) → CLI 전송에 쓰는 OpenAI API 키입니다.';
   }
   if (voiceModeEl) {
-    voiceModeEl.textContent = fromConnect
-      ? 'CLI 연결 완료 · API 키 저장'
-      : `모드 · ${state.linkMode === 'cli' ? 'CLI' : 'Desktop'}`;
+    voiceModeEl.textContent = fromConnect ? 'CLI 연결 완료 · API 키 저장' : 'Codex CLI · Whisper';
   }
   voicePanel?.removeAttribute('hidden');
   refreshVoiceStatus();
@@ -213,8 +210,6 @@ function closeVoicePanel() {
 }
 
 async function maybePromptVoiceSetup(result, { force = false } = {}) {
-  const linkMode = result?.linkMode || state.linkMode;
-  if (linkMode !== 'cli' && !force) return false;
   const needs =
     force ||
     result?.needsApiKey ||
@@ -226,89 +221,6 @@ async function maybePromptVoiceSetup(result, { force = false } = {}) {
   openVoicePanel({ fromConnect: true });
   return true;
 }
-
-const modePanel = document.getElementById('mode-panel');
-const modeGrid = document.getElementById('mode-grid');
-const modeHint = document.getElementById('mode-hint');
-let modePicking = false;
-
-async function openModePicker() {
-  closeVoicePanel();
-  try {
-    closeGuide();
-  } catch {
-    /* ignore */
-  }
-  try {
-    closeIconPicker();
-  } catch {
-    /* ignore */
-  }
-  if (!modePanel || !modeGrid) return;
-  const modes = (await api?.listModes?.()) || [];
-  const info = await api?.getMode?.();
-  const active = info?.mode || state.linkMode;
-  modeGrid.innerHTML = modes
-    .map(
-      (m) => `<button type="button" class="provider-tile${m.id === active ? ' active' : ''}" data-mode="${m.id}">
-        <strong>${m.label}</strong>
-        <span>${m.blurb}</span>
-      </button>`
-    )
-    .join('');
-  if (modeHint) modeHint.textContent = '선택 후 바로 연결합니다';
-  modePanel.hidden = false;
-  flashAction('Desktop / CLI 선택');
-}
-
-function closeModePicker() {
-  if (modePanel) modePanel.hidden = true;
-  modePicking = false;
-}
-
-modeGrid?.addEventListener('click', async (e) => {
-  const tile = e.target.closest('[data-mode]');
-  if (!tile || modePicking) return;
-  const id = tile.getAttribute('data-mode');
-  modePicking = true;
-  modeGrid.querySelectorAll('.provider-tile').forEach((el) => {
-    el.classList.toggle('busy', true);
-    el.classList.toggle('active', el === tile);
-  });
-  if (modeHint) modeHint.textContent = `${id} 연결 중…`;
-  flashAction(`mode · ${id}`);
-  try {
-    const result = await api?.setMode?.(id);
-    state.linkMode = id;
-    closeModePicker();
-    render();
-    if (result?.ok === false && result?.reason === 'missing') {
-      flashAction('Codex 없음 · pnpm install');
-    } else if (result?.ok === false && result?.reason === 'login') {
-      flashAction('로그인 필요 · ↻ 다시');
-    } else if (result?.ok) {
-      const prompted = await maybePromptVoiceSetup({ ...result, linkMode: id });
-      flashAction(
-        prompted
-          ? 'CLI · API 키 입력'
-          : id === 'cli'
-            ? 'CLI connected'
-            : 'Desktop connected'
-      );
-    } else {
-      flashAction(result?.reason || 'connect failed');
-    }
-  } catch (err) {
-    flashAction(err?.message || 'mode failed');
-    modePicking = false;
-    modeGrid.querySelectorAll('.provider-tile').forEach((el) => el.classList.remove('busy'));
-  }
-});
-
-document.getElementById('mode-close')?.addEventListener('click', closeModePicker);
-modePanel?.addEventListener('click', (e) => {
-  if (e.target === modePanel) closeModePicker();
-});
 
 async function startCodexDictation({ latched = false } = {}) {
   if (dictationActive) return;

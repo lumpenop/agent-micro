@@ -34,10 +34,6 @@ contextBridge.exposeInMainWorld('codexDesktop', {
   beginVoiceDictation: () => ipcRenderer.invoke('voice:beginDictation'),
   endVoiceDictation: () => ipcRenderer.invoke('voice:endDictation'),
 
-  listModes: () => ipcRenderer.invoke('mode:list'),
-  getMode: () => ipcRenderer.invoke('mode:get'),
-  setMode: (id) => ipcRenderer.invoke('mode:set', id),
-
   onState: (cb) => {
     const handler = (_e, state) => cb(state);
     ipcRenderer.on('codex:state', handler);
@@ -52,10 +48,5 @@ contextBridge.exposeInMainWorld('codexDesktop', {
     const handler = (_e, status) => cb(status);
     ipcRenderer.on('mic:status', handler);
     return () => ipcRenderer.removeListener('mic:status', handler);
-  },
-  onNeedModePick: (cb) => {
-    const handler = () => cb();
-    ipcRenderer.on('mode:needPick', handler);
-    return () => ipcRenderer.removeListener('mode:needPick', handler);
   },
 });

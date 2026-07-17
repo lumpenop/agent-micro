@@ -1,7 +1,6 @@
 const { app, BrowserWindow, ipcMain, screen, globalShortcut, session, systemPreferences, shell } = require('electron');
 const path = require('path');
 const { createCodexBridge, focusCodexDesktop } = require('./providers/create-bridge');
-const connectionMode = require('./connection-mode');
 const {
   setUserDataPath: setVoiceUserDataPath,
   transcribeWithWhisper,
@@ -118,9 +117,7 @@ function ensureBridge({ autoStart = true } = {}) {
 }
 
 app.whenReady().then(async () => {
-  const userData = app.getPath('userData');
-  setVoiceUserDataPath(userData);
-  connectionMode.setUserDataPath(userData);
+  setVoiceUserDataPath(app.getPath('userData'));
 
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
     if (permission === 'media' || permission === 'microphone') callback(true);
@@ -133,18 +130,10 @@ app.whenReady().then(async () => {
   ensureMicAccess();
   createWindow();
 
-  // Codex only — Desktop/CLI mode picker is the connection choice
+  // Codex CLI (app-server) only
   bridge = createCodexBridge();
   bindBridge(bridge);
-  if (connectionMode.hasModeChoice()) {
-    setTimeout(() => bridge.start(), 400);
-  } else {
-    setTimeout(() => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('mode:needPick');
-      }
-    }, 500);
-  }
+  setTimeout(() => bridge.start(), 400);
 
   globalShortcut.register('CommandOrControl+Shift+M', () => {
     if (!mainWindow) return;
@@ -217,26 +206,6 @@ ipcMain.handle('voice:endDictation', async () => {
   return r;
 });
 
-ipcMain.handle('mode:list', () => connectionMode.listModes());
-ipcMain.handle('mode:get', () => ({
-  mode: connectionMode.getMode(),
-  resolved: connectionMode.resolveMode(),
-  needsPick: !connectionMode.hasModeChoice(),
-}));
-ipcMain.handle('mode:set', async (_e, id) => {
-  connectionMode.setMode(id);
-  ensureBridge({ autoStart: false });
-  bridge.setLinkMode?.(id);
-  const result = await bridge.connect({ linkMode: id });
-  const needsKey =
-    id === 'cli' && result?.ok && needsVoiceSetup();
-  return {
-    ...withVoiceSetup(result),
-    linkMode: id,
-    needsApiKey: !!needsKey,
-  };
-});
-
 ipcMain.handle('codex:getState', () => bridge?.getState());
 ipcMain.handle('codex:select', async (_e, index, focus) => {
   const r = await bridge?.select(index, { focus });
@@ -253,20 +222,15 @@ ipcMain.handle('codex:togglePlan', () => bridge?.togglePlan());
 ipcMain.handle('codex:skill', (_e, name) => bridge?.skill(name));
 ipcMain.handle('codex:newChat', () => bridge?.newChat());
 ipcMain.handle('codex:desktop', async (_e, action) => {
-  const r = await bridge?.desktopAction(action);
-  // desktop shortcuts activate Codex briefly — return focus to pad
-  refocusPad(220);
-  return r;
+  // Legacy name — maps to CLI agent/nav helpers in the bridge
+  return bridge?.desktopAction(action);
 });
 ipcMain.handle('codex:voice', async (_e, text) => {
   if (!bridge?.voiceToCodex) {
-    // fallback: send only
     await bridge?.send?.(text);
     return { ok: true, mode: 'send-only' };
   }
-  const r = await bridge.voiceToCodex(text);
-  refocusPad(500);
-  return r;
+  return bridge.voiceToCodex(text);
 });
 ipcMain.handle('codex:focusApp', () => {
   focusCodexDesktop();
@@ -279,12 +243,10 @@ ipcMain.handle('codex:loginStatus', () => bridge?.checkLogin());
 ipcMain.handle('codex:login', () => bridge?.login());
 function withVoiceSetup(result) {
   const base = result && typeof result === 'object' ? result : { ok: !!result };
-  const linkMode = base.linkMode || connectionMode.resolveMode();
-  // API key step only in CLI mode
-  const needsSetup = !!(base.ok && linkMode === 'cli' && needsVoiceSetup());
+  const needsSetup = !!(base.ok && needsVoiceSetup());
   return {
     ...base,
-    linkMode,
+    linkMode: 'cli',
     needsVoiceSetup: needsSetup,
     needsApiKey: needsSetup,
     voice: voiceStatus(),
@@ -304,7 +266,7 @@ ipcMain.handle('codex:reconnect', async () => {
   else {
     bridge.stop();
     const started = await bridge.start();
-    result = { ok: !!started, reason: started ? 'connected' : 'offline' };
+    result = { ok: !!started, reason: started ? 'connected' : 'offline', linkMode: 'cli' };
   }
   return withVoiceSetup(result);
 });
