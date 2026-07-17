@@ -464,7 +464,7 @@ async function listOpenCodexCliSlots() {
           return s
         end tell`;
     }
-    const out = await osa(script, { timeout: 4000 });
+    const out = await osa(script, { timeout: 1800 });
     if (!out) return [];
     if (kind !== 'terminal') {
       const slots = [];
@@ -488,6 +488,14 @@ async function listOpenCodexCliSlots() {
   } catch {
     return [];
   }
+}
+
+/** In-memory open slots (no AppleScript) — used for fast split path. */
+function rememberedOpenSlots() {
+  hydrateCliSession();
+  const set = new Set(openedCliSlots);
+  for (const k of slotTerminalIds.keys()) set.add(k);
+  return [...set].sort((a, b) => a - b);
 }
 
 async function hasCodexCliWindow(slot) {
@@ -723,6 +731,22 @@ async function ensureCodexCliWindow(requestedSlot, opts = {}) {
     Number.isFinite(Number(requestedSlot)) &&
     (openedCliSlots.has(req) || slotTerminalIds.has(req));
 
+  const blockedResult = (why) => ({
+    ok: false,
+    slot: req,
+    opened: false,
+    existed: false,
+    focused: false,
+    mode: 'blocked',
+    reason: why || 'blocked',
+    error:
+      why === 'need-agent-1'
+        ? 'Agent 1 창을 먼저 여세요'
+        : /^need-agent-\d+$/.test(String(why || ''))
+          ? `Agent ${String(why).replace('need-agent-', '')} 먼저`
+          : 'Agent 1→6 순서대로',
+  });
+
   // Known slot → focus (activate so it works when pad / other app is frontmost)
   if (hasKnownTarget) {
     const appFast = cachedDefaultTerminal || (await getDefaultTerminalApp());
@@ -744,52 +768,26 @@ async function ensureCodexCliWindow(requestedSlot, opts = {}) {
     forgetOpenedSlot(req);
   }
 
-  let detected = await listOpenCodexCliSlots();
-  let open = mergeOpenSlots(detected);
+  // Fast path: split/block from in-memory session (skip AppleScript scan)
+  let open = rememberedOpenSlots();
   let { slot, mode, reason } = resolveCliSlot(requestedSlot, open);
-
-  const blockedResult = (why) => ({
-    ok: false,
-    slot: req,
-    opened: false,
-    existed: false,
-    focused: false,
-    mode: 'blocked',
-    reason: why || 'blocked',
-    error:
-      why === 'need-agent-1'
-        ? 'Agent 1 창을 먼저 여세요'
-        : /^need-agent-\d+$/.test(String(why || ''))
-          ? `Agent ${String(why).replace('need-agent-', '')} 먼저`
-          : 'Agent 1→6 순서대로',
-  });
-
   if (mode === 'blocked') return blockedResult(reason);
 
-  // About to open a brand-new window — one more scan after waking the terminal app
-  if (mode === 'window') {
-    try {
-      const appProbe = cachedDefaultTerminal || (await getDefaultTerminalApp());
-      const appName = asEscape(appProbe.name || 'Ghostty');
-      await osa(`tell application "${appName}" to activate`, { timeout: 2000 });
-      await delay(80);
-      detected = await listOpenCodexCliSlots();
-      open = mergeOpenSlots(detected);
-      ({ slot, mode, reason } = resolveCliSlot(requestedSlot, open));
-      if (mode === 'blocked') return blockedResult(reason);
-    } catch {
-      /* keep prior mode */
-    }
+  const needScan =
+    mode === 'window' ||
+    (mode === 'split' && !slotTerminalIds.has(Math.max(0, req - 1))) ||
+    (mode === 'focus' && !hasKnownTarget);
+
+  if (needScan) {
+    const detected = await listOpenCodexCliSlots();
+    open = mergeOpenSlots(detected);
+    ({ slot, mode, reason } = resolveCliSlot(requestedSlot, open));
+    if (mode === 'blocked') return blockedResult(reason);
   }
 
-  const title = cliWindowTitle(slot);
-  const line = cliLaunchLine(title, command);
-  const asLine = asEscape(line);
-  const asHost = asEscape(cliWindowTitle(0));
-  const app = await getDefaultTerminalApp();
+  const app = cachedDefaultTerminal || (await getDefaultTerminalApp());
   const kind = terminalKind(app);
   const appName = asEscape(app.name || 'Ghostty');
-  const hostId = slotTerminalIds.get(0);
 
   // Already open → focus that pane
   if (mode === 'focus') {
@@ -824,15 +822,24 @@ async function ensureCodexCliWindow(requestedSlot, opts = {}) {
     }
   }
 
+  const title = cliWindowTitle(slot);
+  const line = cliLaunchLine(title, command);
+  const asLine = asEscape(line);
+  // Split from the previous agent pane: 1→2, 2→3, … (not always from Agent 1)
+  const hostSlot = mode === 'split' ? Math.max(0, slot - 1) : 0;
+  const asHost = asEscape(cliWindowTitle(hostSlot));
+  const hostId = slotTerminalIds.get(hostSlot);
+
   try {
     if (kind === 'ghostty') {
       if (mode === 'window') {
-        const tid = await osa(`
+        const tid = await osa(
+          `
           tell application "${appName}"
             activate
             set cfg to new surface configuration
             set win to new window with configuration cfg
-            delay 0.25
+            delay 0.08
             set term to focused terminal of selected tab of win
             input text "${asLine}" to term
             send key "enter" to term
@@ -842,10 +849,12 @@ async function ensureCodexCliWindow(requestedSlot, opts = {}) {
               return ""
             end try
           end tell
-        `);
+        `,
+          { timeout: 4000 }
+        );
         rememberOpenedSlot(slot, tid);
       } else {
-        // Split like ⌘D — prefer Agent 1 terminal id; never invent a second window if host exists
+        // Split from previous agent (N-1 → N), not always from Agent 1
         const hostIdClause = hostId
           ? `
             set targetHostId to "${asEscape(String(hostId))}"
@@ -859,7 +868,8 @@ async function ensureCodexCliWindow(requestedSlot, opts = {}) {
             end repeat
           `
           : '';
-        const tid = await osa(`
+        const tid = await osa(
+          `
           tell application "${appName}"
             activate
             set hostTerm to missing value
@@ -884,8 +894,9 @@ async function ensureCodexCliWindow(requestedSlot, opts = {}) {
             if hostTerm is missing value then
               error "no host terminal for split"
             end if
+            focus hostTerm
             set term to split hostTerm direction right with configuration cfg
-            delay 0.25
+            delay 0.06
             focus term
             input text "${asLine}" to term
             send key "enter" to term
@@ -895,34 +906,42 @@ async function ensureCodexCliWindow(requestedSlot, opts = {}) {
               return ""
             end try
           end tell
-        `);
+        `,
+          { timeout: 4000 }
+        );
         rememberOpenedSlot(slot, tid);
-        rememberOpenedSlot(0);
+        rememberOpenedSlot(hostSlot);
       }
     } else if (kind === 'terminal') {
       if (mode === 'window') {
-        await osa(`
+        await osa(
+          `
           tell application "${appName}"
             activate
             do script "${asEscape(line)}"
-            delay 0.35
+            delay 0.12
             try
               set custom title of selected tab of front window to "${asEscape(title)}"
             end try
           end tell
-        `);
+        `,
+          { timeout: 4000 }
+        );
       } else {
-        await osa(`
+        await osa(
+          `
           tell application "${appName}"
             activate
             set hostWin to front window
             do script "${asEscape(line)}" in hostWin
-            delay 0.35
+            delay 0.12
             try
               set custom title of selected tab of front window to "${asEscape(title)}"
             end try
           end tell
-        `);
+        `,
+          { timeout: 4000 }
+        );
       }
       rememberOpenedSlot(slot);
       if (mode === 'window') rememberOpenedSlot(0);
@@ -930,28 +949,33 @@ async function ensureCodexCliWindow(requestedSlot, opts = {}) {
       if (mode === 'window') {
         await openInDefaultTerminal(title, command);
       } else {
-        await osa(`
+        // Focus previous agent first so ⌘D splits from that pane
+        await focusCodexCliWindow(hostSlot, { fast: true, activate: true });
+        await osa(
+          `
           tell application "${appName}" to activate
-          delay 0.2
+          delay 0.06
           tell application "System Events"
             keystroke "d" using command down
           end tell
-          delay 0.35
+          delay 0.12
           tell application "${appName}" to activate
-          delay 0.1
+          delay 0.04
           tell application "System Events"
             keystroke "${asLine}"
             key code 36
           end tell
-        `);
+        `,
+          { timeout: 4000 }
+        );
       }
       rememberOpenedSlot(slot);
       if (mode === 'window') rememberOpenedSlot(0);
+      else rememberOpenedSlot(hostSlot);
     } else {
       await openInDefaultTerminal(title, command);
       rememberOpenedSlot(slot);
     }
-    await delay(200);
     return { ok: true, slot, opened: true, existed: false, focused: true, mode, app: app.name };
   } catch (e) {
     // Split failed but Agent 1 still exists — don't spawn another .command window
