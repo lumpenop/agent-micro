@@ -271,6 +271,7 @@ export function createPad3D(container, handlers = {}) {
     alpha: true,
     powerPreference: 'high-performance',
   });
+  renderer.setClearColor(0x000000, 0);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(w, h);
   renderer.shadowMap.enabled = true;

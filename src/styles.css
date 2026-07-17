@@ -1,5 +1,7 @@
 :root {
   --pad: 356px;
+  /* visible white chassis is inset in the canvas — info matches that face */
+  --keyboard: 304px;
   --gap: 9px;
   --radius-pad: 36px;
   --radius-cap: 12px;
@@ -46,8 +48,8 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 8px 12px 10px;
-  gap: 10px;
+  padding: 0 4px 2px;
+  gap: 2px;
 }
 
 .drag { -webkit-app-region: drag; }
@@ -58,7 +60,8 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 4px;
+  padding: 0 2px;
+  min-height: 28px;
   opacity: 0.7;
 }
 
@@ -137,7 +140,8 @@ button {
   position: relative;
   width: var(--pad);
   height: var(--pad);
-  filter: drop-shadow(0 24px 40px rgba(0, 0, 0, 0.22));
+  flex-shrink: 0;
+  filter: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.18));
 }
 
 .pad-3d {
@@ -150,10 +154,7 @@ button {
   border-radius: var(--radius-pad);
   overflow: hidden;
   -webkit-app-region: no-drag;
-  background:
-    radial-gradient(ellipse at 40% 28%, rgba(255, 255, 255, 0.35), transparent 55%),
-    linear-gradient(155deg, #9aa8b6 0%, #6e7b88 48%, #5a6570 100%);
-  min-height: 320px;
+  background: transparent;
 }
 
 .pad-canvas canvas {
@@ -1297,16 +1298,21 @@ button {
 
 /* ——— HUD ——— */
 .hud {
-  width: var(--pad);
-  padding: 10px 12px 8px;
-  border-radius: 16px;
+  width: var(--keyboard);
+  max-width: var(--pad);
+  flex: 0 0 auto;
+  align-self: center;
+  box-sizing: border-box;
+  margin-top: 0;
+  padding: 7px 10px 5px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.42);
   border: 1px solid rgba(255, 255, 255, 0.55);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.1);
   display: grid;
-  gap: 4px;
+  gap: 3px;
 }
 
 .hud-row {
@@ -1331,7 +1337,7 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 230px;
+  max-width: 190px;
 }
 
 .legend {
