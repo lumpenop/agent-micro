@@ -20,6 +20,19 @@ const LAYOUT = [
   ['touch', 'cmd:mic', null, 'cmd:send'], // mic spans 2 via special case
 ];
 
+/** Per-icon face size — codex a bit up, mic more down, others slightly down */
+function iconPlaneSize(iconId, wide = false) {
+  if (iconId === 'codex') return wide ? 0.64 : 0.54;
+  if (iconId === 'mic') return wide ? 0.46 : 0.4;
+  return wide ? 0.54 : 0.44;
+}
+
+function iconTexFill(iconId) {
+  if (iconId === 'codex') return 0.78;
+  if (iconId === 'mic') return 0.56;
+  return 0.64;
+}
+
 function makeIconTexture(iconId) {
   const size = 256;
   const canvas = document.createElement('canvas');
@@ -42,9 +55,46 @@ function makeIconTexture(iconId) {
   const img = new Image();
   const url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   img.onload = () => {
+    // Draw oversized, then re-center on alpha bounds so every glyph sits dead-center
+    const scratch = document.createElement('canvas');
+    scratch.width = scratch.height = size;
+    const sctx = scratch.getContext('2d');
+    sctx.imageSmoothingEnabled = true;
+    sctx.imageSmoothingQuality = 'high';
+    const pad = size * 0.14;
+    sctx.clearRect(0, 0, size, size);
+    sctx.drawImage(img, pad, pad, size - pad * 2, size - pad * 2);
+
+    const { data } = sctx.getImageData(0, 0, size, size);
+    let minX = size;
+    let minY = size;
+    let maxX = -1;
+    let maxY = -1;
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        if (data[(y * size + x) * 4 + 3] < 12) continue;
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+
     ctx.clearRect(0, 0, size, size);
-    const pad = size * 0.18;
-    ctx.drawImage(img, pad, pad, size - pad * 2, size - pad * 2);
+    if (maxX < minX || maxY < minY) {
+      ctx.drawImage(scratch, 0, 0);
+    } else {
+      const bw = maxX - minX + 1;
+      const bh = maxY - minY + 1;
+      const side = Math.max(bw, bh);
+      const target = size * iconTexFill(iconId);
+      const scale = target / side;
+      const dw = bw * scale;
+      const dh = bh * scale;
+      const dx = (size - dw) * 0.5;
+      const dy = (size - dh) * 0.5;
+      ctx.drawImage(scratch, minX, minY, bw, bh, dx, dy, dw, dh);
+    }
     tex.needsUpdate = true;
   };
   img.src = url;
@@ -54,12 +104,35 @@ function makeIconTexture(iconId) {
 /** Shared keycap shell — every 1u key uses identical size + rounding */
 const CAP = {
   w: 0.92,
-  h: 0.52,
+  h: 0.54,
   d: 0.92,
-  r: 0.18,
-  segs: 5,
+  r: 0.19,
+  segs: 6,
   wideW: 1.95,
+  // Camera sits at +Z — slight nudge for cream face art
+  faceZ: 0.02,
+  /** Frost status disc — fixed radius, never scaled per-key */
+  glowR: 0.2,
 };
+
+/** Keep status disc optically centered under the tilted top-down camera. */
+function placeAgentGlow(agentMesh) {
+  const glow = agentMesh?.userData?.glow;
+  if (!glow || !agentMesh) return;
+  const y = CAP.h * 0.5 + 0.014;
+  // Light perspective counter — keep disc in the visual middle of the key
+  glow.position.set(
+    -agentMesh.position.x * 0.028,
+    y,
+    -agentMesh.position.z * 0.032 + 0.038
+  );
+  glow.scale.set(1, 1, 1);
+  // Rebuild geometry if radius constant changed at runtime
+  if (glow.geometry?.parameters?.radius !== CAP.glowR) {
+    glow.geometry?.dispose?.();
+    glow.geometry = new THREE.CircleGeometry(CAP.glowR, 48);
+  }
+}
 
 let _capTopTex = null;
 let _capTopFrostTex = null;
@@ -72,27 +145,50 @@ function capTopTexture(frost = false) {
   c.width = c.height = size;
   const ctx = c.getContext('2d');
 
-  const base = ctx.createRadialGradient(108, 96, 12, 128, 128, 180);
   if (frost) {
+    // Original frost look (unchanged)
+    const base = ctx.createRadialGradient(108, 96, 12, 128, 128, 180);
     base.addColorStop(0, '#ffffff');
     base.addColorStop(0.5, '#eaf2f9');
     base.addColorStop(0.85, '#d2e2f0');
     base.addColorStop(1, '#c0d4e6');
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, size, size);
+    const lip = ctx.createLinearGradient(0, 0, 0, size * 0.55);
+    lip.addColorStop(0, 'rgba(255,255,255,0.35)');
+    lip.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = lip;
+    ctx.fillRect(0, 0, size, size);
   } else {
-    base.addColorStop(0, '#ffffff');
-    base.addColorStop(0.5, '#f6f4ee');
-    base.addColorStop(0.85, '#e8e4da');
-    base.addColorStop(1, '#ddd8ce');
-  }
-  ctx.fillStyle = base;
-  ctx.fillRect(0, 0, size, size);
+    // Cream: clean top face — dark AO only on the outer lip (no dirty center)
+    const cx = size * 0.5;
+    const cy = size * 0.5;
+    const base = ctx.createRadialGradient(size * 0.42, size * 0.38, 12, cx, cy, size * 0.7);
+    base.addColorStop(0, '#fffdf9');
+    base.addColorStop(0.5, '#f7f3ea');
+    base.addColorStop(0.85, '#efe9de');
+    base.addColorStop(1, '#e4ddd0');
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, size, size);
 
-  // gentle top-left light falloff (no hard edge paint)
-  const lip = ctx.createLinearGradient(0, 0, 0, size * 0.55);
-  lip.addColorStop(0, frost ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.4)');
-  lip.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = lip;
-  ctx.fillRect(0, 0, size, size);
+    // soft TL highlight only (no black wash across the face)
+    const rim = ctx.createLinearGradient(0, 0, size * 0.6, size * 0.6);
+    rim.addColorStop(0, 'rgba(255,255,255,0.42)');
+    rim.addColorStop(0.45, 'rgba(255,255,255,0.1)');
+    rim.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = rim;
+    ctx.fillRect(0, 0, size, size);
+
+    // Outer-edge AO only — stronger lip, still clear of the top center
+    const ao = ctx.createRadialGradient(cx, cy, size * 0.48, cx, cy, size * 0.74);
+    ao.addColorStop(0, 'rgba(0,0,0,0)');
+    ao.addColorStop(0.42, 'rgba(0,0,0,0)');
+    ao.addColorStop(0.68, 'rgba(55,45,35,0.08)');
+    ao.addColorStop(0.86, 'rgba(40,32,24,0.2)');
+    ao.addColorStop(1, 'rgba(28,22,16,0.34)');
+    ctx.fillStyle = ao;
+    ctx.fillRect(0, 0, size, size);
+  }
 
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -102,6 +198,24 @@ function capTopTexture(frost = false) {
   return tex;
 }
 
+let _capShadowTex = null;
+function capShadowTexture() {
+  if (_capShadowTex) return _capShadowTex;
+  const size = 128;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(size * 0.47, size * 0.47, size * 0.1, size * 0.54, size * 0.56, size * 0.5);
+  g.addColorStop(0, 'rgba(0,0,0,0.38)');
+  g.addColorStop(0.5, 'rgba(0,0,0,0.14)');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  _capShadowTex = new THREE.CanvasTexture(c);
+  _capShadowTex.colorSpace = THREE.SRGBColorSpace;
+  return _capShadowTex;
+}
+
 let _glowTex = null;
 function glowTexture() {
   if (_glowTex) return _glowTex;
@@ -109,11 +223,12 @@ function glowTexture() {
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const ctx = c.getContext('2d');
-  const g = ctx.createRadialGradient(size / 2, size / 2, 2, size / 2, size / 2, size * 0.48);
+  // Harder disc — readable at rest, same footprint when selected
+  const g = ctx.createRadialGradient(size / 2, size / 2, 1, size / 2, size / 2, size * 0.5);
   g.addColorStop(0, 'rgba(255,255,255,1)');
-  g.addColorStop(0.45, 'rgba(255,255,255,0.95)');
-  g.addColorStop(0.72, 'rgba(255,255,255,0.45)');
-  g.addColorStop(0.9, 'rgba(255,255,255,0.08)');
+  g.addColorStop(0.68, 'rgba(255,255,255,1)');
+  g.addColorStop(0.86, 'rgba(255,255,255,0.65)');
+  g.addColorStop(0.96, 'rgba(255,255,255,0.15)');
   g.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, size, size);
@@ -127,55 +242,39 @@ function keycapMesh({ wide = false, frost = false, iconId = null } = {}) {
   const h = CAP.h;
   const d = CAP.d;
   const r = CAP.r;
-  // Rounding comes from geometry; shading comes from lights + soft materials
-  const geo = new RoundedBoxGeometry(w, h, d, CAP.segs, r);
 
-  const mat = frost
-    ? new THREE.MeshPhysicalMaterial({
-        map: capTopTexture(true),
-        color: 0xffffff,
-        roughness: 0.35,
-        metalness: 0.02,
-        transparent: true,
-        opacity: 0.55,
-        clearcoat: 0.2,
-        clearcoatRoughness: 0.5,
-        transmission: 0,
-        depthWrite: true,
-      })
-    : new THREE.MeshStandardMaterial({
-        map: capTopTexture(false),
-        color: 0xffffff,
-        roughness: 0.45,
-        metalness: 0.03,
-      });
-
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-
-  // slightly darker skirt — natural side shade from light angle, not painted corners
-  const skirt = new THREE.Mesh(
-    new RoundedBoxGeometry(w * 0.98, h * 0.55, d * 0.98, CAP.segs, r * 0.9),
-    frost
-      ? new THREE.MeshPhysicalMaterial({
-          color: 0x9bb6cc,
-          roughness: 0.5,
-          transparent: true,
-          opacity: 0.28,
-          depthWrite: false,
-        })
-      : new THREE.MeshStandardMaterial({
-          color: 0xc8c3b8,
-          roughness: 0.62,
-          metalness: 0.04,
-        })
-  );
-  skirt.position.y = -h * 0.12;
-  mesh.add(skirt);
-
-  // frost inner core — reads as milky translucent shell
+  // —— Frost: original simple shell (pre-sculpt) ——
   if (frost) {
+    const geo = new RoundedBoxGeometry(w, h, d, CAP.segs, r);
+    const mat = new THREE.MeshPhysicalMaterial({
+      map: capTopTexture(true),
+      color: 0xffffff,
+      roughness: 0.35,
+      metalness: 0.02,
+      transparent: true,
+      opacity: 0.55,
+      clearcoat: 0.2,
+      clearcoatRoughness: 0.5,
+      transmission: 0,
+      depthWrite: true,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    const skirt = new THREE.Mesh(
+      new RoundedBoxGeometry(w * 0.98, h * 0.55, d * 0.98, CAP.segs, r * 0.9),
+      new THREE.MeshPhysicalMaterial({
+        color: 0x9bb6cc,
+        roughness: 0.5,
+        transparent: true,
+        opacity: 0.28,
+        depthWrite: false,
+      })
+    );
+    skirt.position.y = -h * 0.12;
+    mesh.add(skirt);
+
     const core = new THREE.Mesh(
       new RoundedBoxGeometry(w * 0.7, h * 0.38, d * 0.7, 4, r * 0.65),
       new THREE.MeshStandardMaterial({
@@ -186,49 +285,124 @@ function keycapMesh({ wide = false, frost = false, iconId = null } = {}) {
     );
     core.position.y = -h * 0.04;
     mesh.add(core);
-  }
 
-  if (!frost && iconId) {
-    const tex = makeIconTexture(iconId);
-    const iconMat = new THREE.MeshBasicMaterial({
-      map: tex,
-      transparent: true,
-      depthWrite: false,
-    });
-    const iconMesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(wide ? 0.55 : 0.42, 0.42),
-      iconMat
-    );
-    iconMesh.rotation.x = -Math.PI / 2;
-    iconMesh.position.y = h * 0.52;
-    mesh.add(iconMesh);
-    mesh.userData.iconMesh = iconMesh;
-  }
-
-  if (frost) {
+    // Center disc — fixed radius; world offset applied after key is placed
     const glow = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.5, 0.5),
+      new THREE.CircleGeometry(CAP.glowR, 48),
       new THREE.MeshBasicMaterial({
         map: glowTexture(),
-        color: 0xf2f2f0,
+        color: STATUS_COLOR.idle,
         transparent: true,
-        opacity: 0.85,
+        opacity: 0.92,
         toneMapped: false,
         depthTest: false,
         depthWrite: false,
       })
     );
     glow.rotation.x = -Math.PI / 2;
-    glow.position.y = h * 0.2;
+    glow.position.set(0, h * 0.5 + 0.014, 0);
+    glow.scale.set(1, 1, 1);
     glow.renderOrder = 5;
-    glow.raycast = () => {}; // don't steal joystick / neighbor hits
+    glow.raycast = () => {};
     mesh.add(glow);
     mesh.userData.glow = glow;
 
-    const light = new THREE.PointLight(0x4aa3ff, 0, 1.85);
+    const light = new THREE.PointLight(STATUS_COLOR.idle, 0.55, 1.85);
     light.position.y = 0.05;
     mesh.add(light);
     mesh.userData.light = light;
+
+    mesh.userData.restY = 0;
+    mesh.userData.pressY = -0.1;
+    return mesh;
+  }
+
+  // —— Cream: matte sculpt, a bit more volume, not glossy ——
+  const geo = new RoundedBoxGeometry(w * 0.97, h * 0.78, d * 0.97, CAP.segs, r);
+  const mat = new THREE.MeshStandardMaterial({
+    map: capTopTexture(false),
+    color: 0xffffff,
+    roughness: 0.72,
+    metalness: 0.01,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+
+  const shadow = new THREE.Mesh(
+    new THREE.PlaneGeometry(w * 1.16, d * 1.16),
+    new THREE.MeshBasicMaterial({
+      map: capShadowTexture(),
+      transparent: true,
+      opacity: 0.62,
+      depthWrite: false,
+      toneMapped: false,
+    })
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.set(0.035, -h * 0.5, 0.045);
+  shadow.renderOrder = 1;
+  shadow.raycast = () => {};
+  mesh.add(shadow);
+
+  const skirt = new THREE.Mesh(
+    new RoundedBoxGeometry(w * 1.03, h * 0.42, d * 1.03, CAP.segs, r * 0.95),
+    new THREE.MeshStandardMaterial({
+      color: 0xc8c2b4,
+      roughness: 0.78,
+      metalness: 0.02,
+    })
+  );
+  skirt.position.y = -h * 0.2;
+  skirt.castShadow = true;
+  mesh.add(skirt);
+
+  const top = new THREE.Mesh(
+    new RoundedBoxGeometry(w * 0.9, h * 0.2, d * 0.9, CAP.segs, r * 0.88),
+    new THREE.MeshStandardMaterial({
+      map: capTopTexture(false),
+      color: 0xffffff,
+      roughness: 0.64,
+      metalness: 0.01,
+    })
+  );
+  top.position.y = h * 0.3;
+  top.castShadow = true;
+  mesh.add(top);
+
+  // Soft light well — warm cream, not a dirty gray disc
+  const faceY = h * 0.42 + 0.01;
+  const dish = new THREE.Mesh(
+    new THREE.CircleGeometry(0.27, 48),
+    new THREE.MeshBasicMaterial({
+      map: glowTexture(),
+      color: 0xf2ebe0,
+      transparent: true,
+      opacity: 0.16,
+      depthWrite: false,
+      toneMapped: false,
+    })
+  );
+  dish.rotation.x = -Math.PI / 2;
+  dish.position.set(0, faceY, CAP.faceZ);
+  dish.renderOrder = 3;
+  dish.raycast = () => {};
+  mesh.add(dish);
+
+  if (iconId) {
+    const tex = makeIconTexture(iconId);
+    const iconMat = new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      depthWrite: false,
+    });
+    const iconSize = iconPlaneSize(iconId, wide);
+    const iconMesh = new THREE.Mesh(new THREE.PlaneGeometry(iconSize, iconSize), iconMat);
+    iconMesh.rotation.x = -Math.PI / 2;
+    iconMesh.position.set(0, faceY + 0.006, CAP.faceZ);
+    mesh.add(iconMesh);
+    mesh.userData.iconMesh = iconMesh;
+    mesh.userData.iconWide = wide;
   }
 
   mesh.userData.restY = 0;
@@ -243,9 +417,9 @@ export function createPad3D(container, handlers = {}) {
   const w = Math.max(container.clientWidth || 0, 360);
   const h = Math.max(container.clientHeight || 0, 360);
 
-  // Near top-down with a touch more tilt so side skirts + shadows read
+  // Near top-down — less tilt so key centers read true
   const camera = new THREE.PerspectiveCamera(28, w / h, 0.1, 100);
-  camera.position.set(0, 11.8, 2.35);
+  camera.position.set(0, 12.2, 1.55);
   camera.lookAt(0, 0, 0);
 
   const renderer = new THREE.WebGLRenderer({
@@ -269,11 +443,11 @@ export function createPad3D(container, handlers = {}) {
   renderer.domElement.style.display = 'block';
   renderer.domElement.style.borderRadius = '36px';
 
-  // lights — stronger key + rim so caps cast readable shade on the plate
-  const amb = new THREE.AmbientLight(0xffffff, 0.32);
+  // lights — soft matte key (volume without gloss)
+  const amb = new THREE.AmbientLight(0xffffff, 0.38);
   scene.add(amb);
-  const key = new THREE.DirectionalLight(0xfff4e8, 1.45);
-  key.position.set(4.2, 9.5, 3.2);
+  const key = new THREE.DirectionalLight(0xfff2e4, 1.15);
+  key.position.set(-2.8, 9.8, 4.2);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
   key.shadow.camera.near = 1;
@@ -284,15 +458,15 @@ export function createPad3D(container, handlers = {}) {
   key.shadow.camera.bottom = -5;
   key.shadow.bias = -0.0004;
   key.shadow.normalBias = 0.03;
-  key.shadow.radius = 2.5;
+  key.shadow.radius = 3.5;
   scene.add(key);
-  const fill = new THREE.DirectionalLight(0xc8d6ea, 0.35);
-  fill.position.set(-5, 4, -3);
+  const fill = new THREE.DirectionalLight(0xc8d6ea, 0.32);
+  fill.position.set(5, 4, -3);
   scene.add(fill);
-  const rim = new THREE.DirectionalLight(0xffffff, 0.28);
-  rim.position.set(-1, 6, 6);
+  const rim = new THREE.DirectionalLight(0xffffff, 0.18);
+  rim.position.set(-1, 5, 5);
   scene.add(rim);
-  const hemi = new THREE.HemisphereLight(0xf5f7fa, 0x6a7380, 0.4);
+  const hemi = new THREE.HemisphereLight(0xf5f7fa, 0x6a7380, 0.42);
   scene.add(hemi);
 
   // chassis — cooler mid-tone shell (keys stay brighter on top)
@@ -598,6 +772,7 @@ export function createPad3D(container, handlers = {}) {
     const m = keycapMesh({ frost: true });
     m.position.set(originX + gap * col, 0.42, originZ + gap * row);
     m.userData = { ...m.userData, type: 'agent', index: i };
+    placeAgentGlow(m);
     scene.add(m);
     agents[i] = m;
     interactives.push(m);
@@ -931,11 +1106,9 @@ export function createPad3D(container, handlers = {}) {
 
   function animate() {
     raf = requestAnimationFrame(animate);
-    // Keep selection glow size; no breathing animation
+    // Keep glow size locked — selection is color/opacity only
     agents.forEach((a) => {
-      if (a.userData.glow) {
-        a.userData.glow.scale.setScalar(a.userData.selected ? 1.22 : 1);
-      }
+      if (a.userData.glow) a.userData.glow.scale.set(1, 1, 1);
     });
     // snappy follow + quick spring return
     const ease = joyDragging ? 0.58 : 0.42;
@@ -964,24 +1137,29 @@ export function createPad3D(container, handlers = {}) {
       a.userData.selected = selected;
       const color = STATUS_COLOR[status] ?? STATUS_COLOR.idle;
       const off = status === 'off';
-      const lit = new THREE.Color(color);
-      if (selected && !off) lit.lerp(new THREE.Color(0xffffff), 0.48);
+      // Default = status color; selected = status + white mix (subtle lift)
+      const base = new THREE.Color(off ? STATUS_COLOR.idle : color);
+      const lit = base.clone();
+      if (selected && !off) lit.lerp(new THREE.Color(0xffffff), 0.28);
       if (a.userData.glow) {
         a.userData.glow.material.color.copy(lit);
-        a.userData.glow.material.opacity = off ? 0 : selected ? 1 : 0.72;
-        a.userData.glow.visible = !off;
-        a.userData.glow.scale.setScalar(selected && !off ? 1.22 : 1);
+        a.userData.glow.material.opacity = off ? 0.82 : selected ? 0.98 : 0.95;
+        a.userData.glow.visible = true;
+        placeAgentGlow(a);
       }
       if (a.userData.light) {
-        a.userData.light.color.copy(lit);
+        // Light = same two-tone: status hue mixed with white
+        const lightCol = base.clone();
+        if (selected && !off) lightCol.lerp(new THREE.Color(0xffffff), 0.4);
+        a.userData.light.color.copy(lightCol);
         a.userData.light.intensity = off
-          ? 0
+          ? 0.55
           : selected
-            ? 5.4
+            ? 3.2
             : status === 'thinking'
-              ? 1.45
-              : 0.7;
-        a.userData.light.distance = selected && !off ? 2.35 : 1.85;
+              ? 2.0
+              : 1.35;
+        a.userData.light.distance = selected && !off ? 2.2 : 2.0;
       }
       // selection reads via glow/halo/light only — scaling made the last
       // clicked key look stuck in a pressed/enlarged state
@@ -994,6 +1172,9 @@ export function createPad3D(container, handlers = {}) {
       m.userData.iconMesh.material.map?.dispose();
       m.userData.iconMesh.material.map = tex;
       m.userData.iconMesh.material.needsUpdate = true;
+      const s = iconPlaneSize(iconId, !!m.userData.iconWide);
+      m.userData.iconMesh.geometry?.dispose?.();
+      m.userData.iconMesh.geometry = new THREE.PlaneGeometry(s, s);
     },
     setCmdActive(cmd, on) {
       const m = cmds[cmd];
