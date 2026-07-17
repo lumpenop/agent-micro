@@ -1,7 +1,7 @@
 :root {
-  /* Canvas fits the 3D chassis tightly — keyboard on-screen size stays ~same */
+  /* Pad canvas + HUD aligned to the thicker outer rim */
   --pad: 318px;
-  --keyboard: 300px;
+  --keyboard: 314px;
   --gap: 9px;
   --radius-pad: 34px;
   --radius-cap: 14px;

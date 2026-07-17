@@ -419,9 +419,9 @@ export function createPad3D(container, handlers = {}) {
   const w = Math.max(container.clientWidth || 0, 280);
   const h = Math.max(container.clientHeight || 0, 280);
 
-  // Near top-down — framed tight to the chassis (less transparent letterbox)
+  // Near top-down — pull back so thick rim shows
   const camera = new THREE.PerspectiveCamera(28, w / h, 0.1, 100);
-  camera.position.set(0, 10.85, 1.35);
+  camera.position.set(0, 11.25, 1.4);
   camera.lookAt(0, 0, 0);
 
   const renderer = new THREE.WebGLRenderer({
@@ -471,18 +471,14 @@ export function createPad3D(container, handlers = {}) {
   const hemi = new THREE.HemisphereLight(0xf5f7fa, 0x6a7380, 0.42);
   scene.add(hemi);
 
-  // chassis — frosted shell; picks up selected agent glow (like RGB case bleed)
+  // Same shell — thicker outer rim only (opaque, no glass film)
   const CHASSIS_BASE = 0xb8c4d0;
   const chassis = new THREE.Mesh(
-    new RoundedBoxGeometry(5.05, 0.55, 5.05, 6, 0.45),
-    new THREE.MeshPhysicalMaterial({
+    new RoundedBoxGeometry(5.55, 0.62, 5.55, 7, 0.55),
+    new THREE.MeshStandardMaterial({
       color: CHASSIS_BASE,
-      roughness: 0.32,
-      metalness: 0.08,
-      transparent: true,
-      opacity: 0.9,
-      clearcoat: 0.62,
-      clearcoatRoughness: 0.22,
+      roughness: 0.42,
+      metalness: 0.1,
       emissive: 0x000000,
       emissiveIntensity: 0,
     })
@@ -522,9 +518,9 @@ export function createPad3D(container, handlers = {}) {
     chassis.userData.glowPulse = true;
   }
 
-  // inset plate — darker well so cream/frost caps pop
+  // Plate inset so only the outer rim reads thicker
   const plate = new THREE.Mesh(
-    new RoundedBoxGeometry(4.45, 0.14, 4.45, 5, 0.28),
+    new RoundedBoxGeometry(4.3, 0.14, 4.3, 5, 0.28),
     new THREE.MeshStandardMaterial({
       color: 0x5a6570,
       roughness: 0.72,
@@ -535,9 +531,8 @@ export function createPad3D(container, handlers = {}) {
   plate.receiveShadow = true;
   scene.add(plate);
 
-  // soft vignette rim inside the well
   const wellRim = new THREE.Mesh(
-    new RoundedBoxGeometry(4.52, 0.06, 4.52, 5, 0.3),
+    new RoundedBoxGeometry(4.38, 0.06, 4.38, 5, 0.3),
     new THREE.MeshStandardMaterial({
       color: 0x3e4750,
       roughness: 0.8,
