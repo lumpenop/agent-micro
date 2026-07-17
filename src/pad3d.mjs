@@ -419,17 +419,19 @@ export function createPad3D(container, handlers = {}) {
   const w = Math.max(container.clientWidth || 0, 280);
   const h = Math.max(container.clientHeight || 0, 280);
 
-  // Near top-down — pull back so thick rim shows
+  // Near top-down — slight pullback so the larger outer rim is visible
   const camera = new THREE.PerspectiveCamera(28, w / h, 0.1, 100);
-  camera.position.set(0, 11.25, 1.4);
+  camera.position.set(0, 11.2, 1.4);
   camera.lookAt(0, 0, 0);
 
   const renderer = new THREE.WebGLRenderer({
     antialias: true,
     alpha: true,
+    premultipliedAlpha: false,
     powerPreference: 'high-performance',
   });
   renderer.setClearColor(0x000000, 0);
+  renderer.setClearAlpha(0);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(w, h);
   renderer.shadowMap.enabled = true;
@@ -443,7 +445,7 @@ export function createPad3D(container, handlers = {}) {
   renderer.domElement.style.width = '100%';
   renderer.domElement.style.height = '100%';
   renderer.domElement.style.display = 'block';
-  renderer.domElement.style.borderRadius = '36px';
+  renderer.domElement.style.borderRadius = '40px';
 
   // lights — soft matte key (volume without gloss)
   const amb = new THREE.AmbientLight(0xffffff, 0.38);
@@ -471,14 +473,16 @@ export function createPad3D(container, handlers = {}) {
   const hemi = new THREE.HemisphereLight(0xf5f7fa, 0x6a7380, 0.42);
   scene.add(hemi);
 
-  // Same shell — thicker outer rim only (opaque, no glass film)
+  // Grow outer shell only — plate/keys stay at the pre-border layout (5.05 → 5.65)
   const CHASSIS_BASE = 0xb8c4d0;
   const chassis = new THREE.Mesh(
-    new RoundedBoxGeometry(5.55, 0.62, 5.55, 7, 0.55),
-    new THREE.MeshStandardMaterial({
+    new RoundedBoxGeometry(5.65, 0.58, 5.65, 7, 0.52),
+    new THREE.MeshPhysicalMaterial({
       color: CHASSIS_BASE,
-      roughness: 0.42,
-      metalness: 0.1,
+      roughness: 0.32,
+      metalness: 0.08,
+      clearcoat: 0.55,
+      clearcoatRoughness: 0.28,
       emissive: 0x000000,
       emissiveIntensity: 0,
     })
@@ -518,9 +522,9 @@ export function createPad3D(container, handlers = {}) {
     chassis.userData.glowPulse = true;
   }
 
-  // Plate inset so only the outer rim reads thicker
+  // inset plate — darker well so cream/frost caps pop
   const plate = new THREE.Mesh(
-    new RoundedBoxGeometry(4.3, 0.14, 4.3, 5, 0.28),
+    new RoundedBoxGeometry(4.45, 0.14, 4.45, 5, 0.28),
     new THREE.MeshStandardMaterial({
       color: 0x5a6570,
       roughness: 0.72,
@@ -531,8 +535,9 @@ export function createPad3D(container, handlers = {}) {
   plate.receiveShadow = true;
   scene.add(plate);
 
+  // soft vignette rim inside the well
   const wellRim = new THREE.Mesh(
-    new RoundedBoxGeometry(4.38, 0.06, 4.38, 5, 0.3),
+    new RoundedBoxGeometry(4.52, 0.06, 4.52, 5, 0.3),
     new THREE.MeshStandardMaterial({
       color: 0x3e4750,
       roughness: 0.8,

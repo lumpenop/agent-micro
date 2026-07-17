@@ -322,9 +322,9 @@ function installAppMenu() {
 
 function createWindow() {
   const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
-  // Fit chrome + tight pad + hud (legend must not clip)
-  const winW = 330;
-  const winH = 512;
+  // Fit chrome + larger pad (outer rim) + hud
+  const winW = 360;
+  const winH = 540;
 
   mainWindow = new BrowserWindow({
     width: winW,

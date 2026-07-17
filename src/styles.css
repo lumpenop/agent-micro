@@ -1,9 +1,9 @@
 :root {
-  /* Pad canvas + HUD aligned to the thicker outer rim */
-  --pad: 318px;
-  --keyboard: 314px;
+  /* Larger pad canvas so the outer rim fits; inner key layout unchanged */
+  --pad: 348px;
+  --keyboard: 330px;
   --gap: 9px;
-  --radius-pad: 34px;
+  --radius-pad: 38px;
   --radius-cap: 14px;
   --ink: #141414;
   /* idle = frost key neutral gray (same as pad3d STATUS_COLOR.idle) */
@@ -148,7 +148,6 @@ button {
   height: var(--pad);
   flex: 0 0 auto;
   margin: 0;
-  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.16));
 }
 
 .pad-3d {
