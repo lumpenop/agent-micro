@@ -1,6 +1,6 @@
 /**
- * Consistent 청축 (clicky blue switch) sounds.
- * Same keycap shape/role → same sample every time (no per-key pitch drift).
+ * Consistent 청축 (clicky blue switch) sounds for keycaps.
+ * Touch pad uses a separate soft rubber tap — not the same family.
  */
 
 let ctx = null;
@@ -43,8 +43,85 @@ function envGain(g, t0, peak, attack, release) {
 }
 
 /**
+ * Soft rubber touch-pad tap — deliberately not a 청축 click.
+ * @param {'down'|'up'} phase
+ */
+function playTouch(phase) {
+  const c = resume();
+  if (!c || !master) return;
+  const t0 = c.currentTime;
+
+  if (phase === 'down') {
+    // muted low thud — pad membrane
+    const th = c.createOscillator();
+    const tg = c.createGain();
+    th.type = 'sine';
+    th.frequency.setValueAtTime(95, t0);
+    th.frequency.exponentialRampToValueAtTime(48, t0 + 0.07);
+    envGain(tg, t0, 0.22, 0.003, 0.09);
+    th.connect(tg);
+    tg.connect(master);
+    th.start(t0);
+    th.stop(t0 + 0.11);
+
+    // soft mid body, no sharp square click
+    const body = c.createOscillator();
+    const bg = c.createGain();
+    body.type = 'triangle';
+    body.frequency.setValueAtTime(320, t0);
+    body.frequency.exponentialRampToValueAtTime(140, t0 + 0.05);
+    envGain(bg, t0, 0.1, 0.002, 0.06);
+    body.connect(bg);
+    bg.connect(master);
+    body.start(t0);
+    body.stop(t0 + 0.08);
+
+    // filtered noise — rubber brush, not clicky
+    const src = c.createBufferSource();
+    src.buffer = noiseBuffer(0.06);
+    const lp = c.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 900;
+    lp.Q.value = 0.7;
+    const ng = c.createGain();
+    envGain(ng, t0, 0.12, 0.002, 0.05);
+    src.connect(lp);
+    lp.connect(ng);
+    ng.connect(master);
+    src.start(t0);
+    src.stop(t0 + 0.06);
+    return;
+  }
+
+  // up — quiet soft release
+  const th = c.createOscillator();
+  const tg = c.createGain();
+  th.type = 'sine';
+  th.frequency.setValueAtTime(140, t0);
+  th.frequency.exponentialRampToValueAtTime(70, t0 + 0.035);
+  envGain(tg, t0, 0.06, 0.002, 0.04);
+  th.connect(tg);
+  tg.connect(master);
+  th.start(t0);
+  th.stop(t0 + 0.05);
+
+  const src = c.createBufferSource();
+  src.buffer = noiseBuffer(0.03);
+  const lp = c.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 700;
+  const ng = c.createGain();
+  envGain(ng, t0, 0.05, 0.001, 0.025);
+  src.connect(lp);
+  lp.connect(ng);
+  ng.connect(master);
+  src.start(t0);
+  src.stop(t0 + 0.03);
+}
+
+/**
  * Fixed 청축 profile — same params → same sound every press.
- * @param {'std'|'wide'|'touch'|'dial'|'joy'} profile
+ * @param {'std'|'wide'|'dial'|'joy'} profile
  * @param {'down'|'up'} phase
  */
 function playBlue(profile, phase) {
@@ -63,16 +140,12 @@ function playBlue(profile, phase) {
       down: { hi: 2200, lo: 820, noise: 1600, thump: 150, bright: 0.95, body: 0.14 },
       up: { hi: 1500, lo: 640, bright: 0.65 },
     },
-    touch: {
-      down: { hi: 2300, lo: 880, noise: 1700, thump: 160, bright: 0.9, body: 0.1 },
-      up: { hi: 1550, lo: 680, bright: 0.6 },
-    },
     dial: {
       down: { hi: 2000, lo: 780, noise: 1500, thump: 140, bright: 0.75, body: 0.1 },
       up: { hi: 1400, lo: 600, bright: 0.55 },
     },
     joy: {
-      down: { hi: 1900, lo: 700, noise: 1400, thump: 130, bright: 0.7, body: 0.15 },
+      down: { hi: 1900, lo: 700, click: 1400, thump: 130, bright: 0.7, body: 0.15 },
       up: { hi: 1300, lo: 560, bright: 0.5 },
     },
   };
@@ -161,12 +234,16 @@ function profileFor(kind, id) {
 
 export function playKeyDown(kind = 'cmd', id = '') {
   if (!enabled) return;
-  playBlue(profileFor(kind, id), 'down');
+  const profile = profileFor(kind, id);
+  if (profile === 'touch') playTouch('down');
+  else playBlue(profile, 'down');
 }
 
 export function playKeyUp(kind = 'cmd', id = '') {
   if (!enabled) return;
-  playBlue(profileFor(kind, id), 'up');
+  const profile = profileFor(kind, id);
+  if (profile === 'touch') playTouch('up');
+  else playBlue(profile, 'up');
 }
 
 /** Dial detents — same tick every step */

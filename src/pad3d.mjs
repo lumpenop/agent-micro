@@ -188,21 +188,6 @@ function keycapMesh({ wide = false, frost = false, iconId = null } = {}) {
     mesh.add(core);
   }
 
-  // soft contact shadow under key (elliptical falloff, no hard corner paint)
-  const contact = new THREE.Mesh(
-    new THREE.CircleGeometry(wide ? 0.9 : 0.46, 32),
-    new THREE.MeshBasicMaterial({
-      color: 0x000000,
-      transparent: true,
-      opacity: 0.18,
-      depthWrite: false,
-    })
-  );
-  if (wide) contact.scale.set(1.15, 1, 0.55);
-  contact.rotation.x = -Math.PI / 2;
-  contact.position.y = -h * 0.52;
-  mesh.add(contact);
-
   if (!frost && iconId) {
     const tex = makeIconTexture(iconId);
     const iconMat = new THREE.MeshBasicMaterial({
@@ -629,6 +614,34 @@ export function createPad3D(container, handlers = {}) {
     cmds[name] = m;
     interactives.push(m);
   });
+
+  // edge label — text only, no backing plate / shadow blob
+  function makeLabel(text, x, z) {
+    const c = document.createElement('canvas');
+    c.width = 512;
+    c.height = 64;
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.font = '28px "SF Pro Text", Avenir, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(40,45,55,0.45)';
+    ctx.fillText(text, 256, 32);
+    const tex = new THREE.CanvasTexture(c);
+    tex.premultiplyAlpha = false;
+    const mat = new THREE.SpriteMaterial({
+      map: tex,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const spr = new THREE.Sprite(mat);
+    spr.scale.set(2.2, 0.28, 1);
+    spr.position.set(x, 0.35, z);
+    scene.add(spr);
+    return spr;
+  }
+  makeLabel("Let's build", 0, 2.35);
 
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
