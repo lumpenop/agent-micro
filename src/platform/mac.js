@@ -673,25 +673,41 @@ function hasOurCliSession() {
   return ourCliSessionActive || openedCliSlots.size > 0 || ourCliTerminalIds.size > 0;
 }
 
+/**
+ * Agent 1 = new window · Agent 2–6 = split only inside that window.
+ * Must open in order: no Agent N without Agents 1…N-1.
+ */
 function resolveCliSlot(requested, openSlots) {
   const req = Math.max(0, Math.min(5, Number(requested) || 0));
   const open = Array.isArray(openSlots) ? openSlots : [];
+
   if (open.includes(req)) {
     return { slot: req, mode: 'focus' };
   }
-  if (!open.includes(0)) {
+
+  // Agent 1 → always a new window (never remap to another slot)
+  if (req === 0) {
     return { slot: 0, mode: 'window' };
   }
-  for (let i = 1; i < 6; i++) {
-    // Same window, Cmd+D style split (not a new tab/window)
-    if (!open.includes(i)) return { slot: i, mode: 'split' };
+
+  // Agent 2–6 require Agent 1's window
+  if (!open.includes(0)) {
+    return { slot: req, mode: 'blocked', reason: 'need-agent-1' };
   }
-  return { slot: open.includes(req) ? req : 0, mode: 'focus' };
+
+  // Sequential: Agent N needs Agents 1…N-1 already open
+  for (let i = 1; i < req; i++) {
+    if (!open.includes(i)) {
+      return { slot: req, mode: 'blocked', reason: `need-agent-${i + 1}` };
+    }
+  }
+
+  return { slot: req, mode: 'split' };
 }
 
 /**
  * Open Codex CLI in the OS default terminal.
- * First = new window → Agent 1 · later = split (⌘D) → Agent 2…
+ * Agent 1 = new window · Agent 2–6 = ⌘D split in that window only (in order).
  */
 async function ensureCodexCliWindow(requestedSlot, opts = {}) {
   const command = String(opts.command || 'codex').trim() || 'codex';
@@ -730,7 +746,25 @@ async function ensureCodexCliWindow(requestedSlot, opts = {}) {
 
   let detected = await listOpenCodexCliSlots();
   let open = mergeOpenSlots(detected);
-  let { slot, mode } = resolveCliSlot(requestedSlot, open);
+  let { slot, mode, reason } = resolveCliSlot(requestedSlot, open);
+
+  const blockedResult = (why) => ({
+    ok: false,
+    slot: req,
+    opened: false,
+    existed: false,
+    focused: false,
+    mode: 'blocked',
+    reason: why || 'blocked',
+    error:
+      why === 'need-agent-1'
+        ? 'Agent 1 창을 먼저 여세요'
+        : /^need-agent-\d+$/.test(String(why || ''))
+          ? `Agent ${String(why).replace('need-agent-', '')} 먼저`
+          : 'Agent 1→6 순서대로',
+  });
+
+  if (mode === 'blocked') return blockedResult(reason);
 
   // About to open a brand-new window — one more scan after waking the terminal app
   if (mode === 'window') {
@@ -741,7 +775,8 @@ async function ensureCodexCliWindow(requestedSlot, opts = {}) {
       await delay(80);
       detected = await listOpenCodexCliSlots();
       open = mergeOpenSlots(detected);
-      ({ slot, mode } = resolveCliSlot(requestedSlot, open));
+      ({ slot, mode, reason } = resolveCliSlot(requestedSlot, open));
+      if (mode === 'blocked') return blockedResult(reason);
     } catch {
       /* keep prior mode */
     }
@@ -773,7 +808,8 @@ async function ensureCodexCliWindow(requestedSlot, opts = {}) {
     forgetOpenedSlot(slot);
     // Fall through to open/split with refreshed open set
     open = mergeOpenSlots(await listOpenCodexCliSlots());
-    ({ slot, mode } = resolveCliSlot(requestedSlot, open));
+    ({ slot, mode, reason } = resolveCliSlot(requestedSlot, open));
+    if (mode === 'blocked') return blockedResult(reason);
     if (mode === 'focus') {
       return {
         ok: false,

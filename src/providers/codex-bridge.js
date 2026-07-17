@@ -588,10 +588,14 @@ class CodexBridge extends EventEmitter {
   async select(index, { focus = false } = {}) {
     const requested = Math.max(0, Math.min(5, index));
 
-    // CLI: first open → Agent 1 window · later → split (⌘D) + Codex
+    // CLI: Agent 1 = new window · 2–6 = split in that window only (in order)
     let slot = requested;
     try {
       const r = await this.ensureAgentCliWindow(requested, { focus });
+      if (r?.mode === 'blocked') {
+        this.emitState(r.error || 'Agent 1→6 순서대로');
+        return { ok: false, reason: r.reason || 'blocked', slot: requested };
+      }
       if (typeof r?.slot === 'number') slot = r.slot;
       this.selected = slot;
       const a = this.agents[this.selected];
@@ -606,16 +610,13 @@ class CodexBridge extends EventEmitter {
       } else if (r?.focused) {
         this.emitState(`focus · CLI · Agent ${slot + 1}`);
       } else {
-        this.emitState(
-          slot === requested
-            ? `switch · Agent ${slot + 1}`
-            : `switch · Agent ${slot + 1} (⇧${requested + 1}→${slot + 1})`
-        );
+        this.emitState(`switch · Agent ${slot + 1}`);
       }
+      return { ok: true, slot };
     } catch (e) {
-      this.selected = requested;
       this.emit('log', e?.message || String(e));
       this.emitState(`CLI 창 실패 · ${e?.message || e}`);
+      return { ok: false, error: e?.message || String(e) };
     }
   }
 

@@ -43,7 +43,7 @@ pnpm start
 | **⇧Q W E R D F** | Fast · Approve · Decline · Fork · Mic · Send |
 | **⇧Tab** | Touch · 레이어 전환 |
 | **⇧↑ ↓ ← →** | 조이스틱 (현재 레이어 액션) |
-| **⇧1–6** | 투명 에이전트 키 (좌상단→우하단) |
+| **⇧1–6** | Agent 1 = 새 창 · 2–6 = 그 창에 순서대로 스플릿 (앞 번호 없으면 무시) |
 
 종료: **⌘⇧Q**
 
@@ -60,7 +60,7 @@ pnpm start
 
 | Control | Behavior |
 |--------|----------|
-| Agent ×6 | 탭 = 전환 · 더블탭 = 에이전트 앱 포커스 |
+| Agent ×6 | 1 = 새 CLI 창 · 2–6 = 1번 창에만 순차 스플릿 · 이미 있으면 포커스 |
 | ⚡ Fast | reasoning → minimal |
 | ✓ / ✕ | Approve / Decline |
 | Fork | `thread/fork` → 다음 빈 슬롯 + CLI 스플릿 (UI는 6/6일 때만 비활성) |
