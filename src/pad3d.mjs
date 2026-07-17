@@ -4,13 +4,13 @@ import { RoomEnvironment } from './vendor/RoomEnvironment.mjs';
 import { iconSvgDocument } from './icons.mjs';
 import { playKeyDown, playKeyUp, playDialTick, playJoyTick } from './key-sounds.mjs';
 
+/** Match HUD legend (--thinking/complete/input/error); idle stays neutral gray for frost */
 const STATUS_COLOR = {
-  // default frost disc — cool gray with a hint of blue
   idle: 0x8fa5b4,
-  thinking: 0x2b9dff,
-  complete: 0x2edf72,
-  input: 0xffc53d,
-  error: 0xff4545,
+  thinking: 0x4aa3ff,
+  complete: 0x3ecf7a,
+  input: 0xf0c24b,
+  error: 0xef4d4d,
   off: 0x000000,
 };
 

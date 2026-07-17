@@ -6,7 +6,8 @@
   --radius-pad: 34px;
   --radius-cap: 14px;
   --ink: #141414;
-  --idle: #f2f2f0;
+  /* idle = frost key neutral gray (same as pad3d STATUS_COLOR.idle) */
+  --idle: #8fa5b4;
   --thinking: #4aa3ff;
   --complete: #3ecf7a;
   --input: #f0c24b;
@@ -547,7 +548,7 @@ button {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 12px 14px 12px;
+  padding: 12px 12px 12px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.82);
   border: 1px solid rgba(255, 255, 255, 0.7);
@@ -555,8 +556,9 @@ button {
 }
 
 .icon-picker-card > .modal-scroll {
-  padding: 2px 4px 4px 0;
-  margin-right: -2px;
+  padding: 2px 2px 4px;
+  /* Reserve scrollbar space so the 4-col grid stays visually centered */
+  scrollbar-gutter: stable;
 }
 
 .icon-picker-head {
@@ -565,6 +567,7 @@ button {
   justify-content: space-between;
   flex: 0 0 auto;
   margin-bottom: 5px;
+  padding: 0 2px;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -575,7 +578,8 @@ button {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 9px;
-  padding-right: 4px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .icon-pick {
@@ -813,8 +817,8 @@ button {
 }
 
 .guide-agent-cap:nth-child(2) .guide-agent-led {
-  background: radial-gradient(circle at 35% 30%, #fff, #8fa5b4 75%);
-  box-shadow: 0 0 3px rgba(143, 165, 180, 0.55);
+  background: radial-gradient(circle at 35% 30%, #fff, var(--idle) 75%);
+  box-shadow: 0 0 3px color-mix(in srgb, var(--idle) 55%, transparent);
 }
 
 .guide-ico {
@@ -1454,7 +1458,8 @@ button {
   display: inline-block;
 }
 
-.dot.idle { background: var(--idle); box-shadow: 0 0 0 1px rgba(0,0,0,0.08); }
+/* Legend idle = selected frost key disc (STATUS_COLOR.idle + select richer) */
+.dot.idle { background: #679abd; }
 .dot.thinking { background: var(--thinking); }
 .dot.complete { background: var(--complete); }
 .dot.input { background: var(--input); }
