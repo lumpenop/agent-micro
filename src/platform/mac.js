@@ -405,6 +405,81 @@ function openInDefaultTerminal(title, command) {
  * Which agent slots already have a CLI window/tab in the default terminal app.
  * Ghostty: scan top-level `terminals` (works even when app is not frontmost).
  */
+/** Live Ghostty terminal ids (Ghostty `name` is cwd/process — not OSC title). */
+async function listGhosttyTerminalIds(appName) {
+  const name = asEscape(appName || 'Ghostty');
+  try {
+    const out = await osa(
+      `
+      tell application "${name}"
+        set ids to {}
+        repeat with term in terminals
+          try
+            set end of ids to (id of term as text)
+          end try
+        end repeat
+        set AppleScript's text item delimiters to ","
+        set s to ids as text
+        set AppleScript's text item delimiters to ""
+        return s
+      end tell`,
+      { timeout: 1800 }
+    );
+    return new Set(
+      String(out || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+function forgetOpenedSlotSilent(slot) {
+  const i = Math.max(0, Math.min(5, Number(slot) || 0));
+  const tid = slotTerminalIds.get(i);
+  openedCliSlots.delete(i);
+  slotTerminalIds.delete(i);
+  if (tid) ourCliTerminalIds.delete(tid);
+}
+
+/**
+ * Drop slots whose Ghostty terminal id is gone, then keep only a contiguous
+ * 0…N-1 prefix (so a hole never lets Agent 5 look "open" without 3/4).
+ */
+function pruneStaleCliSession(liveIds) {
+  hydrateCliSession();
+  const live = liveIds instanceof Set ? liveIds : new Set(liveIds || []);
+  let changed = false;
+  for (const [slot, tid] of [...slotTerminalIds.entries()]) {
+    if (!tid || !live.has(tid)) {
+      forgetOpenedSlotSilent(slot);
+      changed = true;
+    }
+  }
+  for (const slot of [...openedCliSlots]) {
+    if (!slotTerminalIds.has(slot)) {
+      openedCliSlots.delete(slot);
+      changed = true;
+    }
+  }
+  // Contiguous from Agent 1 only
+  const open = [...slotTerminalIds.keys()].sort((a, b) => a - b);
+  let prefix = 0;
+  while (prefix < open.length && open[prefix] === prefix) prefix += 1;
+  for (const s of open) {
+    if (s >= prefix) {
+      forgetOpenedSlotSilent(s);
+      changed = true;
+    }
+  }
+  if (openedCliSlots.size === 0 && ourCliTerminalIds.size === 0) {
+    ourCliSessionActive = false;
+  }
+  if (changed) persistCliSession();
+}
+
 async function listOpenCodexCliSlots() {
   if (process.platform !== 'darwin') return [];
   const app = cachedDefaultTerminal || (await getDefaultTerminalApp());
@@ -412,90 +487,61 @@ async function listOpenCodexCliSlots() {
   const appName = asEscape(app.name || 'Ghostty');
 
   try {
-    let script;
-    if (kind === 'terminal') {
-      script = `
-        tell application "${appName}"
-          set found to {}
-          repeat with n from 1 to 6
-            set targetTitle to "Codex · Agent " & n
-            set hit to false
-            repeat with w in windows
-              try
-                set wn to name of w as text
-                if wn contains targetTitle then set hit to true
-              end try
-              try
-                repeat with t in tabs of w
-                  try
-                    if (custom title of t as text) is targetTitle then set hit to true
-                    if (name of t as text) contains targetTitle then set hit to true
-                  end try
-                end repeat
-              end try
-            end repeat
-            if hit then set end of found to n
-          end repeat
-          set AppleScript's text item delimiters to ","
-          set s to found as text
-          set AppleScript's text item delimiters to ""
-          return s
-        end tell`;
-    } else {
-      // Ghostty: one flat terminals list + title → also returns id:slot pairs for cache
-      script = `
-        tell application "${appName}"
-          set pairs to {}
-          repeat with term in terminals
+    // Ghostty: track by terminal id (title matching is unreliable)
+    if (kind === 'ghostty') {
+      const liveIds = await listGhosttyTerminalIds(app.name || 'Ghostty');
+      pruneStaleCliSession(liveIds);
+      return [...slotTerminalIds.keys()]
+        .filter((s) => liveIds.has(slotTerminalIds.get(s)))
+        .sort((a, b) => a - b);
+    }
+
+    // Terminal.app: custom title / window name contains "Codex · Agent N"
+    const script = `
+      tell application "${appName}"
+        set found to {}
+        repeat with n from 1 to 6
+          set targetTitle to "Codex · Agent " & n
+          set hit to false
+          repeat with w in windows
             try
-              set nm to name of term as text
-              set tid to id of term as text
-              repeat with n from 1 to 6
-                set targetTitle to "Codex · Agent " & n
-                if nm contains targetTitle then
-                  set end of pairs to (tid & "=" & n)
-                end if
+              set wn to name of w as text
+              if wn contains targetTitle then set hit to true
+            end try
+            try
+              repeat with t in tabs of w
+                try
+                  if (custom title of t as text) is targetTitle then set hit to true
+                  if (name of t as text) contains targetTitle then set hit to true
+                end try
               end repeat
             end try
           end repeat
-          set AppleScript's text item delimiters to ","
-          set s to pairs as text
-          set AppleScript's text item delimiters to ""
-          return s
-        end tell`;
-    }
+          if hit then set end of found to n
+        end repeat
+        set AppleScript's text item delimiters to ","
+        set s to found as text
+        set AppleScript's text item delimiters to ""
+        return s
+      end tell`;
     const out = await osa(script, { timeout: 1800 });
     if (!out) return [];
-    if (kind !== 'terminal') {
-      const slots = [];
-      for (const part of String(out).split(',')) {
-        const m = String(part).trim().match(/^(.+)=([1-6])$/);
-        if (!m) continue;
-        const tid = m[1].trim();
-        const slot = Number(m[2]) - 1;
-        if (slot < 0 || slot > 5) continue;
-        slots.push(slot);
-        if (tid) rememberOpenedSlot(slot, tid, { persist: false });
-      }
-      const uniq = [...new Set(slots)].sort((a, b) => a - b);
-      if (uniq.length) persistCliSession();
-      return uniq;
-    }
-    return String(out)
+    const slots = String(out)
       .split(',')
       .map((x) => Number(String(x).trim()) - 1)
       .filter((i) => i >= 0 && i <= 5);
+    for (const s of slots) rememberOpenedSlot(s, null, { persist: false, allowWithoutId: true });
+    if (slots.length) persistCliSession();
+    return [...new Set(slots)].sort((a, b) => a - b);
   } catch {
     return [];
   }
 }
 
-/** In-memory open slots (no AppleScript) — used for fast split path. */
+/** Open slots with a known terminal id (after hydrate; may still be stale until prune). */
 function rememberedOpenSlots() {
   hydrateCliSession();
-  const set = new Set(openedCliSlots);
-  for (const k of slotTerminalIds.keys()) set.add(k);
-  return [...set].sort((a, b) => a - b);
+  return [...slotTerminalIds.keys()].sort((a, b) => a - b);
 }
 
 async function hasCodexCliWindow(slot) {
@@ -647,12 +693,17 @@ function hydrateCliSession() {
 function rememberOpenedSlot(slot, terminalId, opts = {}) {
   hydrateCliSession();
   const i = Math.max(0, Math.min(5, Number(slot) || 0));
-  openedCliSlots.add(i);
-  ourCliSessionActive = true;
-  if (terminalId != null && String(terminalId).trim()) {
-    const tid = String(terminalId).trim();
+  const tid =
+    terminalId != null && String(terminalId).trim() ? String(terminalId).trim() : '';
+  // Id-backed slots are authoritative (Ghostty). allowWithoutId = Terminal.app titles.
+  if (tid) {
     ourCliTerminalIds.add(tid);
     slotTerminalIds.set(i, tid);
+    openedCliSlots.add(i);
+    ourCliSessionActive = true;
+  } else if (opts.allowWithoutId) {
+    openedCliSlots.add(i);
+    ourCliSessionActive = true;
   }
   if (opts.persist !== false) persistCliSession();
 }
@@ -669,10 +720,9 @@ function forgetOpenedSlot(slot) {
   persistCliSession();
 }
 
+/** Detected/live slots only — never re-inflate from stale disk memory. */
 function mergeOpenSlots(detected) {
-  hydrateCliSession();
   const set = new Set(Array.isArray(detected) ? detected : []);
-  for (const i of openedCliSlots) set.add(i);
   return [...set].sort((a, b) => a - b);
 }
 
@@ -727,9 +777,16 @@ async function ensureCodexCliWindow(requestedSlot, opts = {}) {
   hydrateCliSession();
 
   const req = Math.max(0, Math.min(5, Number(requestedSlot) || 0));
-  const hasKnownTarget =
-    Number.isFinite(Number(requestedSlot)) &&
-    (openedCliSlots.has(req) || slotTerminalIds.has(req));
+  const appFast = cachedDefaultTerminal || (await getDefaultTerminalApp());
+  const kindFast = terminalKind(appFast);
+
+  // Always reconcile Ghostty ids with live terminals before any open/focus decision
+  let open = [];
+  if (kindFast === 'ghostty') {
+    open = await listOpenCodexCliSlots();
+  } else {
+    open = mergeOpenSlots(await listOpenCodexCliSlots());
+  }
 
   const blockedResult = (why) => ({
     ok: false,
@@ -747,9 +804,11 @@ async function ensureCodexCliWindow(requestedSlot, opts = {}) {
           : 'Agent 1→6 순서대로',
   });
 
-  // Known slot → focus (activate so it works when pad / other app is frontmost)
-  if (hasKnownTarget) {
-    const appFast = cachedDefaultTerminal || (await getDefaultTerminalApp());
+  let { slot, mode, reason } = resolveCliSlot(requestedSlot, open);
+  if (mode === 'blocked') return blockedResult(reason);
+
+  // Known live slot → focus
+  if (mode === 'focus') {
     let f = await focusCodexCliWindow(req, { fast: true, activate: true });
     if (!f.ok) f = await focusCodexCliWindow(req, { fast: false, activate: true });
     if (f.ok) {
@@ -764,23 +823,8 @@ async function ensureCodexCliWindow(requestedSlot, opts = {}) {
         fast: true,
       };
     }
-    // Stale record — drop and continue to detect / open
     forgetOpenedSlot(req);
-  }
-
-  // Fast path: split/block from in-memory session (skip AppleScript scan)
-  let open = rememberedOpenSlots();
-  let { slot, mode, reason } = resolveCliSlot(requestedSlot, open);
-  if (mode === 'blocked') return blockedResult(reason);
-
-  const needScan =
-    mode === 'window' ||
-    (mode === 'split' && !slotTerminalIds.has(Math.max(0, req - 1))) ||
-    (mode === 'focus' && !hasKnownTarget);
-
-  if (needScan) {
-    const detected = await listOpenCodexCliSlots();
-    open = mergeOpenSlots(detected);
+    open = mergeOpenSlots(await listOpenCodexCliSlots());
     ({ slot, mode, reason } = resolveCliSlot(requestedSlot, open));
     if (mode === 'blocked') return blockedResult(reason);
   }
@@ -827,7 +871,6 @@ async function ensureCodexCliWindow(requestedSlot, opts = {}) {
   const asLine = asEscape(line);
   // Split from the previous agent pane: 1→2, 2→3, … (not always from Agent 1)
   const hostSlot = mode === 'split' ? Math.max(0, slot - 1) : 0;
-  const asHost = asEscape(cliWindowTitle(hostSlot));
   const hostId = slotTerminalIds.get(hostSlot);
 
   try {
@@ -852,11 +895,16 @@ async function ensureCodexCliWindow(requestedSlot, opts = {}) {
         `,
           { timeout: 4000 }
         );
+        if (!String(tid || '').trim()) throw new Error('no terminal id after window open');
         rememberOpenedSlot(slot, tid);
       } else {
-        // Split from previous agent (N-1 → N), not always from Agent 1
-        const hostIdClause = hostId
-          ? `
+        // Split from previous agent (N-1 → N) — host must be the known id (no front-window guess)
+        if (!hostId) throw new Error(`no host id for Agent ${hostSlot + 1}`);
+        const tid = await osa(
+          `
+          tell application "${appName}"
+            activate
+            set hostTerm to missing value
             set targetHostId to "${asEscape(String(hostId))}"
             repeat with term in terminals
               try
@@ -866,34 +914,8 @@ async function ensureCodexCliWindow(requestedSlot, opts = {}) {
                 end if
               end try
             end repeat
-          `
-          : '';
-        const tid = await osa(
-          `
-          tell application "${appName}"
-            activate
-            set hostTerm to missing value
-            ${hostIdClause}
-            if hostTerm is missing value then
-              set hostTitle to "${asHost}"
-              repeat with term in terminals
-                try
-                  if (name of term as text) contains hostTitle then
-                    set hostTerm to term
-                    exit repeat
-                  end if
-                end try
-              end repeat
-            end if
-            if hostTerm is missing value then
-              try
-                set hostTerm to focused terminal of selected tab of front window
-              end try
-            end if
+            if hostTerm is missing value then error "host terminal missing"
             set cfg to new surface configuration
-            if hostTerm is missing value then
-              error "no host terminal for split"
-            end if
             focus hostTerm
             set term to split hostTerm direction right with configuration cfg
             delay 0.06
@@ -909,8 +931,8 @@ async function ensureCodexCliWindow(requestedSlot, opts = {}) {
         `,
           { timeout: 4000 }
         );
+        if (!String(tid || '').trim()) throw new Error('no terminal id after split');
         rememberOpenedSlot(slot, tid);
-        rememberOpenedSlot(hostSlot);
       }
     } else if (kind === 'terminal') {
       if (mode === 'window') {
@@ -943,14 +965,16 @@ async function ensureCodexCliWindow(requestedSlot, opts = {}) {
           { timeout: 4000 }
         );
       }
-      rememberOpenedSlot(slot);
-      if (mode === 'window') rememberOpenedSlot(0);
+      rememberOpenedSlot(slot, null, { allowWithoutId: true });
+      if (mode === 'window') rememberOpenedSlot(0, null, { allowWithoutId: true });
     } else if (kind === 'iterm' || mode === 'split') {
       if (mode === 'window') {
         await openInDefaultTerminal(title, command);
+        rememberOpenedSlot(slot, null, { allowWithoutId: true });
       } else {
         // Focus previous agent first so ⌘D splits from that pane
-        await focusCodexCliWindow(hostSlot, { fast: true, activate: true });
+        const focused = await focusCodexCliWindow(hostSlot, { fast: true, activate: true });
+        if (!focused?.ok) throw new Error(`host Agent ${hostSlot + 1} not focused`);
         await osa(
           `
           tell application "${appName}" to activate
@@ -968,18 +992,17 @@ async function ensureCodexCliWindow(requestedSlot, opts = {}) {
         `,
           { timeout: 4000 }
         );
+        rememberOpenedSlot(slot, null, { allowWithoutId: true });
       }
-      rememberOpenedSlot(slot);
-      if (mode === 'window') rememberOpenedSlot(0);
-      else rememberOpenedSlot(hostSlot);
     } else {
+      if (mode === 'split') throw new Error('split unsupported for this terminal');
       await openInDefaultTerminal(title, command);
-      rememberOpenedSlot(slot);
+      rememberOpenedSlot(slot, null, { allowWithoutId: true });
     }
     return { ok: true, slot, opened: true, existed: false, focused: true, mode, app: app.name };
   } catch (e) {
-    // Split failed but Agent 1 still exists — don't spawn another .command window
-    if (mode === 'split' && (openedCliSlots.has(0) || open.includes(0))) {
+    // Never open a random new window to "satisfy" a split — that bypasses 1→6 order
+    if (mode === 'split') {
       return {
         ok: false,
         slot,
@@ -990,7 +1013,7 @@ async function ensureCodexCliWindow(requestedSlot, opts = {}) {
     }
     try {
       await openInDefaultTerminal(title, command);
-      rememberOpenedSlot(slot);
+      rememberOpenedSlot(slot, null, { allowWithoutId: true });
       return { ok: true, slot, opened: true, existed: false, focused: true, mode, app: app.name, fallback: true };
     } catch (e2) {
       return { ok: false, slot, error: e2.message || e.message || String(e), mode };
@@ -1021,6 +1044,8 @@ module.exports = {
   isCodexCliTerminalFrontmost,
   isOurCliFrontmost,
   hasOurCliSession,
+  pruneStaleCliSession,
+  listGhosttyTerminalIds,
 };
 
 hydrateCliSession();

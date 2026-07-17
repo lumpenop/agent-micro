@@ -231,6 +231,35 @@
         </div>
       </div>
 
+      <div class="icon-picker trial-lock" id="trial-lock" hidden>
+        <div class="icon-picker-card guide-card trial-lock-card">
+          <div class="guide-head">
+            <div class="guide-head-copy">
+              <span class="guide-kicker">Agent Micro</span>
+              <span class="guide-title">무료 기간 종료</span>
+            </div>
+          </div>
+          <p class="provider-lead" id="trial-lock-lead">
+            무료 사용 기간(7일)이 끝났습니다. Gumroad에서 구매한 뒤 라이선스 키를 입력하세요.
+          </p>
+          <label class="voice-label" for="trial-license-key">라이선스 키</label>
+          <input
+            id="trial-license-key"
+            class="voice-input"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="AM-····-····-····-····"
+          />
+          <div class="voice-actions trial-lock-actions">
+            <button type="button" class="voice-btn primary" id="trial-activate">키로 활성화</button>
+            <button type="button" class="voice-btn" id="trial-sponsor" disabled>구매하기</button>
+            <button type="button" class="voice-btn" id="trial-close">창 닫기</button>
+          </div>
+          <p class="icon-picker-hint" id="trial-lock-hint">구매 메일의 키를 붙여넣기 · 구매 링크는 준비 중일 수 있음</p>
+        </div>
+      </div>
+
       <div class="hud">
         <div class="hud-row">
           <span class="hud-label">Link</span>

@@ -1100,6 +1100,39 @@ button {
   color: rgba(20, 70, 150, 0.95);
 }
 
+.voice-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ——— Trial lock (non-dismissible) ——— */
+.trial-lock {
+  z-index: 80;
+  pointer-events: auto;
+}
+
+.trial-lock-card {
+  width: min(300px, calc(100% - 28px));
+}
+
+.trial-lock-actions {
+  margin-top: 8px;
+}
+
+.shell.trial-expired .pad,
+.shell.trial-expired .hud,
+.shell.trial-expired .chrome-actions .chrome-btn:not(.close):not(#btn-min) {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.shell.trial-expired .chrome-actions #btn-min,
+.shell.trial-expired .chrome-actions #btn-close {
+  pointer-events: auto;
+  opacity: 1;
+}
+
 .settings-card {
   width: min(372px, calc(100% - 28px));
   max-height: min(520px, calc(100% - 28px));

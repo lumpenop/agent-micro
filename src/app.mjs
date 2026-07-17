@@ -119,6 +119,7 @@ const state = {
   /** @type {'shift' | 'command'} */
   hotkeyModifier: 'shift',
   canFork: true,
+  trialExpired: false,
 };
 
 function modGlyph(mod = state.hotkeyModifier) {
@@ -128,6 +129,13 @@ function modGlyph(mod = state.hotkeyModifier) {
 const padEl = document.getElementById('pad');
 const canvasHost = document.getElementById('pad-canvas');
 const linkDot = document.getElementById('link-dot');
+const shellEl = document.getElementById('shell');
+const trialLockEl = document.getElementById('trial-lock');
+const trialSponsorBtn = document.getElementById('trial-sponsor');
+const trialCloseBtn = document.getElementById('trial-close');
+const trialHintEl = document.getElementById('trial-lock-hint');
+const trialKeyInput = document.getElementById('trial-license-key');
+const trialActivateBtn = document.getElementById('trial-activate');
 const hud = {
   link: document.getElementById('hud-link'),
   task: document.getElementById('hud-task'),
@@ -142,6 +150,36 @@ const pickerTitle = document.getElementById('icon-picker-title');
 
 function flashAction(text) {
   if (text) hud.action.textContent = text;
+}
+
+function applyTrialLock(status) {
+  const locked = !!(status?.locked ?? status?.expired);
+  state.trialExpired = locked;
+  shellEl?.classList.toggle('trial-expired', locked);
+  if (!locked) {
+    trialLockEl?.setAttribute('hidden', '');
+    return;
+  }
+  closeGuide();
+  closeKeymap();
+  closeSettings();
+  closeVoicePanel();
+  closeIconPicker();
+  trialLockEl?.removeAttribute('hidden');
+  const hasUrl = !!status?.sponsorUrl;
+  if (trialSponsorBtn) {
+    trialSponsorBtn.disabled = !hasUrl;
+  }
+  if (trialHintEl) {
+    trialHintEl.textContent = hasUrl
+      ? '구매 후 메일·페이지의 키를 입력하세요'
+      : '키로 활성화 · 구매 링크는 SPONSOR_URL에 설정';
+  }
+  flashAction('무료 기간 종료');
+}
+
+function trialBlocks() {
+  return !!state.trialExpired;
 }
 
 function statusLabel(s) {
@@ -195,6 +233,7 @@ async function refreshVoiceStatus() {
 }
 
 function openVoicePanel({ fromConnect = false } = {}) {
+  if (trialBlocks()) return;
   closeGuide();
   closeKeymap();
   closeSettings();
@@ -500,6 +539,7 @@ function applyKeyIcons() {
 }
 
 function openIconPicker(cmd) {
+  if (trialBlocks()) return;
   state.pickingCmd = cmd || 'send';
   pickerTitle.textContent = `Icon · ${state.pickingCmd}`;
   const current = state.keyIcons[state.pickingCmd];
@@ -744,6 +784,7 @@ function renderGuideList(items) {
 }
 
 function openGuide() {
+  if (trialBlocks()) return;
   closeIconPicker();
   closeKeymap();
   closeSettings();
@@ -779,6 +820,7 @@ function applyHotkeyModifier(mod) {
 }
 
 function openKeymap() {
+  if (trialBlocks()) return;
   closeIconPicker();
   closeGuide();
   closeSettings();
@@ -823,6 +865,7 @@ function fillSettingsForm(s = {}) {
 }
 
 async function openSettings() {
+  if (trialBlocks()) return;
   closeIconPicker();
   closeGuide();
   closeKeymap();
@@ -963,6 +1006,7 @@ function applyBridgeState(s) {
 }
 
 async function onAgent(index) {
+  if (trialBlocks()) return;
   const now = Date.now();
   const dbl = state.lastAgentTap.index === index && now - state.lastAgentTap.at < 350;
   state.lastAgentTap = { index, at: now };
@@ -983,6 +1027,7 @@ async function runIconAction(cmd) {
 
 /** Mic PTT: hold = talk · double-tap = hands-free latch */
 function onMicPress() {
+  if (trialBlocks()) return;
   const now = Date.now();
   if (now - state.lastMicTap < 350) {
     state.lastMicTap = 0;
@@ -998,10 +1043,12 @@ function onMicPress() {
 }
 
 function onMicRelease() {
+  if (trialBlocks()) return;
   if (state.recording && !micLatched) stopRecording({ process: true });
 }
 
 async function onCmd(cmd) {
+  if (trialBlocks()) return;
   if (cmd === 'mic') {
     // fallback if press/release not wired
     onMicPress();
@@ -1046,6 +1093,7 @@ async function onCmd(cmd) {
 
 let dialAcc = 0;
 function onDialDelta(d) {
+  if (trialBlocks()) return;
   dialAcc += d;
   if (Math.abs(dialAcc) < 28) return;
   const step = dialAcc > 0 ? 1 : -1;
@@ -1063,6 +1111,7 @@ function onDialDelta(d) {
 }
 
 function onJoy(dir) {
+  if (trialBlocks()) return;
   const now = Date.now();
   if (state.lastJoy.dir === dir && now - state.lastJoy.at < 450) return;
   state.lastJoy = { dir, at: now };
@@ -1089,6 +1138,7 @@ try {
     onDialStart: () => flashAction('reasoning control'),
     onJoy,
     onTouch: () => {
+      if (trialBlocks()) return;
       state.layer = (state.layer + 1) % LAYERS.length;
       pad3d?.setLayer?.(state.layer);
       flashAction(`layer · ${layerDisplayName(state.layer)}`);
@@ -1105,6 +1155,10 @@ try {
 }
 
 async function connectAgent({ forceLogin = false } = {}) {
+  if (trialBlocks()) {
+    flashAction('무료 기간 종료');
+    return;
+  }
   linkDot?.classList.add('busy');
   flashAction(forceLogin ? 'Codex 로그인…' : 'CLI connecting…');
   try {
@@ -1150,6 +1204,7 @@ api?.onMicStatus?.((s) => {
 
 /** Mod+QWERDF / Tab / arrows / 1–6 — pad or our CLI context */
 api?.onHotkey?.(({ cmd, phase, dir, index } = {}) => {
+  if (trialBlocks()) return;
   if (!cmd) return;
   const g = modGlyph();
 
@@ -1209,9 +1264,48 @@ api?.getPadPrefs?.().then((prefs) => {
   if (prefs?.hotkeyModifier) applyHotkeyModifier(prefs.hotkeyModifier);
 });
 
+trialSponsorBtn?.addEventListener('click', async () => {
+  const r = await api?.openSponsor?.();
+  if (!r?.ok) flashAction(r?.error || '구매 링크 없음');
+  else flashAction('구매 페이지 열림');
+});
+trialCloseBtn?.addEventListener('click', () => api?.close());
+trialActivateBtn?.addEventListener('click', async () => {
+  const key = trialKeyInput?.value || '';
+  trialActivateBtn.disabled = true;
+  try {
+    const r = await api?.activateLicense?.(key);
+    if (!r?.ok) {
+      flashAction(r?.error || '활성화 실패');
+      return;
+    }
+    applyTrialLock(r.trial || { locked: false, expired: false, licensed: true });
+    if (trialKeyInput) trialKeyInput.value = '';
+    flashAction('라이선스 활성화됨');
+    api?.getState?.().then(applyBridgeState);
+  } finally {
+    trialActivateBtn.disabled = false;
+  }
+});
+trialKeyInput?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') trialActivateBtn?.click();
+});
+
+api?.getTrialStatus?.().then((status) => {
+  applyTrialLock(status);
+  if (!(status?.locked ?? status?.expired)) {
+    state.provider = 'codex';
+    state.linkMode = 'cli';
+    api?.getState?.().then(applyBridgeState);
+  }
+}).catch(() => {
+  state.provider = 'codex';
+  state.linkMode = 'cli';
+  api?.getState?.().then(applyBridgeState);
+});
+
 state.provider = 'codex';
 state.linkMode = 'cli';
-api?.getState?.().then(applyBridgeState);
 
 document.getElementById('voice-close')?.addEventListener('click', async () => {
   const s = await api?.voiceStatus?.();

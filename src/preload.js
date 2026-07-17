@@ -41,6 +41,10 @@ contextBridge.exposeInMainWorld('codexDesktop', {
   getPadPrefs: () => ipcRenderer.invoke('padPrefs:get'),
   setPadPrefs: (partial) => ipcRenderer.invoke('padPrefs:set', partial),
 
+  getTrialStatus: () => ipcRenderer.invoke('trial:get'),
+  openSponsor: () => ipcRenderer.invoke('trial:openSponsor'),
+  activateLicense: (key) => ipcRenderer.invoke('trial:activate', key),
+
   onState: (cb) => {
     const handler = (_e, state) => cb(state);
     ipcRenderer.on('codex:state', handler);

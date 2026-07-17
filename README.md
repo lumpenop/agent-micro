@@ -25,6 +25,11 @@ pnpm install   # Electron + @openai/codex
 pnpm start
 ```
 
+개발 중 7일 잠금 끄기: `AGENT_MICRO_TRIAL_BYPASS=1 pnpm start`  
+라이선스 키 발급(Gumroad 전달용): `node scripts/gen-license.js` / `node scripts/gen-license.js 10`  
+구매 페이지 URL: [`src/trial.js`](src/trial.js) 의 `SPONSOR_URL`  
+키 서명 비밀값: `AGENT_MICRO_LICENSE_SECRET` (배포 전 [`src/license.js`](src/license.js) 기본값 변경)
+
 단축키: `⌘⇧M` — 창 숨기기/보이기 (전역)  
 패드 단축키(**⇧QWERDF · ⇧1–6 · ⇧화살표 · ⇧Tab**)는 패드 창 또는 이 패드로 연 CLI 터미널에서 동작합니다.
 

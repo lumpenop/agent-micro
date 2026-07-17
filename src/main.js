@@ -12,10 +12,19 @@ const {
 } = require('./voice-transcribe');
 const codexSettings = require('./codex-settings');
 const padPrefs = require('./pad-prefs');
+const trial = require('./trial');
 const mac = require('./platform/mac');
 
 let mainWindow = null;
 let bridge = null;
+
+function trialLocked() {
+  return trial.isLocked();
+}
+
+function trialDenied() {
+  return { ok: false, error: 'trial expired', trialExpired: true };
+}
 /** Global pad shortcuts armed while Codex CLI terminal is frontmost */
 let cliPadGlobalsArmed = false;
 let padContextTimer = null;
@@ -58,6 +67,7 @@ function allPadAccelerators() {
 }
 
 function sendHotkey(cmd, phase = 'tap', extra = {}) {
+  if (trialLocked()) return;
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (!mainWindow.isVisible()) return;
   // Pad focused OR our CLI terminal context (globals armed)
@@ -77,6 +87,10 @@ function unregisterCliPadGlobals() {
 }
 
 function registerCliPadGlobals() {
+  if (trialLocked()) {
+    unregisterCliPadGlobals();
+    return;
+  }
   // Re-register every time we arm so failed keys get another chance
   let any = false;
   const list = buildPadGlobalHotkeys();
@@ -110,6 +124,10 @@ function rearmPadHotkeys() {
  */
 async function syncPadHotkeyContext() {
   try {
+    if (trialLocked()) {
+      unregisterCliPadGlobals();
+      return;
+    }
     if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) {
       unregisterCliPadGlobals();
       return;
@@ -419,9 +437,11 @@ function ensureBridge({ autoStart = true } = {}) {
 }
 
 app.whenReady().then(async () => {
-  setVoiceUserDataPath(app.getPath('userData'));
-  codexSettings.setUserDataPath(app.getPath('userData'));
-  padPrefs.setUserDataPath(app.getPath('userData'));
+  const userData = app.getPath('userData');
+  setVoiceUserDataPath(userData);
+  codexSettings.setUserDataPath(userData);
+  padPrefs.setUserDataPath(userData);
+  trial.setUserDataPath(userData);
 
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
     if (permission === 'media' || permission === 'microphone') callback(true);
@@ -435,10 +455,13 @@ app.whenReady().then(async () => {
   installAppMenu();
   createWindow();
 
-  // Codex CLI (app-server) only
-  bridge = createCodexBridge();
-  bindBridge(bridge);
-  setTimeout(() => bridge.start(), 400);
+  const locked = trialLocked();
+  if (!locked) {
+    // Codex CLI (app-server) only
+    bridge = createCodexBridge();
+    bindBridge(bridge);
+    setTimeout(() => bridge.start(), 400);
+  }
 
   // ⌘⇧M always global. Pad keys: pad focused (local) OR Codex CLI terminal frontmost (global).
   globalShortcut.register('CommandOrControl+Shift+M', () => {
@@ -450,12 +473,24 @@ app.whenReady().then(async () => {
     }
     syncPadHotkeyContext();
   });
-  startPadContextWatch();
+  if (!locked) startPadContextWatch();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
+
+function ensureUnlockedRuntime() {
+  if (trialLocked()) return false;
+  if (!bridge) {
+    bridge = createCodexBridge();
+    bindBridge(bridge);
+    setTimeout(() => bridge.start(), 200);
+  }
+  startPadContextWatch();
+  syncPadHotkeyContext();
+  return true;
+}
 
 app.on('window-all-closed', () => {
   bridge?.stop();
@@ -477,8 +512,27 @@ ipcMain.handle('window:suspendPadHotkeys', (_e, suspended) => {
   }
   return true;
 });
-ipcMain.handle('mic:request', () => ensureMicAccess());
+
+ipcMain.handle('trial:get', () => trial.getStatus());
+ipcMain.handle('trial:openSponsor', () => {
+  const url = trial.getSponsorUrl();
+  if (!url) return { ok: false, error: 'no sponsor url' };
+  shell.openExternal(url);
+  return { ok: true };
+});
+ipcMain.handle('trial:activate', (_e, key) => {
+  const r = trial.activateLicense(key);
+  if (!r?.ok) return r;
+  ensureUnlockedRuntime();
+  return { ...r, trial: trial.getStatus() };
+});
+
+ipcMain.handle('mic:request', () => {
+  if (trialLocked()) return false;
+  return ensureMicAccess();
+});
 ipcMain.handle('mic:status', () => {
+  if (trialLocked()) return { granted: false, status: 'denied', whisper: false, trialExpired: true };
   if (process.platform !== 'darwin') return { granted: true, status: 'granted' };
   try {
     const status = systemPreferences.getMediaAccessStatus('microphone');
@@ -488,6 +542,7 @@ ipcMain.handle('mic:status', () => {
   }
 });
 ipcMain.handle('mic:transcribe', async (_e, payload) => {
+  if (trialLocked()) return trialDenied();
   const { base64, mimeType } = payload || {};
   if (!base64) return { ok: false, error: 'empty audio' };
   try {
@@ -498,9 +553,16 @@ ipcMain.handle('mic:transcribe', async (_e, payload) => {
     return { ok: false, error: e.message, code: e.code || 'TRANSCRIBE' };
   }
 });
-ipcMain.handle('mic:whisperReady', () => ({ ok: hasWhisperAuth() }));
-ipcMain.handle('voice:status', () => voiceStatus());
+ipcMain.handle('mic:whisperReady', () => {
+  if (trialLocked()) return { ok: false, trialExpired: true };
+  return { ok: hasWhisperAuth() };
+});
+ipcMain.handle('voice:status', () => {
+  if (trialLocked()) return { ...voiceStatus(), trialExpired: true, needsSetup: false };
+  return voiceStatus();
+});
 ipcMain.handle('voice:setApiKey', (_e, key) => {
+  if (trialLocked()) return trialDenied();
   try {
     const r = writeStoredApiKey(key);
     return { ...r, ...voiceStatus() };
@@ -508,17 +570,28 @@ ipcMain.handle('voice:setApiKey', (_e, key) => {
     return { ok: false, error: e.message, ...voiceStatus() };
   }
 });
-ipcMain.handle('voice:skipSetup', () => markVoiceSetupDone({ skipped: true }));
+ipcMain.handle('voice:skipSetup', () => {
+  if (trialLocked()) return trialDenied();
+  return markVoiceSetupDone({ skipped: true });
+});
 ipcMain.handle('voice:openApiKeysPage', () => {
+  if (trialLocked()) return false;
   shell.openExternal('https://platform.openai.com/api-keys');
   return true;
 });
-ipcMain.handle('codexSettings:get', () => ({
-  settings: codexSettings.load(),
-  meta: codexSettings.meta(),
-}));
-ipcMain.handle('codexSettings:save', (_e, partial) => codexSettings.save(partial || {}));
+ipcMain.handle('codexSettings:get', () => {
+  if (trialLocked()) return { settings: null, meta: null, trialExpired: true };
+  return {
+    settings: codexSettings.load(),
+    meta: codexSettings.meta(),
+  };
+});
+ipcMain.handle('codexSettings:save', (_e, partial) => {
+  if (trialLocked()) return trialDenied();
+  return codexSettings.save(partial || {});
+});
 ipcMain.handle('codexSettings:writeIgnore', async () => {
+  if (trialLocked()) return trialDenied();
   const { dialog } = require('electron');
   const r = await dialog.showOpenDialog(mainWindow, {
     title: '.codexignore 저장 폴더',
@@ -528,11 +601,13 @@ ipcMain.handle('codexSettings:writeIgnore', async () => {
   return codexSettings.writeCodexIgnore(r.filePaths[0]);
 });
 ipcMain.handle('codexSettings:openConfig', () => {
+  if (trialLocked()) return trialDenied();
   const p = codexSettings.meta().configPath;
   return shell.openPath(p);
 });
 ipcMain.handle('padPrefs:get', () => padPrefs.load());
 ipcMain.handle('padPrefs:set', (_e, partial) => {
+  if (trialLocked()) return trialDenied();
   const next = padPrefs.save(partial || {});
   rearmPadHotkeys();
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -541,38 +616,73 @@ ipcMain.handle('padPrefs:set', (_e, partial) => {
   return next;
 });
 ipcMain.handle('voice:beginDictation', async () => {
+  if (trialLocked()) return trialDenied();
   if (!bridge?.beginVoiceDictation) {
     return { ok: false, error: 'dictation not supported' };
   }
   return bridge.beginVoiceDictation();
 });
 ipcMain.handle('voice:endDictation', async () => {
+  if (trialLocked()) return trialDenied();
   const r = (await bridge?.endVoiceDictation?.()) || { ok: false };
   refocusPad(280);
   return r;
 });
 
-ipcMain.handle('codex:getState', () => bridge?.getState());
+ipcMain.handle('codex:getState', () => {
+  if (trialLocked()) return null;
+  return bridge?.getState();
+});
 ipcMain.handle('codex:select', async (_e, index, focus) => {
+  if (trialLocked()) return trialDenied();
   // Opens Codex CLI window/split — then arm globals if terminal takes focus
   const r = await bridge?.select(index, { focus });
   setTimeout(() => syncPadHotkeyContext(), 400);
   return r;
 });
-ipcMain.handle('codex:approve', () => bridge?.approve());
-ipcMain.handle('codex:decline', () => bridge?.decline());
-ipcMain.handle('codex:fork', () => bridge?.fork());
-ipcMain.handle('codex:send', (_e, text) => bridge?.send(text));
-ipcMain.handle('codex:setReasoning', (_e, index) => bridge?.setReasoning(index));
-ipcMain.handle('codex:toggleFast', () => bridge?.toggleFast());
-ipcMain.handle('codex:togglePlan', () => bridge?.togglePlan());
-ipcMain.handle('codex:skill', (_e, name) => bridge?.skill(name));
-ipcMain.handle('codex:newChat', () => bridge?.newChat());
+ipcMain.handle('codex:approve', () => {
+  if (trialLocked()) return trialDenied();
+  return bridge?.approve();
+});
+ipcMain.handle('codex:decline', () => {
+  if (trialLocked()) return trialDenied();
+  return bridge?.decline();
+});
+ipcMain.handle('codex:fork', () => {
+  if (trialLocked()) return trialDenied();
+  return bridge?.fork();
+});
+ipcMain.handle('codex:send', (_e, text) => {
+  if (trialLocked()) return trialDenied();
+  return bridge?.send(text);
+});
+ipcMain.handle('codex:setReasoning', (_e, index) => {
+  if (trialLocked()) return trialDenied();
+  return bridge?.setReasoning(index);
+});
+ipcMain.handle('codex:toggleFast', () => {
+  if (trialLocked()) return trialDenied();
+  return bridge?.toggleFast();
+});
+ipcMain.handle('codex:togglePlan', () => {
+  if (trialLocked()) return trialDenied();
+  return bridge?.togglePlan();
+});
+ipcMain.handle('codex:skill', (_e, name) => {
+  if (trialLocked()) return trialDenied();
+  return bridge?.skill(name);
+});
+ipcMain.handle('codex:newChat', () => {
+  if (trialLocked()) return trialDenied();
+  return bridge?.newChat();
+});
 ipcMain.handle('codex:desktop', async (_e, action) => {
+  if (trialLocked()) return trialDenied();
   // Legacy name — maps to CLI agent/nav helpers in the bridge
   return bridge?.desktopAction(action);
 });
 ipcMain.handle('codex:voice', async (_e, text) => {
+  if (trialLocked()) return trialDenied();
   if (!bridge?.voiceToCodex) {
     await bridge?.send?.(text);
     return { ok: true, mode: 'send-only' };
@@ -580,14 +690,24 @@ ipcMain.handle('codex:voice', async (_e, text) => {
   return bridge.voiceToCodex(text);
 });
 ipcMain.handle('codex:focusApp', () => {
+  if (trialLocked()) return false;
   focusCodexDesktop();
   bridge?.focusApp?.();
   refocusPad(320);
   return true;
 });
-ipcMain.handle('codex:linkInfo', () => bridge?.getLinkInfo());
-ipcMain.handle('codex:loginStatus', () => bridge?.checkLogin());
-ipcMain.handle('codex:login', () => bridge?.login());
+ipcMain.handle('codex:linkInfo', () => {
+  if (trialLocked()) return { connected: false, trialExpired: true };
+  return bridge?.getLinkInfo();
+});
+ipcMain.handle('codex:loginStatus', () => {
+  if (trialLocked()) return { ok: false, trialExpired: true };
+  return bridge?.checkLogin();
+});
+ipcMain.handle('codex:login', () => {
+  if (trialLocked()) return trialDenied();
+  return bridge?.login();
+});
 function withVoiceSetup(result) {
   const base = result && typeof result === 'object' ? result : { ok: !!result };
   const needsSetup = !!(base.ok && needsVoiceSetup());
@@ -601,11 +721,13 @@ function withVoiceSetup(result) {
 }
 
 ipcMain.handle('codex:connect', async (_e, opts) => {
+  if (trialLocked()) return trialDenied();
   ensureBridge({ autoStart: false });
   const result = await bridge.connect(opts || {});
   return withVoiceSetup(result);
 });
 ipcMain.handle('codex:reconnect', async () => {
+  if (trialLocked()) return trialDenied();
   ensureBridge({ autoStart: false });
   const info = bridge.getLinkInfo?.() || {};
   let result;
