@@ -20,16 +20,16 @@ const LAYOUT = [
   ['touch', 'cmd:mic', null, 'cmd:send'], // mic spans 2 via special case
 ];
 
-/** Per-icon face size — codex a bit up, mic more down, others slightly down */
+/** Per-icon face size — codex/mic settled halfway from last tweak */
 function iconPlaneSize(iconId, wide = false) {
-  if (iconId === 'codex') return wide ? 0.64 : 0.54;
-  if (iconId === 'mic') return wide ? 0.46 : 0.4;
+  if (iconId === 'codex') return wide ? 0.58 : 0.49;
+  if (iconId === 'mic') return wide ? 0.49 : 0.42;
   return wide ? 0.54 : 0.44;
 }
 
 function iconTexFill(iconId) {
-  if (iconId === 'codex') return 0.78;
-  if (iconId === 'mic') return 0.56;
+  if (iconId === 'codex') return 0.71;
+  if (iconId === 'mic') return 0.61;
   return 0.64;
 }
 
@@ -293,7 +293,7 @@ function keycapMesh({ wide = false, frost = false, iconId = null } = {}) {
         map: glowTexture(),
         color: STATUS_COLOR.idle,
         transparent: true,
-        opacity: 0.92,
+        opacity: 0.82,
         toneMapped: false,
         depthTest: false,
         depthWrite: false,
@@ -1137,29 +1137,31 @@ export function createPad3D(container, handlers = {}) {
       a.userData.selected = selected;
       const color = STATUS_COLOR[status] ?? STATUS_COLOR.idle;
       const off = status === 'off';
-      // Default = status color; selected = status + white mix (subtle lift)
+      // Disc = status color (default slightly soft; selected = richer)
+      // Light bloom = status + white mix
       const base = new THREE.Color(off ? STATUS_COLOR.idle : color);
-      const lit = base.clone();
-      if (selected && !off) lit.lerp(new THREE.Color(0xffffff), 0.28);
+      const disc = base.clone();
+      if (selected && !off) disc.offsetHSL(0, 0.2, -0.06);
+      else if (!off) disc.lerp(new THREE.Color(0xffffff), 0.14);
       if (a.userData.glow) {
-        a.userData.glow.material.color.copy(lit);
-        a.userData.glow.material.opacity = off ? 0.82 : selected ? 0.98 : 0.95;
+        a.userData.glow.material.color.copy(disc);
+        a.userData.glow.material.opacity = off ? 0.72 : selected ? 1 : 0.82;
         a.userData.glow.visible = true;
         placeAgentGlow(a);
       }
       if (a.userData.light) {
-        // Light = same two-tone: status hue mixed with white
         const lightCol = base.clone();
-        if (selected && !off) lightCol.lerp(new THREE.Color(0xffffff), 0.4);
+        if (selected && !off) lightCol.lerp(new THREE.Color(0xffffff), 0.35);
+        else lightCol.lerp(new THREE.Color(0xffffff), 0.12);
         a.userData.light.color.copy(lightCol);
         a.userData.light.intensity = off
           ? 0.55
           : selected
-            ? 3.2
+            ? 4.0
             : status === 'thinking'
               ? 2.0
               : 1.35;
-        a.userData.light.distance = selected && !off ? 2.2 : 2.0;
+        a.userData.light.distance = selected && !off ? 2.35 : 2.0;
       }
       // selection reads via glow/halo/light only — scaling made the last
       // clicked key look stuck in a pressed/enlarged state
