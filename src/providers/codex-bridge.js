@@ -841,25 +841,32 @@ class CodexBridge extends EventEmitter {
 
   async desktopAction(action) {
     switch (action) {
-      case 'historyBack':
+      case 'agentPrev':
         this.select((this.selected - 1 + 6) % 6);
-        break;
-      case 'historyForward':
+        return { ok: true, action };
+      case 'agentNext':
         this.select((this.selected + 1) % 6);
-        break;
+        return { ok: true, action };
+      case 'historyBack':
+      case 'historyForward':
       case 'sidebar':
-        this.emitState(lt('bridge.sidebar'));
-        break;
       case 'composer':
-        focusChatGPT();
-        this.emitState(lt('bridge.composer'));
-        break;
       case 'newChat':
-      case 'newDesktopChat':
-        await this.newChat();
-        break;
+      case 'newDesktopChat': {
+        const shortcut = action === 'newDesktopChat' ? 'newChat' : action;
+        try {
+          const r = await mac.desktopShortcut(shortcut);
+          this.emitState(r?.label || shortcut);
+          return r;
+        } catch (e) {
+          this.emit('log', `desktop ${shortcut}: ${e.message}`);
+          this.emitState(lt('bridge.unknown', { action: shortcut }));
+          return { ok: false, reason: e.message };
+        }
+      }
       default:
         this.emitState(lt('bridge.unknown', { action }));
+        return { ok: false, reason: 'unknown' };
     }
   }
 

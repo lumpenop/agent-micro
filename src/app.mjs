@@ -24,15 +24,20 @@ const STORAGE_KEY = 'agent-micro-key-icons-v1';
 const CUSTOM_ICONS_KEY = 'agent-micro-custom-icons-v1';
 const MAX_CUSTOM_ICONS = 32;
 
-/** Joystick layers → visible Agent CLI (send/skill) or slot nav */
+/**
+ * Joystick layers (Touch cycles these):
+ * - Codex: CLI session control (plan, new chat, agent slot history)
+ * - Prompts: inject canned skills (review / docs / refactor / debug)
+ * - App: desktop Codex UI shortcuts (composer, sidebar, chat history, new chat)
+ */
 const LAYERS = [
   {
     name: 'Codex',
     joy: {
       up: () => api?.togglePlan(),
       down: () => api?.newChat(),
-      left: () => api?.desktop('historyBack'),
-      right: () => api?.desktop('historyForward'),
+      left: () => api?.desktop('agentPrev'),
+      right: () => api?.desktop('agentNext'),
     },
   },
   {
@@ -47,10 +52,10 @@ const LAYERS = [
   {
     name: 'App',
     joy: {
-      up: () => api?.send('Continue.'),
-      down: () => api?.skill('explain'),
-      left: () => api?.fork(),
-      right: () => api?.newChat(),
+      up: () => api?.desktop('composer'),
+      down: () => api?.desktop('sidebar'),
+      left: () => api?.desktop('historyBack'),
+      right: () => api?.desktop('newChat'),
     },
   },
 ];
