@@ -547,7 +547,7 @@ button {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 12px 12px 12px;
+  padding: 10px 10px 10px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.82);
   border: 1px solid rgba(255, 255, 255, 0.7);
@@ -556,7 +556,7 @@ button {
 
 .icon-picker-card > .modal-scroll {
   /* Extra inset so active outline isn't clipped on left/top */
-  padding: 5px 6px 8px 6px;
+  padding: 4px 4px 6px 4px;
   scrollbar-gutter: stable;
 }
 
@@ -565,9 +565,9 @@ button {
   align-items: center;
   justify-content: space-between;
   flex: 0 0 auto;
-  margin-bottom: 5px;
+  margin-bottom: 4px;
   padding: 0 2px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: rgba(0, 0, 0, 0.7);
@@ -576,7 +576,7 @@ button {
 .icon-picker-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 9px;
+  gap: 7px;
   width: 100%;
   box-sizing: border-box;
 }
@@ -591,11 +591,11 @@ button {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
   color: var(--ink);
   cursor: pointer;
   transition: transform 0.08s ease, box-shadow 0.12s ease;
-  padding: 6px 3px 5px;
+  padding: 4px 2px 3px;
   min-width: 0;
 }
 
@@ -611,12 +611,16 @@ button {
 
 .icon-pick svg,
 .icon-svg {
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   display: block;
   flex-shrink: 0;
   shape-rendering: geometricPrecision;
   overflow: visible;
+}
+
+.icon-pick .icon-stroke {
+  stroke-width: 2.35;
 }
 
 .icon-pick .icon-evenodd,
@@ -781,7 +785,7 @@ button {
 .guide-card {
   width: min(348px, calc(100% - 28px));
   max-height: min(480px, calc(100% - 32px));
-  padding: 14px 12px 12px;
+  padding: 10px 8px 8px;
   background:
     linear-gradient(165deg, rgba(255, 255, 255, 0.92), rgba(246, 248, 251, 0.86));
   border: 1px solid rgba(255, 255, 255, 0.78);
@@ -795,9 +799,9 @@ button {
   align-items: flex-start;
   justify-content: space-between;
   flex: 0 0 auto;
-  gap: 12px;
-  margin-bottom: 5px;
-  padding: 0 4px 5px;
+  gap: 8px;
+  margin-bottom: 2px;
+  padding: 0 1px 3px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
@@ -816,7 +820,7 @@ button {
 }
 
 .guide-title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 650;
   letter-spacing: -0.02em;
   color: rgba(16, 20, 26, 0.9);
@@ -825,14 +829,14 @@ button {
 .guide-body {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 0 2px 2px;
+  gap: 7px;
+  padding: 0;
 }
 
 .guide-group {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 3px;
 }
 
 .guide-section {
@@ -841,16 +845,16 @@ button {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: rgba(0, 0, 0, 0.34);
-  padding: 0 2px 2px;
+  padding: 1px 1px 0;
 }
 
 .guide-item {
   display: grid;
-  grid-template-columns: 68px 1fr;
-  gap: 10px;
+  grid-template-columns: 52px 1fr;
+  gap: 6px;
   align-items: stretch;
-  padding: 8px;
-  border-radius: 12px;
+  padding: 3px 4px;
+  border-radius: 10px;
   background: rgba(241, 242, 244, 0.72);
   border: 1px solid rgba(0, 0, 0, 0.04);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
@@ -862,7 +866,7 @@ button {
 }
 
 .guide-item-key {
-  min-height: 52px;
+  min-height: 40px;
   align-self: stretch;
   display: grid;
   place-items: center;
@@ -870,14 +874,14 @@ button {
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.01em;
-  color: #2e3034;
+  color: #1e2024;
   background:
     linear-gradient(180deg, #fafafa 0%, #f7f7f6 42%, #eeebe8 100%);
   border: 1px solid rgba(120, 118, 112, 0.28);
-  border-radius: 10px;
-  padding: 6px 5px;
+  border-radius: 9px;
+  padding: 2px 1px;
   text-align: center;
-  line-height: 1.15;
+  line-height: 1.1;
   white-space: pre-line;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.95),
@@ -887,11 +891,11 @@ button {
 }
 
 .guide-item-key--wrap {
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: -0.01em;
-  padding: 6px 3px;
+  font-size: 12.5px;
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+  padding: 2px 1px;
   word-break: keep-all;
 }
 
@@ -900,26 +904,61 @@ button {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 2px;
   line-height: 1;
 }
 
 .guide-chord-mods {
   font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  color: #2a2c30;
+  letter-spacing: 0.01em;
+  color: #1e2024;
 }
 
 .guide-chord-key {
   font-size: 13px;
   font-weight: 800;
-  letter-spacing: 0.02em;
-  color: #1e2024;
+  letter-spacing: 0.01em;
+  color: #141618;
+}
+
+.guide-chord--plus .guide-chord-mods,
+.guide-chord--plus .guide-chord-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
+
+.guide-chord-plus {
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(40, 44, 50, 0.4);
+  padding: 0 1px;
+  line-height: 1;
+}
+
+/* Larger chord / stacked control badges (Hide window, Touch · layer) */
+.guide-item-key--chord-lg .guide-chord-mods,
+.guide-item-key--chord-lg .guide-chord-key {
+  font-size: 15px;
+}
+
+.guide-item-key--chord-lg .guide-chord-plus {
+  font-size: 10px;
+  padding: 0 1.5px;
+}
+
+.guide-item-key--chord-lg.guide-item-key--stack .guide-key-mod {
+  font-size: 16px;
+}
+
+.guide-item-key--chord-lg.guide-item-key--stack .guide-key-word {
+  font-size: 13px;
 }
 
 .guide-key-slash {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   color: rgba(40, 44, 50, 0.45);
   line-height: 1;
@@ -927,8 +966,8 @@ button {
 }
 
 .guide-key-dot {
-  width: 7px;
-  height: 7px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background: #3ecf7a;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
@@ -937,23 +976,23 @@ button {
 
 .guide-key-mod {
   font-family: "SF Pro Text", "SF Pro Symbols", "Apple Symbols", "Segoe UI Symbol", sans-serif;
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 700;
   line-height: 1;
-  color: #1e2024;
+  color: #141618;
   flex-shrink: 0;
 }
 
 .guide-key-word {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.02em;
   line-height: 1;
-  color: #1e2024;
+  color: #141618;
 }
 
 .guide-key-word--lg {
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .guide-item-key--icons {
@@ -961,31 +1000,73 @@ button {
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 4px;
-  padding: 7px 5px;
+  gap: 2px;
+  padding: 2px 1px;
   white-space: normal;
+}
+
+/* Single glyph — compact, not dominating the badge */
+.guide-item-key--single .guide-ico {
+  width: 15px;
+  height: 15px;
+}
+
+.guide-item-key--single .guide-key-word,
+.guide-item-key--single .guide-key-word--lg {
+  font-size: 11px;
+}
+
+.guide-item-key--single .guide-ico .icon-stroke {
+  stroke-width: 2.1;
+}
+
+/* Multi glyphs — each piece smaller so the set fits */
+.guide-item-key--multi .guide-ico {
+  width: 12px;
+  height: 12px;
+}
+
+.guide-item-key--multi .guide-key-mod {
+  font-size: 13px;
+}
+
+.guide-item-key--multi .guide-key-word {
+  font-size: 11px;
+}
+
+.guide-item-key--multi .guide-key-slash {
+  font-size: 11px;
+}
+
+.guide-item-key--multi .guide-key-dot {
+  width: 7px;
+  height: 7px;
+}
+
+.guide-item-key--multi .guide-ico .icon-stroke {
+  stroke-width: 2.35;
 }
 
 .guide-item-key--stack {
   flex-direction: column;
   flex-wrap: nowrap;
-  gap: 4px;
-  padding: 8px 5px;
+  gap: 1px;
+  padding: 3px 1px;
 }
 
 .guide-item-key--arrow-pair {
-  gap: 6px;
+  gap: 4px;
 }
 
 .guide-item-key--arrow-pair .guide-ico--arrow {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 
 .guide-ico--arrow {
-  width: 16px;
-  height: 16px;
-  color: rgba(22, 26, 32, 0.92);
+  width: 14px;
+  height: 14px;
+  color: rgba(18, 22, 28, 0.94);
 }
 
 .guide-ico--arrow .icon-svg {
@@ -996,19 +1077,19 @@ button {
 
 .guide-joy-pad {
   display: grid;
-  grid-template-columns: repeat(3, 15px);
-  grid-template-rows: repeat(3, 15px);
-  gap: 2px;
+  grid-template-columns: repeat(3, 13px);
+  grid-template-rows: repeat(3, 13px);
+  gap: 1px;
   place-items: center;
 }
 
 .guide-joy-pad .guide-ico--arrow {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
 }
 
 .guide-item-key--agents {
-  padding: 5px 4px;
+  padding: 3px 2px;
   white-space: normal;
   background:
     linear-gradient(180deg, #2a323a 0%, #1c2228 100%);
@@ -1060,9 +1141,9 @@ button {
 
 .guide-ico {
   display: inline-flex;
-  width: 14px;
-  height: 14px;
-  color: rgba(20, 24, 30, 0.78);
+  width: 15px;
+  height: 15px;
+  color: rgba(16, 20, 26, 0.9);
 }
 
 .guide-ico svg,
@@ -1071,6 +1152,10 @@ button {
   height: 100%;
   display: block;
   shape-rendering: geometricPrecision;
+}
+
+.guide-ico .icon-stroke {
+  stroke-width: 2.25;
 }
 
 .guide-ico .icon-evenodd {
@@ -1088,7 +1173,7 @@ button {
 
 .guide-item-text {
   font-size: 11px;
-  line-height: 1.4;
+  line-height: 1.3;
   color: rgba(20, 24, 30, 0.58);
 }
 
@@ -1098,7 +1183,7 @@ button {
   font-weight: 650;
   letter-spacing: -0.01em;
   color: rgba(16, 20, 26, 0.88);
-  margin-bottom: 1px;
+  margin-bottom: 0;
 }
 
 .guide-foot {
@@ -1107,9 +1192,9 @@ button {
   justify-content: center;
   flex: 0 0 auto;
   flex-wrap: wrap;
-  gap: 6px 8px;
-  margin-top: 5px;
-  padding-top: 5px;
+  gap: 4px 6px;
+  margin-top: 2px;
+  padding-top: 3px;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
   font-size: 10px;
   color: rgba(0, 0, 0, 0.42);
@@ -1157,16 +1242,16 @@ button {
 }
 
 .mod-picker {
-  margin: 0 2px 10px;
-  padding: 10px 10px 8px;
-  border-radius: 12px;
+  margin: 0 0 6px;
+  padding: 6px 7px 5px;
+  border-radius: 10px;
   background: rgba(16, 20, 26, 0.05);
   border: 1px solid rgba(16, 20, 26, 0.06);
 }
 
 .mod-picker-label {
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: 5px;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -1184,9 +1269,9 @@ button {
   appearance: none;
   border: 1px solid rgba(16, 20, 26, 0.1);
   border-radius: 9px;
-  padding: 8px 10px;
+  padding: 7px 8px;
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: rgba(20, 24, 30, 0.55);
   background: rgba(255, 255, 255, 0.55);

@@ -627,6 +627,7 @@ function getGuideItems() {
     },
     {
       key: '⌘⇧M',
+      keyLarge: true,
       title: t('guide.hide.title'),
       text: t('guide.hide.text'),
     },
@@ -677,6 +678,7 @@ function buildKeymapItems(g = modGlyph()) {
     {
       marks: ['mod', 'tab'],
       stack: true,
+      keyLarge: true,
       title: t('map.touch.title'),
       text: t('map.touch.text'),
     },
@@ -781,40 +783,68 @@ function guideMarksHtml(marks) {
 
 function formatGuideKeyLabel(key) {
   const s = String(key || '');
-  // ⌘⇧M / ⇧Tab → mods on top, key below (fills the badge vertically)
+  // ⌘⇧M / ⇧Tab → stack with + between each piece
   const chord = s.match(/^([⌘⇧⌃⌥]+)(.+)$/u);
   if (chord && !/\n/.test(s) && chord[2].length <= 4) {
-    return `<span class="guide-chord"><span class="guide-chord-mods">${chord[1]}</span><span class="guide-chord-key">${chord[2]}</span></span>`;
+    const parts = [...chord[1], chord[2]];
+    const plus = '<span class="guide-chord-plus">+</span>';
+    if (parts.length >= 3) {
+      const top = parts.slice(0, -1).join(plus);
+      const bot = `${plus}${parts[parts.length - 1]}`;
+      return `<span class="guide-chord guide-chord--plus"><span class="guide-chord-mods">${top}</span><span class="guide-chord-key">${bot}</span></span>`;
+    }
+    return `<span class="guide-chord guide-chord--plus"><span class="guide-chord-mods">${parts[0]}</span><span class="guide-chord-key">${plus}${parts[1]}</span></span>`;
   }
   const html = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\n/g, '<br>');
   return html;
 }
 
+/** single = one glyph in the badge · multi = 2+ pieces / joy pad / arrow pair */
+function guideBadgeDensity(item) {
+  if (item.icons?.length) return item.icons.length === 1 ? 'single' : 'multi';
+  if (item.marks?.length) {
+    if (item.marks.includes('joyPad')) return 'multi';
+    return item.marks.length === 1 ? 'single' : 'multi';
+  }
+  return null;
+}
+
 function guideKeyHtml(item) {
   if (item.visual === 'agents') return guideAgentsVisual();
   if (item.marks?.length) {
+    const density = guideBadgeDensity(item);
     const arrowPair =
       item.marks.length === 2 &&
       item.marks.every((m) => m === 'up' || m === 'down' || m === 'left' || m === 'right');
     const cls = [
       'guide-item-key',
       'guide-item-key--icons',
+      density === 'single' ? 'guide-item-key--single' : 'guide-item-key--multi',
       item.stack ? 'guide-item-key--stack' : '',
       arrowPair ? 'guide-item-key--arrow-pair' : '',
+      item.keyLarge ? 'guide-item-key--chord-lg' : '',
     ]
       .filter(Boolean)
       .join(' ');
     return `<div class="${cls}">${guideMarksHtml(item.marks)}</div>`;
   }
   if (item.icons?.length) {
+    const density = guideBadgeDensity(item);
     const icons = item.icons
       .map((id) => `<span class="guide-ico">${iconMarkup(id)}</span>`)
       .join('<span class="guide-ico-sep" aria-hidden="true"></span>');
-    return `<div class="guide-item-key guide-item-key--icons">${icons}</div>`;
+    const densCls = density === 'single' ? 'guide-item-key--single' : 'guide-item-key--multi';
+    return `<div class="guide-item-key guide-item-key--icons ${densCls}">${icons}</div>`;
   }
   const raw = String(item.key || '');
   const wrap = raw.includes('\n') || raw.length > 7;
-  const cls = wrap ? 'guide-item-key guide-item-key--wrap' : 'guide-item-key';
+  const cls = [
+    'guide-item-key',
+    wrap ? 'guide-item-key--wrap' : '',
+    item.keyLarge ? 'guide-item-key--chord-lg' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
   return `<div class="${cls}">${formatGuideKeyLabel(raw)}</div>`;
 }
 
