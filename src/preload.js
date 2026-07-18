@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld('codexDesktop', {
   getCodexSettings: () => ipcRenderer.invoke('codexSettings:get'),
   saveCodexSettings: (partial) => ipcRenderer.invoke('codexSettings:save', partial),
   chooseCodexWorkingDirectory: () => ipcRenderer.invoke('codexSettings:chooseWorkingDirectory'),
+  getResourceUsage: () => ipcRenderer.invoke('resources:getUsage'),
   writeCodexIgnore: () => ipcRenderer.invoke('codexSettings:writeIgnore'),
   openCodexConfig: () => ipcRenderer.invoke('codexSettings:openConfig'),
   getPadPrefs: () => ipcRenderer.invoke('padPrefs:get'),

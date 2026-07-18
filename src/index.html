@@ -288,17 +288,126 @@
             </div>
 
             <div class="settings-field">
-              <label class="voice-label" for="set-job" data-i18n="settings.job">Job max runtime (sec)</label>
-              <input id="set-job" class="voice-input" type="number" min="60" max="86400" step="60" />
-              <p class="settings-desc" data-i18n="settings.job.desc">Stop runaway jobs.</p>
-            </div>
-
-            <div class="settings-field">
               <label class="settings-check" for="set-proxy">
                 <input id="set-proxy" type="checkbox" />
                 <span data-i18n="settings.proxy">network_proxy · Network proxy</span>
               </label>
               <p class="settings-desc" data-i18n="settings.proxy.desc">Finer control of model network calls.</p>
+            </div>
+
+            <div class="settings-section">
+              <p class="settings-section-title" data-i18n="settings.agents">Agents</p>
+              <div class="settings-row">
+                <div class="settings-field">
+                  <label class="voice-label" for="set-max-threads" data-i18n="settings.maxThreads">Concurrent threads</label>
+                  <input id="set-max-threads" class="voice-input" type="number" min="1" max="64" step="1" />
+                  <p class="settings-desc" data-i18n="settings.maxThreads.desc">Maximum concurrently open agent threads. Default 6.</p>
+                </div>
+                <div class="settings-field">
+                  <label class="voice-label" for="set-max-depth" data-i18n="settings.maxDepth">Spawn depth</label>
+                  <input id="set-max-depth" class="voice-input" type="number" min="0" max="4" step="1" />
+                  <p class="settings-desc" data-i18n="settings.maxDepth.desc">1 allows direct child agents. Higher values allow recursive delegation.</p>
+                </div>
+              </div>
+              <div class="settings-field">
+                <label class="voice-label" for="set-job" data-i18n="settings.job">Job max runtime (sec)</label>
+                <input id="set-job" class="voice-input" type="number" min="60" max="86400" step="60" />
+                <p class="settings-desc" data-i18n="settings.job.desc">Stop runaway jobs.</p>
+              </div>
+              <div class="settings-field">
+                <label class="settings-check" for="set-interrupt-message">
+                  <input id="set-interrupt-message" type="checkbox" />
+                  <span data-i18n="settings.interruptMessage">Record interruption messages</span>
+                </label>
+                <p class="settings-desc" data-i18n="settings.interruptMessage.desc">Keeps an interruption note in the agent context when a turn is stopped.</p>
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <p class="settings-section-title" data-i18n="settings.agentRoles">Custom agent roles</p>
+              <div class="settings-row">
+                <div class="settings-field">
+                  <label class="voice-label" for="set-agent-role" data-i18n="settings.agentRole">Role</label>
+                  <select id="set-agent-role" class="voice-input settings-select"></select>
+                </div>
+                <div class="settings-field settings-field--actions">
+                  <div class="voice-actions settings-inline-actions">
+                    <button type="button" class="voice-btn" id="settings-agent-add" data-i18n="settings.agentAdd">Add</button>
+                    <button type="button" class="voice-btn" id="settings-agent-delete" data-i18n="settings.agentDelete">Delete</button>
+                  </div>
+                </div>
+              </div>
+              <div id="set-agent-editor">
+                <div class="settings-field">
+                  <label class="settings-check" for="set-agent-enabled"><input id="set-agent-enabled" type="checkbox" /><span data-i18n="settings.agentEnabled">Enabled</span></label>
+                </div>
+                <div class="settings-field">
+                  <label class="voice-label" for="set-agent-name" data-i18n="settings.agentName">Role name</label>
+                  <input id="set-agent-name" class="voice-input" type="text" maxlength="48" placeholder="reviewer" />
+                </div>
+                <div class="settings-field">
+                  <label class="voice-label" for="set-agent-description" data-i18n="settings.agentDescription">When to use this role</label>
+                  <textarea id="set-agent-description" class="voice-input" rows="2" maxlength="1000"></textarea>
+                </div>
+                <div class="settings-field">
+                  <label class="voice-label" for="set-agent-instructions" data-i18n="settings.agentInstructions">Developer instructions</label>
+                  <textarea id="set-agent-instructions" class="voice-input" rows="5" maxlength="20000"></textarea>
+                </div>
+                <div class="settings-row">
+                  <div class="settings-field"><label class="voice-label" for="set-agent-model" data-i18n="settings.agentModel">Model override</label><input id="set-agent-model" class="voice-input" type="text" placeholder="Automatic" /></div>
+                  <div class="settings-field"><label class="voice-label" for="set-agent-reasoning" data-i18n="settings.reasoning">Reasoning effort</label><select id="set-agent-reasoning" class="voice-input settings-select"><option value="" data-i18n="settings.auto">Automatic</option><option value="minimal">minimal</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option><option value="xhigh">xhigh</option></select></div>
+                </div>
+                <p class="settings-desc" data-i18n="settings.agentRoles.desc">Saved as Agent Micro-managed files under ~/.codex/agents. Existing user files are never overwritten.</p>
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <p class="settings-section-title" data-i18n="settings.resources">Resource management</p>
+              <div class="settings-field">
+                <label class="voice-label" for="set-resource-preset" data-i18n="settings.resourcePreset">Preset</label>
+                <select id="set-resource-preset" class="voice-input settings-select">
+                  <option value="saver" data-i18n="settings.resourcePreset.saver">Saver</option>
+                  <option value="balanced" data-i18n="settings.resourcePreset.balanced">Balanced</option>
+                  <option value="performance" data-i18n="settings.resourcePreset.performance">Maximum performance</option>
+                  <option value="custom" data-i18n="settings.resourcePreset.custom">Custom</option>
+                </select>
+                <p class="settings-desc" data-i18n="settings.resourcePreset.desc">Presets adjust reasoning, concurrency, depth, runtime, and context limits.</p>
+              </div>
+              <div class="settings-field">
+                <label class="settings-check" for="set-rollout-budget">
+                  <input id="set-rollout-budget" type="checkbox" />
+                  <span data-i18n="settings.rolloutBudget">Token rollout budget</span>
+                </label>
+                <p class="settings-desc" data-i18n="settings.rolloutBudget.desc">Experimental token tracking and reminders; not a currency spending cap.</p>
+              </div>
+              <div class="settings-row">
+                <div class="settings-field">
+                  <label class="voice-label" for="set-rollout-limit" data-i18n="settings.rolloutLimit">Token limit</label>
+                  <input id="set-rollout-limit" class="voice-input" type="number" min="10000" max="2000000" step="10000" />
+                </div>
+                <div class="settings-field">
+                  <label class="voice-label" for="set-rollout-reminder" data-i18n="settings.rolloutReminder">Reminder interval</label>
+                  <input id="set-rollout-reminder" class="voice-input" type="number" min="1000" max="500000" step="1000" />
+                </div>
+              </div>
+              <div class="settings-row">
+                <div class="settings-field">
+                  <label class="voice-label" for="set-compact-limit" data-i18n="settings.compactLimit">Auto compact tokens</label>
+                  <input id="set-compact-limit" class="voice-input" type="number" min="0" max="2000000" step="1000" />
+                  <p class="settings-desc" data-i18n="settings.zeroAuto">0 uses the model default.</p>
+                </div>
+                <div class="settings-field">
+                  <label class="voice-label" for="set-tool-output-limit" data-i18n="settings.toolOutputLimit">Tool output tokens</label>
+                  <input id="set-tool-output-limit" class="voice-input" type="number" min="0" max="1000000" step="1000" />
+                  <p class="settings-desc" data-i18n="settings.zeroAuto">0 uses the model default.</p>
+                </div>
+              </div>
+              <div class="settings-field">
+                <label class="voice-label" for="set-ram-warning" data-i18n="settings.ramWarning">Agent Micro RAM warning (MB)</label>
+                <input id="set-ram-warning" class="voice-input" type="number" min="256" max="65536" step="256" />
+                <p class="settings-status is-muted" id="set-ram-status" data-i18n="settings.ramChecking">Checking memory…</p>
+                <p class="settings-desc" data-i18n="settings.ramWarning.desc">Warns when this app's Electron processes exceed the threshold; it does not force-stop work.</p>
+              </div>
             </div>
 
             <div class="settings-field settings-field--actions">

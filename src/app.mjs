@@ -1049,6 +1049,26 @@ const settingsPanel = document.getElementById('settings-panel');
 const setWorkingDirectory = document.getElementById('set-working-directory');
 const setWritableRoots = document.getElementById('set-writable-roots');
 const setWorkspaceNetwork = document.getElementById('set-workspace-network');
+const setMaxThreads = document.getElementById('set-max-threads');
+const setMaxDepth = document.getElementById('set-max-depth');
+const setInterruptMessage = document.getElementById('set-interrupt-message');
+const setResourcePreset = document.getElementById('set-resource-preset');
+const setRolloutBudget = document.getElementById('set-rollout-budget');
+const setRolloutLimit = document.getElementById('set-rollout-limit');
+const setRolloutReminder = document.getElementById('set-rollout-reminder');
+const setCompactLimit = document.getElementById('set-compact-limit');
+const setToolOutputLimit = document.getElementById('set-tool-output-limit');
+const setRamWarning = document.getElementById('set-ram-warning');
+const setRamStatus = document.getElementById('set-ram-status');
+const setAgentRole = document.getElementById('set-agent-role');
+const setAgentEditor = document.getElementById('set-agent-editor');
+const setAgentEnabled = document.getElementById('set-agent-enabled');
+const setAgentName = document.getElementById('set-agent-name');
+const setAgentDescription = document.getElementById('set-agent-description');
+const setAgentInstructions = document.getElementById('set-agent-instructions');
+const setAgentModel = document.getElementById('set-agent-model');
+const setAgentReasoning = document.getElementById('set-agent-reasoning');
+let agentRoles = [];
 const setModel = document.getElementById('set-model');
 const setReasoning = document.getElementById('set-reasoning');
 const setPersonality = document.getElementById('set-personality');
@@ -1068,10 +1088,22 @@ const settingsLicenseActivateBtn = document.getElementById('settings-license-act
 const settingsLicenseBuyBtn = document.getElementById('settings-license-buy');
 
 function readSettingsForm() {
+  commitAgentEditor();
   return {
     working_directory: setWorkingDirectory?.value?.trim() || '',
     writable_roots: String(setWritableRoots?.value || '').split(/\r?\n/).map((v) => v.trim()).filter(Boolean),
     workspace_network_access: !!setWorkspaceNetwork?.checked,
+    max_threads: Number(setMaxThreads?.value) || 6,
+    max_depth: Number.isFinite(Number(setMaxDepth?.value)) ? Number(setMaxDepth.value) : 1,
+    interrupt_message: !!setInterruptMessage?.checked,
+    resource_preset: setResourcePreset?.value || 'balanced',
+    rollout_budget_enabled: !!setRolloutBudget?.checked,
+    rollout_limit_tokens: Number(setRolloutLimit?.value) || 100000,
+    rollout_reminder_tokens: Number(setRolloutReminder?.value) || 10000,
+    model_auto_compact_token_limit: Number(setCompactLimit?.value) || 0,
+    tool_output_token_limit: Number(setToolOutputLimit?.value) || 0,
+    ram_warning_mb: Number(setRamWarning?.value) || 2048,
+    agent_roles: agentRoles,
     model: setModel?.value?.trim() || '',
     model_reasoning_effort: setReasoning?.value || '',
     personality: setPersonality?.value || '',
@@ -1095,6 +1127,18 @@ function fillSettingsForm(s = {}) {
     setWritableRoots.placeholder = t('settings.writableRoots.placeholder');
   }
   if (setWorkspaceNetwork) setWorkspaceNetwork.checked = !!s.workspace_network_access;
+  if (setMaxThreads) setMaxThreads.value = String(s.max_threads ?? 6);
+  if (setMaxDepth) setMaxDepth.value = String(s.max_depth ?? 1);
+  if (setInterruptMessage) setInterruptMessage.checked = s.interrupt_message !== false;
+  if (setResourcePreset) setResourcePreset.value = s.resource_preset || 'balanced';
+  if (setRolloutBudget) setRolloutBudget.checked = !!s.rollout_budget_enabled;
+  if (setRolloutLimit) setRolloutLimit.value = String(s.rollout_limit_tokens ?? 100000);
+  if (setRolloutReminder) setRolloutReminder.value = String(s.rollout_reminder_tokens ?? 10000);
+  if (setCompactLimit) setCompactLimit.value = String(s.model_auto_compact_token_limit ?? 0);
+  if (setToolOutputLimit) setToolOutputLimit.value = String(s.tool_output_token_limit ?? 0);
+  if (setRamWarning) setRamWarning.value = String(s.ram_warning_mb ?? 2048);
+  agentRoles = Array.isArray(s.agent_roles) ? s.agent_roles.map((role) => ({ ...role })) : [];
+  renderAgentRoleList();
   if (setModel) {
     setModel.value = s.model || '';
     setModel.placeholder = t('settings.model.placeholder');
@@ -1108,6 +1152,88 @@ function fillSettingsForm(s = {}) {
   if (setTool) setTool.value = String(s.tool_timeout_sec ?? 60);
   if (setJob) setJob.value = String(s.job_max_runtime_seconds ?? 1800);
   if (setProxy) setProxy.checked = !!s.network_proxy;
+}
+
+function selectedAgentRole() {
+  return agentRoles.find((role) => role.id === setAgentRole?.value) || null;
+}
+
+function commitAgentEditor() {
+  const role = selectedAgentRole();
+  if (!role) return;
+  role.enabled = !!setAgentEnabled?.checked;
+  role.name = String(setAgentName?.value || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-').slice(0, 48);
+  role.description = String(setAgentDescription?.value || '').trim();
+  role.developer_instructions = String(setAgentInstructions?.value || '').trim();
+  role.model = String(setAgentModel?.value || '').trim();
+  role.model_reasoning_effort = setAgentReasoning?.value || '';
+}
+
+function renderAgentEditor() {
+  const role = selectedAgentRole();
+  if (setAgentEditor) setAgentEditor.hidden = !role;
+  if (!role) return;
+  if (setAgentEnabled) setAgentEnabled.checked = role.enabled !== false;
+  if (setAgentName) setAgentName.value = role.name || '';
+  if (setAgentDescription) setAgentDescription.value = role.description || '';
+  if (setAgentInstructions) setAgentInstructions.value = role.developer_instructions || '';
+  if (setAgentModel) setAgentModel.value = role.model || '';
+  if (setAgentReasoning) setAgentReasoning.value = role.model_reasoning_effort || '';
+}
+
+function renderAgentRoleList(selectedId) {
+  if (!setAgentRole) return;
+  const keep = selectedId || setAgentRole.value || agentRoles[0]?.id || '';
+  setAgentRole.replaceChildren();
+  if (!agentRoles.length) {
+    const option = document.createElement('option');
+    option.value = ''; option.textContent = t('settings.agentNone');
+    setAgentRole.append(option);
+  } else {
+    for (const role of agentRoles) {
+      const option = document.createElement('option');
+      option.value = role.id;
+      option.textContent = role.name || role.id;
+      setAgentRole.append(option);
+    }
+    setAgentRole.value = agentRoles.some((role) => role.id === keep) ? keep : agentRoles[0].id;
+  }
+  renderAgentEditor();
+}
+
+const RESOURCE_PRESET_VALUES = {
+  saver: { reasoning: 'low', threads: 2, depth: 1, runtime: 900, compact: 48000, tool: 6000, budget: true, limit: 80000, reminder: 8000, ram: 1024 },
+  balanced: { reasoning: 'medium', threads: 6, depth: 1, runtime: 1800, compact: 64000, tool: 12000, budget: false, limit: 100000, reminder: 10000, ram: 2048 },
+  performance: { reasoning: 'high', threads: 12, depth: 2, runtime: 3600, compact: 0, tool: 0, budget: false, limit: 200000, reminder: 20000, ram: 4096 },
+};
+
+function applyResourcePreset(name) {
+  const p = RESOURCE_PRESET_VALUES[name];
+  if (!p) return;
+  if (setReasoning) setReasoning.value = p.reasoning;
+  if (setMaxThreads) setMaxThreads.value = String(p.threads);
+  if (setMaxDepth) setMaxDepth.value = String(p.depth);
+  if (setJob) setJob.value = String(p.runtime);
+  if (setCompactLimit) setCompactLimit.value = String(p.compact);
+  if (setToolOutputLimit) setToolOutputLimit.value = String(p.tool);
+  if (setRolloutBudget) setRolloutBudget.checked = p.budget;
+  if (setRolloutLimit) setRolloutLimit.value = String(p.limit);
+  if (setRolloutReminder) setRolloutReminder.value = String(p.reminder);
+  if (setRamWarning) setRamWarning.value = String(p.ram);
+}
+
+async function refreshRamUsage() {
+  if (!setRamStatus || settingsPanel?.hidden) return;
+  const usage = await api?.getResourceUsage?.();
+  if (!usage?.ok) return;
+  const limit = Math.max(256, Number(setRamWarning?.value) || 2048);
+  const over = usage.ramMb >= limit;
+  setRamStatus.textContent = t(over ? 'settings.ramOver' : 'settings.ramUsage', {
+    used: usage.ramMb,
+    limit,
+    n: usage.processCount,
+  });
+  setStatusTone(setRamStatus, over ? 'bad' : 'ok');
 }
 
 function setStatusTone(el, tone) {
@@ -1222,6 +1348,7 @@ async function openSettings() {
   settingsPanel.hidden = false;
   flashAction(t('flash.settings'));
   refreshAccountStatus();
+  refreshRamUsage();
 }
 
 function closeSettings() {
@@ -1274,6 +1401,37 @@ document.getElementById('settings-choose-directory')?.addEventListener('click', 
 document.getElementById('settings-clear-directory')?.addEventListener('click', () => {
   if (setWorkingDirectory) setWorkingDirectory.value = '';
 });
+setResourcePreset?.addEventListener('change', () => applyResourcePreset(setResourcePreset.value));
+setAgentRole?.addEventListener('change', renderAgentEditor);
+[
+  setAgentEnabled, setAgentName, setAgentDescription, setAgentInstructions, setAgentModel, setAgentReasoning,
+].forEach((el) => el?.addEventListener('input', () => {
+  commitAgentEditor();
+  if (el === setAgentName) {
+    const option = [...(setAgentRole?.options || [])].find((item) => item.value === setAgentRole.value);
+    if (option) option.textContent = setAgentName.value || option.value;
+  }
+}));
+document.getElementById('settings-agent-add')?.addEventListener('click', () => {
+  commitAgentEditor();
+  const id = `role-${Date.now().toString(36)}`;
+  agentRoles.push({ id, name: `agent-${agentRoles.length + 1}`, description: '', developer_instructions: '', model: '', model_reasoning_effort: '', enabled: true });
+  renderAgentRoleList(id);
+});
+document.getElementById('settings-agent-delete')?.addEventListener('click', () => {
+  const id = setAgentRole?.value;
+  if (!id) return;
+  agentRoles = agentRoles.filter((role) => role.id !== id);
+  renderAgentRoleList();
+});
+setRamWarning?.addEventListener('input', refreshRamUsage);
+[
+  setReasoning, setMaxThreads, setMaxDepth, setJob, setRolloutBudget,
+  setRolloutLimit, setRolloutReminder, setCompactLimit, setToolOutputLimit, setRamWarning,
+].forEach((el) => el?.addEventListener('input', () => {
+  if (setResourcePreset) setResourcePreset.value = 'custom';
+}));
+setInterval(refreshRamUsage, 3000);
 document.getElementById('settings-add-writable-root')?.addEventListener('click', async () => {
   const r = await api?.chooseCodexWorkingDirectory?.();
   if (!r?.ok || !r.path || !setWritableRoots) return;

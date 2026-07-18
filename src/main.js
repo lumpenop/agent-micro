@@ -623,6 +623,11 @@ ipcMain.handle('codexSettings:chooseWorkingDirectory', async () => {
   });
   return r.canceled ? { ok: false, canceled: true } : { ok: true, path: r.filePaths?.[0] || '' };
 });
+ipcMain.handle('resources:getUsage', () => {
+  const metrics = app.getAppMetrics();
+  const totalKb = metrics.reduce((sum, metric) => sum + Number(metric.memory?.workingSetSize || 0), 0);
+  return { ok: true, ramMb: Math.round(totalKb / 1024), processCount: metrics.length };
+});
 ipcMain.handle('codexSettings:writeIgnore', async () => {
   if (trialLocked()) return trialDenied();
   const { dialog } = require('electron');
