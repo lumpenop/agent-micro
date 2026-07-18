@@ -21,7 +21,7 @@ function trialDenied() {
 let cliPadGlobalsArmed = false;
 let padContextTimer = null;
 
-/** Base defs — modifier (Shift|Command) chosen in pad prefs */
+/** Base defs — modifier (⌘ ⌥ ⌃ ⇪) chosen in pad prefs */
 const PAD_HOTKEY_DEFS = [
   { key: 'Q', cmd: 'fast' },
   { key: 'W', cmd: 'approve' },
@@ -42,21 +42,56 @@ const PAD_HOTKEY_DEFS = [
   { key: '6', cmd: 'agent', index: 5 },
 ];
 
+/** Caps Lock LED/lock state — used when modifier is capslock */
+let capsLockOn = false;
+
 function buildPadGlobalHotkeys(mod = padPrefs.getHotkeyModifier()) {
   const prefix = padPrefs.acceleratorPrefix(mod);
   return PAD_HOTKEY_DEFS.map((d) => ({
-    accelerator: `${prefix}+${d.key}`,
+    accelerator: prefix ? `${prefix}+${d.key}` : d.key,
     cmd: d.cmd,
     phase: d.phase,
     dir: d.dir,
     index: d.index,
+    requiresCaps: mod === 'capslock',
   }));
 }
 
 function allPadAccelerators() {
   const keys = PAD_HOTKEY_DEFS.map((d) => d.key);
-  return keys.flatMap((k) => [`Shift+${k}`, `Command+${k}`]);
+  const mods = ['Command', 'Option', 'Control', ''];
+  return keys.flatMap((k) => mods.map((m) => (m ? `${m}+${k}` : k)));
 }
+
+function readCapsLockOnMac() {
+  if (process.platform !== 'darwin') return null;
+  try {
+    const { execFileSync } = require('child_process');
+    const out = execFileSync(
+      'osascript',
+      [
+        '-l',
+        'JavaScript',
+        '-e',
+        'ObjC.import("Cocoa"); (!!($.NSEvent.modifierFlags & $.NSEventModifierFlagCapsLock)) ? "1" : "0"',
+      ],
+      { timeout: 400, encoding: 'utf8' }
+    ).trim();
+    return out === '1';
+  } catch {
+    return null;
+  }
+}
+
+function refreshCapsLockState() {
+  const live = readCapsLockOnMac();
+  if (live != null) capsLockOn = live;
+  return capsLockOn;
+}
+
+/** Dedupe pad+global double-delivery */
+let lastHotkeySig = '';
+let lastHotkeyAt = 0;
 
 function sendHotkey(cmd, phase = 'tap', extra = {}) {
   if (trialLocked()) return;
@@ -64,6 +99,13 @@ function sendHotkey(cmd, phase = 'tap', extra = {}) {
   if (!mainWindow.isVisible()) return;
   // Pad focused OR our CLI terminal context (globals armed)
   if (!mainWindow.isFocused() && !cliPadGlobalsArmed) return;
+
+  const sig = `${cmd}|${phase}|${extra.dir || ''}|${extra.index ?? ''}`;
+  const now = Date.now();
+  if (sig === lastHotkeySig && now - lastHotkeyAt < 90) return;
+  lastHotkeySig = sig;
+  lastHotkeyAt = now;
+
   mainWindow.webContents.send('hotkey', { cmd, phase, ...extra });
 }
 
@@ -78,28 +120,47 @@ function unregisterCliPadGlobals() {
   cliPadGlobalsArmed = false;
 }
 
+/**
+ * Steal pad chords at the OS level while our Codex CLI is frontmost.
+ * (Pad-focused input uses before-input instead — higher priority inside the app.)
+ */
 function registerCliPadGlobals() {
   if (trialLocked()) {
     unregisterCliPadGlobals();
     return;
   }
-  // Re-register every time we arm so failed keys get another chance
+  const mod = padPrefs.getHotkeyModifier();
+  if (mod === 'capslock') refreshCapsLockState();
+
+  // Clear every known accelerator first so we always own the binding
+  unregisterCliPadGlobals();
+
   let any = false;
-  const list = buildPadGlobalHotkeys();
-  for (const { accelerator, cmd, phase, dir, index } of list) {
-    try {
-      globalShortcut.unregister(accelerator);
-    } catch {
-      /* ignore */
-    }
+  const failed = [];
+  const list = buildPadGlobalHotkeys(mod);
+  for (const { accelerator, cmd, phase, dir, index, requiresCaps } of list) {
+    // Caps Lock layer: only steal bare keys while Caps Lock is on
+    if (requiresCaps && !capsLockOn) continue;
+
     const extra = {};
     if (dir) extra.dir = dir;
     if (typeof index === 'number') extra.index = index;
-    const ok = globalShortcut.register(accelerator, () =>
-      sendHotkey(cmd, phase || 'tap', extra)
-    );
-    if (!ok) console.log('[hotkey] global failed', accelerator);
-    else any = true;
+    const ok = globalShortcut.register(accelerator, () => {
+      if (requiresCaps) {
+        refreshCapsLockState();
+        if (!capsLockOn) return;
+      }
+      sendHotkey(cmd, phase || 'tap', extra);
+    });
+    if (!ok) {
+      failed.push(accelerator);
+      console.log('[hotkey] global failed (OS/other app owns it)', accelerator);
+    } else {
+      any = true;
+    }
+  }
+  if (failed.length) {
+    console.log('[hotkey] could not claim', failed.length, 'accelerators:', failed.join(', '));
   }
   cliPadGlobalsArmed = any;
 }
@@ -110,9 +171,10 @@ function rearmPadHotkeys() {
 }
 
 /**
- * Only two places capture pad shortcuts (and they win over OS/terminal):
- * 1) Agent Micro pad window focused
- * 2) Default terminal frontmost after this pad opened a Codex CLI there
+ * Priority model (highest → lowest for pad chords):
+ * 1) Pad window focused → before-input-event (beats menus / page / inputs)
+ * 2) Our Codex CLI frontmost → globalShortcut (beats terminal keybindings)
+ * 3) Elsewhere → unregistered (OS / other apps keep their shortcuts)
  */
 async function syncPadHotkeyContext() {
   try {
@@ -124,9 +186,21 @@ async function syncPadHotkeyContext() {
       unregisterCliPadGlobals();
       return;
     }
+    if (padPrefs.getHotkeyModifier() === 'capslock') {
+      const prev = capsLockOn;
+      refreshCapsLockState();
+      if (prev !== capsLockOn && cliPadGlobalsArmed) {
+        unregisterCliPadGlobals();
+      }
+    }
     const padFocused = mainWindow.isFocused();
-    const cliOurs = padFocused ? false : await mac.isOurCliFrontmost();
-    if (padFocused || cliOurs) registerCliPadGlobals();
+    if (padFocused) {
+      // Local before-input owns chords — do not also arm globals (avoids races)
+      unregisterCliPadGlobals();
+      return;
+    }
+    const cliOurs = await mac.isOurCliFrontmost();
+    if (cliOurs) registerCliPadGlobals();
     else unregisterCliPadGlobals();
   } catch (e) {
     console.log('[hotkey] sync', e.message);
@@ -135,9 +209,10 @@ async function syncPadHotkeyContext() {
 
 function startPadContextWatch() {
   if (padContextTimer) return;
+  // Tight loop so CLI focus steals chords quickly after leaving the pad
   padContextTimer = setInterval(() => {
     syncPadHotkeyContext();
-  }, 350);
+  }, 200);
   syncPadHotkeyContext();
 }
 
@@ -150,52 +225,55 @@ function stopPadContextWatch() {
 }
 
 /**
- * Pad focused → swallow non-pad shortcuts.
- * Chords use pad prefs modifier (⇧ or ⌘) + QWERDF / 1–6 / arrows / Tab.
- * When globals already armed, don't double-fire.
+ * Pad focused → pad Mod chords always win (menus, inputs, page shortcuts).
+ * Suspend only allows bare typing / system edit keys; Mod chords stay first.
  */
 function attachPadHotkeys(win) {
   win.__padHotkeysSuspended = false;
   win.webContents.on('before-input-event', (event, input) => {
-    if (!input || input.type !== 'keyDown') return;
+    if (!input || (input.type !== 'keyDown' && input.type !== 'keyUp')) return;
     if (!win.isFocused()) return;
     if (typeof app.isFocused === 'function' && !app.isFocused()) return;
 
     const key = String(input.key || '');
     const code = String(input.code || '');
+
+    // Keep Caps Lock lock state in sync (toggle key)
+    if (key === 'CapsLock' || code === 'CapsLock') {
+      if (input.type === 'keyDown') {
+        const live = readCapsLockOnMac();
+        capsLockOn = live != null ? live : !capsLockOn;
+        if (padPrefs.getHotkeyModifier() === 'capslock') rearmPadHotkeys();
+      }
+      return;
+    }
+
+    if (input.type !== 'keyDown') return;
+
     const meta = !!input.meta;
     const ctrl = !!input.control;
     const alt = !!input.alt;
     const shift = !!input.shift;
     const primary = process.platform === 'darwin' ? meta : ctrl;
     const mod = padPrefs.getHotkeyModifier();
+    const flags = { shift, primary, alt, meta, ctrl };
 
-    if (win.__padHotkeysSuspended) {
-      // 입력 중: 대문자/기호 타이핑은 허용
-      return;
-    }
-
-    // App chrome: ⌘⇧M / ⌘⇧Q
+    // App chrome: ⌘⇧M / ⌘⇧Q (not pad chords)
     if (primary && shift && !alt) {
       const k = key.toLowerCase();
       if (k === 'm' || k === 'q') return;
     }
 
-    // Mod+Tab → Touch / layer
-    const tabChord =
-      mod === 'command'
-        ? primary && !shift && !alt && (key === 'Tab' || code === 'Tab')
-        : shift && !primary && !alt && !meta && !ctrl && (key === 'Tab' || code === 'Tab');
-    if (tabChord) {
+    // ── Pad Mod chords: highest priority (even while an input is focused) ──
+    if (isModChord(mod, flags) && (key === 'Tab' || code === 'Tab')) {
       event.preventDefault();
-      if (!cliPadGlobalsArmed) sendHotkey('touch');
+      sendHotkey('touch');
       return;
     }
 
-    const hit = matchPadChord(mod, shift, primary, alt, meta, ctrl, key, code);
+    const hit = matchPadChord(mod, flags, key, code);
     if (hit) {
       event.preventDefault();
-      if (cliPadGlobalsArmed) return;
       const extra = {};
       if (hit.dir) extra.dir = hit.dir;
       if (typeof hit.index === 'number') extra.index = hit.index;
@@ -203,21 +281,40 @@ function attachPadHotkeys(win) {
       return;
     }
 
-    // Pad focused: block other modifier shortcuts (keep bare Shift for typing when using ⌘)
+    // Typing in settings / license / voice sink — allow normal keys + ⌘C/V/…
+    if (win.__padHotkeysSuspended) return;
+
+    // Pad focused: swallow other modifier shortcuts so they can't steal focus
     if (meta || ctrl || alt) event.preventDefault();
   });
 }
 
-/** Active modifier + QWERDF / arrows / 1–6 */
-function matchPadChord(mod, shift, primary, alt, meta, ctrl, key, code) {
-  if (alt) return null;
-  if (mod === 'command') {
-    if (!primary || shift) return null;
-  } else {
-    if (!shift || primary || meta || ctrl) return null;
+/** True when the preferred modifier is held (Caps Lock = lock LED on). */
+function isModChord(mod, { meta, ctrl, alt, shift, primary }) {
+  switch (mod) {
+    case 'option':
+      return alt && !primary && !ctrl && !shift;
+    case 'control':
+      return ctrl && !meta && !alt && !shift;
+    case 'capslock':
+      return capsLockOn && !meta && !ctrl && !alt && !shift;
+    case 'command':
+    default:
+      return primary && !alt && !shift && (process.platform === 'darwin' ? !ctrl : true);
   }
+}
 
-  const lower = key.length === 1 ? key.toLowerCase() : key;
+/** Active modifier + QWERDF / arrows / 1–6 */
+function matchPadChord(mod, flags, key, code) {
+  if (!isModChord(mod, flags)) return null;
+
+  // Prefer physical key code — Option on macOS often remaps `key` to symbols
+  const codeLetter = /^Key([A-Z])$/.exec(code);
+  const lower = codeLetter
+    ? codeLetter[1].toLowerCase()
+    : key.length === 1
+      ? key.toLowerCase()
+      : key;
   const cmdKeys = {
     q: { cmd: 'fast' },
     w: { cmd: 'approve' },
@@ -243,11 +340,6 @@ function matchPadChord(mod, shift, primary, alt, meta, ctrl, key, code) {
   };
   if (digitMap[code] != null) return { cmd: 'agent', index: digitMap[code] };
   if (/^[1-6]$/.test(key)) return { cmd: 'agent', index: Number(key) - 1 };
-  // US layout Shift+1..6 → !@#$%^ (shift mode only)
-  if (mod === 'shift') {
-    const shifted = { '!': 0, '@': 1, '#': 2, $: 3, '%': 4, '^': 5 };
-    if (shifted[key] != null) return { cmd: 'agent', index: shifted[key] };
-  }
 
   return null;
 }
@@ -358,7 +450,10 @@ function createWindow() {
       .then((r) => console.log('[pad]', r))
       .catch((e) => console.error('[pad]', e));
   });
-  mainWindow.webContents.on('console-message', (_e, level, message) => {
+  mainWindow.webContents.on('console-message', (event) => {
+    // Electron: prefer Event params object (legacy positional args deprecated)
+    const level = event?.level ?? 0;
+    const message = event?.message ?? '';
     if (level >= 2) console.log('[renderer]', message);
   });
 
@@ -541,22 +636,35 @@ ipcMain.handle('padPrefs:set', (_e, partial) => {
   }
   return next;
 });
+function focusPadNow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try {
+    mainWindow.setAlwaysOnTop(true, 'floating');
+    mainWindow.setFocusable(true);
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    if (typeof app.focus === 'function') app.focus({ steal: true });
+  } catch (e) {
+    console.log('[focusPad]', e.message);
+  }
+}
+
 ipcMain.handle('voice:beginDictation', async () => {
   if (trialLocked()) return trialDenied();
-  if (!bridge?.beginVoiceDictation) {
+  if (!bridge?.prepareVoiceDictation || !bridge?.beginVoiceDictation) {
     return { ok: false, error: 'dictation not supported' };
   }
-  // Dictation lands in the pad's hidden text sink — keep pad key-focused
-  try {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.setFocusable(true);
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
-    }
-  } catch {
-    /* ignore */
-  }
+  // 1) Ensure CLI exists without activating it (paste target for later)
+  const prep = await bridge.prepareVoiceDictation();
+  if (!prep?.ok) return prep;
+
+  // 2) Steal focus back to pad so macOS dictation inserts into voice-sink
+  focusPadNow();
+  await new Promise((r) => setTimeout(r, prep.opened ? 220 : 100));
+  focusPadNow();
+
+  // 3) Start dictation while pad/sink is first-responder
   return bridge.beginVoiceDictation();
 });
 ipcMain.handle('voice:endDictation', async () => {

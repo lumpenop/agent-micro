@@ -55,20 +55,21 @@ button {
   overflow: hidden;
 }
 
-/* Off-screen but real text field — macOS dictation inserts here, then we paste to CLI */
+/* Tiny on-screen field — macOS dictation often ignores fully off-screen inputs */
 .voice-sink {
   position: fixed;
-  left: -2400px;
+  left: 0;
   top: 0;
-  width: 480px;
-  height: 160px;
-  opacity: 0;
+  width: 2px;
+  height: 2px;
+  opacity: 0.02;
   border: none;
-  padding: 8px;
+  padding: 0;
   margin: 0;
   resize: none;
   outline: none;
-  z-index: -1;
+  z-index: 0;
+  overflow: hidden;
   pointer-events: none;
   font: 16px/1.4 sans-serif;
   color: #000;
@@ -1280,18 +1281,18 @@ button {
 }
 
 .mod-picker-btns {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 6px;
 }
 
 .mod-btn {
-  flex: 1;
   appearance: none;
   border: 1px solid rgba(16, 20, 26, 0.1);
   border-radius: 9px;
   padding: 7px 8px;
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: rgba(20, 24, 30, 0.55);
   background: rgba(255, 255, 255, 0.55);

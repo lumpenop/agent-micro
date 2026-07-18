@@ -157,8 +157,8 @@ const state = {
   agents: Array.from({ length: 6 }, () => ({ name: '—', status: 'off' })),
   keyIcons: loadKeyIcons(),
   pickingCmd: null,
-  /** @type {'shift' | 'command'} */
-  hotkeyModifier: 'shift',
+  /** @type {'command' | 'option' | 'control' | 'capslock'} */
+  hotkeyModifier: 'command',
   canFork: true,
   trialExpired: false,
   /** Not logged into Codex CLI — pad locked until login */
@@ -216,7 +216,29 @@ function applyLocale(locale) {
 }
 
 function modGlyph(mod = state.hotkeyModifier) {
-  return mod === 'command' ? '⌘' : '⇧';
+  switch (mod) {
+    case 'option':
+      return '⌥';
+    case 'control':
+      return '⌃';
+    case 'capslock':
+      return '⇪';
+    case 'command':
+    default:
+      return '⌘';
+  }
+}
+
+const HOTKEY_MODS = ['command', 'option', 'control', 'capslock'];
+
+function normalizeHotkeyMod(mod) {
+  const m = String(mod || '').toLowerCase();
+  if (HOTKEY_MODS.includes(m)) return m;
+  if (m === 'shift' || m === 'cmd' || m === 'meta') return m === 'shift' ? 'command' : 'command';
+  if (m === 'alt' || m === 'opt') return 'option';
+  if (m === 'ctrl') return 'control';
+  if (m === 'caps' || m === 'caps-lock') return 'capslock';
+  return 'command';
 }
 
 const padEl = document.getElementById('pad');
@@ -340,6 +362,11 @@ function statusLabel(s) {
 
 let micLatched = false;
 let dictationActive = false;
+/** True while beginVoiceDictation IPC is in flight (hold-release race). */
+let micStarting = false;
+let micCancelStart = false;
+let pendingMicLatch = false;
+let micStartGen = 0;
 const voiceSink = document.getElementById('voice-sink');
 
 function armVoiceSink({ clear = true } = {}) {
@@ -366,14 +393,27 @@ function disarmVoiceSink() {
 
 /** Mic = macOS dictation into pad sink, then paste into Agent CLI (no Whisper). */
 async function startRecording({ latched = false } = {}) {
-  if (dictationActive) return;
+  if (dictationActive || micStarting) return;
   if (padBlocks()) return;
+  const gen = ++micStartGen;
+  micStarting = true;
+  micCancelStart = false;
+  pendingMicLatch = latched;
   flashAction(t('flash.codexJump'));
   armVoiceSink();
   // Let the sink become first-responder before Fn/dictation hotkey
   await new Promise((r) => setTimeout(r, 80));
+  if (gen !== micStartGen) {
+    micStarting = false;
+    return;
+  }
   const r = await api?.beginVoiceDictation?.();
+  if (gen !== micStartGen) {
+    micStarting = false;
+    return;
+  }
   if (!r?.ok) {
+    micStarting = false;
     disarmVoiceSink();
     if (r?.code === 'AUTH') {
       flashAction(r.stale ? t('flash.authStale') : t('flash.needLogin'));
@@ -388,16 +428,27 @@ async function startRecording({ latched = false } = {}) {
   dictationActive = true;
   state.recording = true;
   micLatched = latched;
+  micStarting = false;
   padEl.classList.add('recording');
   pad3d?.setRecording(true);
   flashAction(latched ? t('flash.speakTap') : t('flash.speakHold'));
+
+  // Hold released while start was still in flight → finish now
+  if (micCancelStart && !latched) {
+    micCancelStart = false;
+    await stopRecording({ process: true });
+  }
 }
 
 async function stopRecording({ process = true } = {}) {
-  if (!dictationActive && !state.recording) return;
+  if (!dictationActive && !state.recording) {
+    if (micStarting) micCancelStart = true;
+    return;
+  }
   dictationActive = false;
   state.recording = false;
   micLatched = false;
+  pendingMicLatch = false;
   padEl.classList.remove('recording');
   pad3d?.setRecording(false);
   pad3d?.releasePress?.('mic');
@@ -411,7 +462,8 @@ async function stopRecording({ process = true } = {}) {
   // Keep sink focused while dictation stops so text commits into it
   voiceSink?.focus({ preventScroll: true });
   await api?.endVoiceDictation?.();
-  await new Promise((r) => setTimeout(r, 120));
+  // macOS often needs a beat to flush recognized text into the field
+  await new Promise((r) => setTimeout(r, 280));
   const text = disarmVoiceSink();
   if (!text) {
     flashAction(t('flash.dictationCancel'));
@@ -925,19 +977,18 @@ function closeGuide() {
 }
 
 function syncModPickerUI() {
-  const mod = state.hotkeyModifier === 'command' ? 'command' : 'shift';
-  document.getElementById('mod-shift')?.classList.toggle('is-active', mod === 'shift');
-  document.getElementById('mod-command')?.classList.toggle('is-active', mod === 'command');
+  const mod = normalizeHotkeyMod(state.hotkeyModifier);
+  for (const id of HOTKEY_MODS) {
+    document.getElementById(`mod-${id}`)?.classList.toggle('is-active', mod === id);
+  }
   const hint = document.getElementById('mod-hint');
   if (hint) {
-    hint.textContent =
-      mod === 'command' ? t('keymap.modHint.command') : t('keymap.modHint.shift');
+    hint.textContent = t(`keymap.modHint.${mod}`);
   }
 }
 
 function applyHotkeyModifier(mod) {
-  const next = mod === 'command' ? 'command' : 'shift';
-  state.hotkeyModifier = next;
+  state.hotkeyModifier = normalizeHotkeyMod(mod);
   syncModPickerUI();
   if (keymapBody && keymapPanel && !keymapPanel.hidden) {
     keymapBody.innerHTML = renderGuideList(buildKeymapItems());
@@ -1115,15 +1166,13 @@ function closeSettings() {
 
 document.getElementById('btn-help')?.addEventListener('click', openGuide);
 document.getElementById('btn-keymap')?.addEventListener('click', openKeymap);
-document.getElementById('mod-shift')?.addEventListener('click', async () => {
-  const r = await api?.setPadPrefs?.({ hotkeyModifier: 'shift' });
-  applyHotkeyModifier(r?.hotkeyModifier || 'shift');
-  flashAction(t('flash.modShift'));
-});
-document.getElementById('mod-command')?.addEventListener('click', async () => {
-  const r = await api?.setPadPrefs?.({ hotkeyModifier: 'command' });
-  applyHotkeyModifier(r?.hotkeyModifier || 'command');
-  flashAction(t('flash.modCmd'));
+document.getElementById('mod-picker')?.addEventListener('click', async (e) => {
+  const btn = e.target?.closest?.('[data-mod]');
+  if (!btn) return;
+  const mod = normalizeHotkeyMod(btn.getAttribute('data-mod'));
+  const r = await api?.setPadPrefs?.({ hotkeyModifier: mod });
+  applyHotkeyModifier(r?.hotkeyModifier || mod);
+  flashAction(t(`flash.mod.${mod}`));
 });
 document.getElementById('btn-settings')?.addEventListener('click', openSettings);
 document.getElementById('guide-close')?.addEventListener('click', closeGuide);
@@ -1256,6 +1305,11 @@ function onMicPress() {
 
 function onMicRelease() {
   if (padBlocks()) return;
+  // Start still in flight (common on short holds) — request stop when ready
+  if (micStarting && !pendingMicLatch) {
+    micCancelStart = true;
+    return;
+  }
   if (state.recording && !micLatched) stopRecording({ process: true });
 }
 
@@ -1547,7 +1601,7 @@ api?.getTrialStatus?.().then(async (status) => {
 state.provider = 'codex';
 state.linkMode = 'cli';
 
-/** While typing in inputs, don't treat ⇧Q/D/1… as pad shortcuts */
+/** While typing in inputs, allow bare keys — Mod chords still win (main before-input). */
 function isEditableEl(el) {
   if (!el || !el.tagName) return false;
   const tag = el.tagName.toLowerCase();

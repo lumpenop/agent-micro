@@ -964,6 +964,8 @@ function resolveCliSlot(requested, openSlots) {
  */
 async function ensureCodexCliWindow(requestedSlot, opts = {}) {
   const command = String(opts.command || 'codex').trim() || 'codex';
+  // Default true (legacy). Voice prep passes false so the pad sink keeps key focus.
+  const wantFocus = opts.focus !== false;
 
   if (process.platform !== 'darwin') {
     return { ok: false, error: 'CLI windows require macOS' };
@@ -1002,8 +1004,19 @@ async function ensureCodexCliWindow(requestedSlot, opts = {}) {
   let { slot, mode, reason } = resolveCliSlot(requestedSlot, open);
   if (mode === 'blocked') return blockedResult(reason);
 
-  // Known live slot → focus
+  // Known live slot → focus (or just confirm existence when wantFocus=false)
   if (mode === 'focus') {
+    if (!wantFocus) {
+      return {
+        ok: true,
+        slot: req,
+        existed: true,
+        focused: false,
+        opened: false,
+        mode: 'exists',
+        app: appFast.name,
+      };
+    }
     let f = await focusCodexCliWindow(req, { fast: true, activate: true });
     if (!f.ok) f = await focusCodexCliWindow(req, { fast: false, activate: true });
     if (f.ok) {

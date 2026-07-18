@@ -25,7 +25,8 @@ pnpm start
 키 서명 비밀값: `AGENT_MICRO_LICENSE_SECRET` (배포 전 [`src/license.js`](src/license.js) 기본값 변경)
 
 단축키: `⌘⇧M` — 창 숨기기/보이기 (전역)  
-패드 단축키(**⇧QWERDF · ⇧1–6 · ⇧화살표 · ⇧Tab**)는 패드 창 또는 이 패드로 연 CLI 터미널에서 동작합니다.
+패드 단축키(기본 **⌘QWERDF · ⌘1–6 · ⌘화살표 · ⌘Tab**)는 패드 창 또는 이 패드로 연 CLI 터미널에서 동작합니다.  
+수정키는 키 맵핑에서 **⌘ / ⌥ / ⌃ / ⇪** 중 선택 (기본 ⌘).
 
 - 초록 점 = Codex 연결됨
 - 노란 점 = demo fallback
@@ -38,10 +39,10 @@ pnpm start
 |------|------|
 | **↻** / 제목 옆 **점** | CLI Connect / Reconnect (`app-server`) |
 | Shift + 점 | Codex 강제 로그인 (브라우저) |
-| **⇧Q W E R D F** | Fast · Approve · Decline · Fork · Mic · Send |
-| **⇧Tab** | Touch · 레이어 전환 |
-| **⇧↑ ↓ ← →** | 조이스틱 (현재 레이어 액션) |
-| **⇧1–6** | Agent 1 = 새 창 · 2–6 = 직전 창에서 순서대로 스플릿 (1→2→3…, 앞 번호 없으면 무시) |
+| **Mod+Q W E R D F** | Fast · Approve · Decline · Fork · Mic · Send (기본 Mod=⌘) |
+| **Mod+Tab** | Touch · 레이어 전환 |
+| **Mod+↑ ↓ ← →** | 조이스틱 (현재 레이어 액션) |
+| **Mod+1–6** | Agent 1 = 새 창 · 2–6 = 직전 창에서 순서대로 스플릿 (1→2→3…, 앞 번호 없으면 무시) |
 
 종료: **⌘⇧Q**
 

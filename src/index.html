@@ -109,8 +109,10 @@
             <div class="mod-picker" id="mod-picker" role="group" aria-label="Modifier" data-i18n-aria="keymap.modLabel">
               <span class="mod-picker-label" data-i18n="keymap.modLabel">Modifier</span>
               <div class="mod-picker-btns">
-                <button type="button" class="mod-btn" data-mod="shift" id="mod-shift">⇧ Shift</button>
                 <button type="button" class="mod-btn" data-mod="command" id="mod-command">⌘ Command</button>
+                <button type="button" class="mod-btn" data-mod="option" id="mod-option">⌥ Option</button>
+                <button type="button" class="mod-btn" data-mod="control" id="mod-control">⌃ Control</button>
+                <button type="button" class="mod-btn" data-mod="capslock" id="mod-capslock">⇪ Caps</button>
               </div>
               <p class="mod-picker-hint" id="mod-hint" data-i18n="keymap.modHint">Used for pad &amp; CLI shortcuts · applies immediately</p>
             </div>
@@ -342,7 +344,7 @@
       autocorrect="off"
       autocapitalize="off"
       spellcheck="false"
-      aria-hidden="true"
+      aria-label="Voice dictation sink"
     ></textarea>
 
     <script type="module" src="./app.mjs"></script>

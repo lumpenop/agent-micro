@@ -5,9 +5,13 @@ const fs = require('fs');
 const path = require('path');
 const { normalizeLocale } = require('./i18n');
 
+/** @typedef {'command' | 'option' | 'control' | 'capslock'} HotkeyModifier */
+
+const MODIFIERS = ['command', 'option', 'control', 'capslock'];
+
 const DEFAULTS = {
-  /** @type {'shift' | 'command'} */
-  hotkeyModifier: 'shift',
+  /** @type {HotkeyModifier} */
+  hotkeyModifier: 'command',
   /** @type {'en' | 'ko'} */
   locale: 'en',
 };
@@ -24,10 +28,20 @@ function prefsPath() {
   return path.join(userDataDir || require('os').tmpdir(), 'pad-prefs.json');
 }
 
+function normalizeModifier(raw) {
+  const mod = String(raw || '').toLowerCase();
+  if (mod === 'command' || mod === 'cmd' || mod === 'meta') return 'command';
+  if (mod === 'option' || mod === 'alt' || mod === 'opt') return 'option';
+  if (mod === 'control' || mod === 'ctrl' || mod === 'controlkey') return 'control';
+  if (mod === 'capslock' || mod === 'caps' || mod === 'caps-lock') return 'capslock';
+  // Legacy Shift → Command (new default)
+  if (mod === 'shift') return 'command';
+  return DEFAULTS.hotkeyModifier;
+}
+
 function normalize(raw) {
-  const mod = String(raw?.hotkeyModifier || '').toLowerCase();
   return {
-    hotkeyModifier: mod === 'command' || mod === 'cmd' || mod === 'meta' ? 'command' : 'shift',
+    hotkeyModifier: normalizeModifier(raw?.hotkeyModifier),
     locale: normalizeLocale(raw?.locale ?? DEFAULTS.locale),
   };
 }
@@ -77,11 +91,39 @@ function setLocale(locale) {
 }
 
 function modifierGlyph(mod = getHotkeyModifier()) {
-  return mod === 'command' ? '⌘' : '⇧';
+  switch (normalizeModifier(mod)) {
+    case 'option':
+      return '⌥';
+    case 'control':
+      return '⌃';
+    case 'capslock':
+      return '⇪';
+    case 'command':
+    default:
+      return '⌘';
+  }
 }
 
+/**
+ * Electron globalShortcut accelerator prefix.
+ * Caps Lock is not a supported accelerator mod — returns '' (bare key).
+ */
 function acceleratorPrefix(mod = getHotkeyModifier()) {
-  return mod === 'command' ? 'Command' : 'Shift';
+  switch (normalizeModifier(mod)) {
+    case 'option':
+      return 'Option';
+    case 'control':
+      return 'Control';
+    case 'capslock':
+      return '';
+    case 'command':
+    default:
+      return 'Command';
+  }
+}
+
+function isValidModifier(mod) {
+  return MODIFIERS.includes(normalizeModifier(mod));
 }
 
 module.exports = {
@@ -94,5 +136,8 @@ module.exports = {
   setLocale,
   modifierGlyph,
   acceleratorPrefix,
+  normalizeModifier,
+  isValidModifier,
+  MODIFIERS,
   DEFAULTS,
 };

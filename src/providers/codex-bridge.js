@@ -676,7 +676,8 @@ class CodexBridge extends EventEmitter {
     // CLI: Agent 1 = new window · 2–6 = split in that window only (in order)
     let slot = requested;
     try {
-      const r = await this.ensureAgentCliWindow(requested, { focus });
+      // Always bring the Agent CLI pane forward on select (ignore dbl-tap flag).
+      const r = await this.ensureAgentCliWindow(requested, { focus: true });
       if (r?.mode === 'blocked') {
         this.emitState(r.error || lt('bridge.order'));
         return { ok: false, reason: r.reason || 'blocked', slot: requested };
@@ -745,13 +746,14 @@ class CodexBridge extends EventEmitter {
    * Ensure Terminal has a Codex CLI window for this agent slot.
    * @param {number} slot
    * @param {{ focus?: boolean, command?: string }} [opts]
+   *        focus defaults to true; pass false for voice prep (keep pad key focus).
    */
   async ensureAgentCliWindow(slot, opts = {}) {
     if (process.platform !== 'darwin') {
       return { ok: false, error: 'macOS only' };
     }
     return mac.ensureCodexCliWindow(slot, {
-      focus: !!opts.focus,
+      focus: opts.focus !== false,
       command: opts.command || this._codexCliCommand(),
     });
   }
@@ -975,10 +977,10 @@ class CodexBridge extends EventEmitter {
   }
 
   /**
-   * Start macOS dictation into the pad's hidden text sink (renderer-focused).
-   * CLI TUI often cannot receive system dictation directly.
+   * Ensure login + a CLI slot for later paste. Does not start dictation and must
+   * not steal key focus (pad sink needs to stay first-responder).
    */
-  async beginVoiceDictation() {
+  async prepareVoiceDictation() {
     const slot = this.selected;
     try {
       const login = await this.checkLogin();
@@ -993,23 +995,37 @@ class CodexBridge extends EventEmitter {
         return { ok: false, error: hint, code: 'AUTH', stale: !!login.stale, slot };
       }
 
-      // Ensure a CLI slot exists so we can paste when dictation ends
-      const focus = await this.ensureAgentCliWindow(slot, { focus: false });
-      if (!focus?.ok) {
-        const hint = focus?.error || focus?.reason || lt('bridge.dictationFail');
+      const cli = await this.ensureAgentCliWindow(slot, { focus: false });
+      if (!cli?.ok) {
+        const hint = cli?.error || cli?.reason || lt('bridge.dictationFail');
         this.emitState(hint);
-        return { ok: false, error: hint, code: focus?.reason || 'NO_CLI', slot };
+        return { ok: false, error: hint, code: cli?.reason || 'NO_CLI', slot };
       }
-
-      await mac.triggerDictation('start');
-      this.emitState(lt('bridge.speak'));
-      return { ok: true, mode: 'pad-sink', slot };
+      return { ok: true, slot, opened: !!cli.opened };
     } catch (e) {
       this.emit('log', e.message);
       const hint =
         e.code === 'NO_CODEX_APP' || e.code === 'WRONG_APP' || e.code === 'NO_CLI'
           ? e.message
           : lt('bridge.dictationFail');
+      this.emitState(hint);
+      return { ok: false, error: hint, code: e.code || 'DICTATION', slot };
+    }
+  }
+
+  /**
+   * Start macOS dictation into the pad's focused text sink.
+   * Caller (main) must refocus the pad after prepareVoiceDictation.
+   */
+  async beginVoiceDictation() {
+    const slot = this.selected;
+    try {
+      await mac.triggerDictation('start');
+      this.emitState(lt('bridge.speak'));
+      return { ok: true, mode: 'pad-sink', slot };
+    } catch (e) {
+      this.emit('log', e.message);
+      const hint = lt('bridge.dictationFail');
       this.emitState(hint);
       return { ok: false, error: hint, code: e.code || 'DICTATION', slot };
     }

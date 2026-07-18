@@ -244,13 +244,19 @@ async function main() {
   console.log('\n--- dictation ---');
   if (process.env.SMOKE_DICTATION === '1') {
     try {
-      const b = await bridge.beginVoiceDictation();
-      if (b?.ok) pass('voice.dictation.begin', `app=${b.app || '?'} slot=${b.slot}`);
-      else fail('voice.dictation.begin', b?.error || JSON.stringify(b));
-      await new Promise((r) => setTimeout(r, 700));
-      const e = await bridge.endVoiceDictation();
-      if (e?.ok) pass('voice.dictation.end', `slot=${e.slot}`);
-      else fail('voice.dictation.end', e?.error || JSON.stringify(e));
+      const prep = await bridge.prepareVoiceDictation();
+      if (!prep?.ok) {
+        fail('voice.dictation.prepare', prep?.error || JSON.stringify(prep));
+      } else {
+        pass('voice.dictation.prepare', `slot=${prep.slot}`);
+        const b = await bridge.beginVoiceDictation();
+        if (b?.ok) pass('voice.dictation.begin', `mode=${b.mode || '?'} slot=${b.slot}`);
+        else fail('voice.dictation.begin', b?.error || JSON.stringify(b));
+        await new Promise((r) => setTimeout(r, 700));
+        const e = await bridge.endVoiceDictation();
+        if (e?.ok) pass('voice.dictation.end', `slot=${e.slot}`);
+        else fail('voice.dictation.end', e?.error || JSON.stringify(e));
+      }
     } catch (e) {
       fail('voice.dictation', e.message);
     }
@@ -262,6 +268,13 @@ async function main() {
       else fail('voice.cliFocus', JSON.stringify(focus).slice(0, 120));
     } catch (e) {
       fail('voice.cliFocus', e.message);
+    }
+    try {
+      if (typeof bridge.prepareVoiceDictation === 'function') {
+        pass('voice.prepare.exists');
+      } else fail('voice.prepare.exists', 'missing');
+    } catch (e) {
+      fail('voice.prepare.exists', e.message);
     }
     skip('voice.dictation.begin', 'set SMOKE_DICTATION=1');
   }
