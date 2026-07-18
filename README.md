@@ -61,7 +61,7 @@ pnpm start
 | Agent ×6 | 1 = 새 CLI 창 · 2–6 = 직전 에이전트에서 순차 스플릿 (1→2→3…) · 이미 있으면 포커스 |
 | ⚡ Fast | reasoning → minimal |
 | ✓ / ✕ | Approve / Decline |
-| Fork | `thread/fork` → 다음 빈 슬롯 + CLI 스플릿 (UI는 6/6일 때만 비활성) |
+| Fork | 소스 세션 fork → 다음 빈 슬롯에 `codex fork`/`resume` CLI 스플릿 (UI는 6/6일 때만 비활성) |
 | Mic | 홀드 = PTT · 더블탭 = hands-free |
 | Send | Continue · 더블탭 = new chat |
 | Dial | reasoning effort |

@@ -1,5 +1,6 @@
 const { spawn, execFile } = require('child_process');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const readline = require('readline');
 const EventEmitter = require('events');
@@ -135,7 +136,9 @@ class CodexBridge extends EventEmitter {
 
   /**
    * Fork current thread into the next empty slot, open/focus its CLI split.
-   * UI stays enabled until 6/6; runtime still needs a live source agent.
+   * Prefer a disk-backed session (CLI rollout). App-server thread/fork alone
+   * often fails with "no rollout found" when the slot id is a phantom
+   * thread/start id that never wrote a rollout.
    */
   async fork() {
     const active = this._activeCount();
@@ -163,26 +166,45 @@ class CodexBridge extends EventEmitter {
     let threadId = src.threadId;
     let name = `${src.name || 'Agent'} · fork`;
     let status = 'idle';
+    let launchCmd = null;
 
-    if (!this.connected || !threadId || String(threadId).startsWith('demo')) {
+    if (!this.connected || String(threadId || '').startsWith('demo')) {
       // Demo / offline: copy slot state into empty agent
       name = `${src.name || 'Agent'} · continued`;
       status = 'thinking';
       threadId = src.threadId || `demo-fork-${Date.now()}`;
     } else {
-      try {
-        const result = await this.request('thread/fork', { threadId: src.threadId });
-        threadId = result?.thread?.id || result?.threadId || result?.id;
-        if (!threadId) {
-          this.emitState(lt('bridge.forkNoThread'));
-          return { ok: false, reason: 'no-id' };
+      const sourceId = await this._resolveForkableThreadId(src);
+      let forkedId = null;
+
+      if (sourceId) {
+        try {
+          const result = await this.request('thread/fork', { threadId: sourceId });
+          forkedId = result?.thread?.id || result?.threadId || result?.id || null;
+        } catch (e) {
+          if (!isNoRolloutError(e)) {
+            this.emitState(lt('bridge.forkFail', { err: e.message }));
+            return { ok: false, error: e.message };
+          }
+          this.emit('log', `fork app-server: ${e.message}; CLI fallback`);
         }
-      } catch (e) {
-        this.emitState(lt('bridge.forkFail', { err: e.message }));
-        return { ok: false, error: e.message };
+      }
+
+      if (forkedId && shellQuoteId(forkedId)) {
+        threadId = forkedId;
+        // Resume the already-forked thread in the new pane
+        launchCmd = this._codexSubcommand(`resume ${shellQuoteId(forkedId)}`);
+      } else {
+        // CLI reads ~/.codex/sessions rollouts directly (reliable path)
+        const quoted = shellQuoteId(sourceId);
+        launchCmd = quoted
+          ? this._codexSubcommand(`fork ${quoted}`)
+          : this._codexSubcommand('fork --last');
+        threadId = quoted || `fork-pending-${Date.now()}`;
       }
     }
 
+    const prevSelected = this.selected;
     this.agents[target] = {
       name,
       status,
@@ -193,14 +215,63 @@ class CodexBridge extends EventEmitter {
     this.selected = target;
 
     // Always open/focus CLI split for the fork target (Agent N pane)
+    const rollback = () => {
+      this.agents[target] = emptyAgent();
+      this.selected = prevSelected;
+    };
     try {
-      await this.ensureAgentCliWindow(target, { focus: true });
+      const cli = await this.ensureAgentCliWindow(target, {
+        focus: true,
+        command: launchCmd || undefined,
+      });
+      if (cli && cli.ok === false) {
+        const err = cli.error || cli.reason || 'cli open failed';
+        rollback();
+        this.emit('log', `fork cli: ${err}`);
+        this.emitState(lt('bridge.forkFail', { err }));
+        return { ok: false, error: err, slot: target };
+      }
     } catch (e) {
+      rollback();
       this.emit('log', `fork cli: ${e.message}`);
+      this.emitState(lt('bridge.forkFail', { err: e.message }));
+      return { ok: false, error: e.message, slot: target };
     }
 
     this.emitState(lt('bridge.forkOk', { n: target + 1 }));
     return { ok: true, slot: target };
+  }
+
+  /**
+   * Pick a session id that has a real rollout on disk (forkable).
+   * Slot threadIds from thread/start are often missing rollouts.
+   */
+  async _resolveForkableThreadId(src) {
+    const candidates = [];
+    const slotId = src?.threadId;
+    if (slotId && !String(slotId).startsWith('demo')) candidates.push(slotId);
+
+    if (this.connected) {
+      try {
+        let result;
+        try {
+          result = await this.request('thread/list', { limit: 24 });
+        } catch {
+          result = await this.request('thread/list', {});
+        }
+        for (const t of normalizeThreads(result)) {
+          if (t?.id && !candidates.includes(t.id)) candidates.push(t.id);
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    for (const id of candidates) {
+      if (findRolloutPathForThread(id)) return id;
+    }
+
+    return findNewestRolloutThreadId();
   }
 
   emitState(action) {
@@ -614,8 +685,11 @@ class CodexBridge extends EventEmitter {
       this.selected = slot;
       const a = this.agents[this.selected];
       if (a.status === 'complete') a.status = 'idle';
-      if (a.status === 'off' && this.connected) {
-        this.startThread(this.selected).catch(() => {});
+      // Mark live when CLI opens — do NOT thread/start here.
+      // Phantom app-server ids without rollouts break later thread/fork.
+      if (a.status === 'off') {
+        a.status = 'idle';
+        if (!a.name || a.name === '—') a.name = `Agent ${slot + 1}`;
       }
       if (r?.opened && r.mode === 'window') {
         this.emitState(lt('bridge.window', { n: slot + 1 }));
@@ -636,6 +710,15 @@ class CodexBridge extends EventEmitter {
 
   /** Shell command to launch interactive Codex CLI in Terminal. */
   _codexCliCommand() {
+    return this._codexSubcommand('');
+  }
+
+  /**
+   * Build a Codex CLI launch line with Agent Micro profile flags.
+   * Subcommands are appended after global flags so ids are not eaten as PROMPT.
+   * @param {string} sub e.g. '' | 'fork --last' | 'resume <uuid>'
+   */
+  _codexSubcommand(sub) {
     const bin = findCodexNative();
     let base = 'codex';
     if (!bin) {
@@ -647,18 +730,21 @@ class CodexBridge extends EventEmitter {
     } else {
       base = `'${String(bin).replace(/'/g, `'\\''`)}'`;
     }
+    let cmd = base;
     try {
       const { withCliFlags } = require('../codex-settings');
-      return withCliFlags(base);
+      cmd = withCliFlags(base);
     } catch {
-      return base;
+      /* keep base */
     }
+    const extra = String(sub || '').trim();
+    return extra ? `${cmd} ${extra}` : cmd;
   }
 
   /**
    * Ensure Terminal has a Codex CLI window for this agent slot.
    * @param {number} slot
-   * @param {{ focus?: boolean }} [opts]
+   * @param {{ focus?: boolean, command?: string }} [opts]
    */
   async ensureAgentCliWindow(slot, opts = {}) {
     if (process.platform !== 'darwin') {
@@ -666,7 +752,7 @@ class CodexBridge extends EventEmitter {
     }
     return mac.ensureCodexCliWindow(slot, {
       focus: !!opts.focus,
-      command: this._codexCliCommand(),
+      command: opts.command || this._codexCliCommand(),
     });
   }
 
@@ -961,6 +1047,97 @@ class CodexBridge extends EventEmitter {
       return { ok: false, error: e.message, slot };
     }
   }
+}
+
+function isNoRolloutError(err) {
+  const msg = String(err?.message || err || '').toLowerCase();
+  return (
+    msg.includes('no rollout found') ||
+    msg.includes('thread not found') ||
+    msg.includes('not loaded')
+  );
+}
+
+/** Safe for shell: session ids are UUIDs; reject anything else. */
+function shellQuoteId(id) {
+  const s = String(id || '').trim();
+  if (!/^[0-9a-fA-F-]{8,}$/.test(s)) return '';
+  return s;
+}
+
+function sessionsRoot() {
+  return path.join(os.homedir(), '.codex', 'sessions');
+}
+
+/** Return rollout jsonl path for a thread id, or null. */
+function findRolloutPathForThread(threadId) {
+  const id = String(threadId || '').trim();
+  if (!id || id.startsWith('demo')) return null;
+  const root = sessionsRoot();
+  if (!fs.existsSync(root)) return null;
+
+  const stack = [root];
+  while (stack.length) {
+    const dir = stack.pop();
+    let entries = [];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const ent of entries) {
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) {
+        stack.push(full);
+        continue;
+      }
+      if (!ent.isFile()) continue;
+      if (ent.name.includes(id) && ent.name.endsWith('.jsonl')) return full;
+    }
+  }
+  return null;
+}
+
+/** Newest rollout thread id under ~/.codex/sessions, or null. */
+function findNewestRolloutThreadId() {
+  const root = sessionsRoot();
+  if (!fs.existsSync(root)) return null;
+
+  let best = null;
+  let bestMtime = -1;
+  const stack = [root];
+  const re = /([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\.jsonl$/;
+
+  while (stack.length) {
+    const dir = stack.pop();
+    let entries = [];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const ent of entries) {
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) {
+        stack.push(full);
+        continue;
+      }
+      if (!ent.isFile() || !ent.name.endsWith('.jsonl')) continue;
+      const m = ent.name.match(re);
+      if (!m) continue;
+      let mtime = 0;
+      try {
+        mtime = fs.statSync(full).mtimeMs;
+      } catch {
+        continue;
+      }
+      if (mtime > bestMtime) {
+        bestMtime = mtime;
+        best = m[1];
+      }
+    }
+  }
+  return best;
 }
 
 function normalizeThreads(result) {
