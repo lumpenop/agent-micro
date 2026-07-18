@@ -1046,6 +1046,13 @@ function closeKeymap() {
 
 /* ——— Codex CLI settings panel ——— */
 const settingsPanel = document.getElementById('settings-panel');
+const setWorkingDirectory = document.getElementById('set-working-directory');
+const setWritableRoots = document.getElementById('set-writable-roots');
+const setWorkspaceNetwork = document.getElementById('set-workspace-network');
+const setModel = document.getElementById('set-model');
+const setReasoning = document.getElementById('set-reasoning');
+const setPersonality = document.getElementById('set-personality');
+const setWebSearch = document.getElementById('set-web-search');
 const setSandbox = document.getElementById('set-sandbox');
 const setApproval = document.getElementById('set-approval');
 const setStartup = document.getElementById('set-startup');
@@ -1062,6 +1069,13 @@ const settingsLicenseBuyBtn = document.getElementById('settings-license-buy');
 
 function readSettingsForm() {
   return {
+    working_directory: setWorkingDirectory?.value?.trim() || '',
+    writable_roots: String(setWritableRoots?.value || '').split(/\r?\n/).map((v) => v.trim()).filter(Boolean),
+    workspace_network_access: !!setWorkspaceNetwork?.checked,
+    model: setModel?.value?.trim() || '',
+    model_reasoning_effort: setReasoning?.value || '',
+    personality: setPersonality?.value || '',
+    web_search: setWebSearch?.value || '',
     sandbox_mode: setSandbox?.value || 'workspace-write',
     approval_policy: setApproval?.value || 'on-request',
     startup_timeout_sec: Number(setStartup?.value) || 30,
@@ -1072,6 +1086,22 @@ function readSettingsForm() {
 }
 
 function fillSettingsForm(s = {}) {
+  if (setWorkingDirectory) {
+    setWorkingDirectory.value = s.working_directory || '';
+    setWorkingDirectory.placeholder = t('settings.workingDirectory.auto');
+  }
+  if (setWritableRoots) {
+    setWritableRoots.value = Array.isArray(s.writable_roots) ? s.writable_roots.join('\n') : '';
+    setWritableRoots.placeholder = t('settings.writableRoots.placeholder');
+  }
+  if (setWorkspaceNetwork) setWorkspaceNetwork.checked = !!s.workspace_network_access;
+  if (setModel) {
+    setModel.value = s.model || '';
+    setModel.placeholder = t('settings.model.placeholder');
+  }
+  if (setReasoning) setReasoning.value = s.model_reasoning_effort || '';
+  if (setPersonality) setPersonality.value = s.personality || '';
+  if (setWebSearch) setWebSearch.value = s.web_search || '';
   if (setSandbox) setSandbox.value = s.sandbox_mode || 'workspace-write';
   if (setApproval) setApproval.value = s.approval_policy || 'on-request';
   if (setStartup) setStartup.value = String(s.startup_timeout_sec ?? 30);
@@ -1233,9 +1263,23 @@ document.getElementById('settings-save')?.addEventListener('click', async () => 
         ? t('flash.savedWarn', { warn: r.warning })
         : t('flash.savedApply', { path: r.profile || 'agent-micro' });
     }
-  } else {
+  } else if (!r?.canceled) {
     flashAction(t('flash.settingsFail'));
   }
+});
+document.getElementById('settings-choose-directory')?.addEventListener('click', async () => {
+  const r = await api?.chooseCodexWorkingDirectory?.();
+  if (r?.ok && setWorkingDirectory) setWorkingDirectory.value = r.path || '';
+});
+document.getElementById('settings-clear-directory')?.addEventListener('click', () => {
+  if (setWorkingDirectory) setWorkingDirectory.value = '';
+});
+document.getElementById('settings-add-writable-root')?.addEventListener('click', async () => {
+  const r = await api?.chooseCodexWorkingDirectory?.();
+  if (!r?.ok || !r.path || !setWritableRoots) return;
+  const roots = String(setWritableRoots.value || '').split(/\r?\n/).map((v) => v.trim()).filter(Boolean);
+  if (!roots.includes(r.path)) roots.push(r.path);
+  setWritableRoots.value = roots.join('\n');
 });
 document.getElementById('settings-ignore')?.addEventListener('click', async () => {
   const r = await api?.writeCodexIgnore?.();

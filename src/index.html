@@ -176,12 +176,78 @@
               </div>
             </div>
 
+            <div class="settings-section">
+              <p class="settings-section-title" data-i18n="settings.workspace">Workspace</p>
+              <div class="settings-field">
+                <label class="voice-label" for="set-working-directory" data-i18n="settings.workingDirectory">Default working folder</label>
+                <input id="set-working-directory" class="voice-input" type="text" readonly
+                  placeholder="Automatic (home folder)" />
+                <p class="settings-desc" data-i18n="settings.workingDirectory.desc">New Agent CLI windows and hidden threads start in this folder.</p>
+                <div class="voice-actions settings-inline-actions">
+                  <button type="button" class="voice-btn" id="settings-choose-directory" data-i18n="settings.workingDirectory.choose">Choose folder</button>
+                  <button type="button" class="voice-btn" id="settings-clear-directory" data-i18n="settings.workingDirectory.clear">Use automatic</button>
+                </div>
+              </div>
+              <div class="settings-field">
+                <label class="voice-label" for="set-writable-roots" data-i18n="settings.writableRoots">Additional writable folders</label>
+                <textarea id="set-writable-roots" class="voice-input" rows="3" spellcheck="false"
+                  placeholder="One absolute path per line"></textarea>
+                <p class="settings-desc" data-i18n="settings.writableRoots.desc">Only applies to workspace-write. The current working folder is already writable.</p>
+                <div class="voice-actions settings-inline-actions">
+                  <button type="button" class="voice-btn" id="settings-add-writable-root" data-i18n="settings.writableRoots.add">Add folder</button>
+                </div>
+              </div>
+              <div class="settings-field">
+                <label class="settings-check" for="set-workspace-network">
+                  <input id="set-workspace-network" type="checkbox" />
+                  <span data-i18n="settings.workspaceNetwork">Allow command network access</span>
+                </label>
+                <p class="settings-desc" data-i18n="settings.workspaceNetwork.desc">Allows commands spawned in workspace-write to access the network.</p>
+              </div>
+            </div>
+
             <div class="settings-field">
               <label class="voice-label" for="set-locale" data-i18n="settings.language">Language</label>
               <select id="set-locale" class="voice-input settings-select">
                 <option value="en" data-i18n="settings.lang.en">English</option>
                 <option value="ko" data-i18n="settings.lang.ko">한국어</option>
               </select>
+            </div>
+
+            <div class="settings-section">
+              <p class="settings-section-title" data-i18n="settings.core">Model &amp; response</p>
+              <div class="settings-field">
+                <label class="voice-label" for="set-model" data-i18n="settings.model">model · Model</label>
+                <input id="set-model" class="voice-input" type="text" autocomplete="off" spellcheck="false"
+                  data-i18n-placeholder="settings.model.placeholder" placeholder="Automatic (Codex default)" />
+                <p class="settings-desc" data-i18n="settings.model.desc">Leave blank to let Codex choose its default model.</p>
+              </div>
+              <div class="settings-row">
+                <div class="settings-field">
+                  <label class="voice-label" for="set-reasoning" data-i18n="settings.reasoning">Reasoning effort</label>
+                  <select id="set-reasoning" class="voice-input settings-select">
+                    <option value="" data-i18n="settings.auto">Automatic</option>
+                    <option value="minimal">minimal</option><option value="low">low</option>
+                    <option value="medium">medium</option><option value="high">high</option><option value="xhigh">xhigh</option>
+                  </select>
+                </div>
+                <div class="settings-field">
+                  <label class="voice-label" for="set-personality" data-i18n="settings.personality">Personality</label>
+                  <select id="set-personality" class="voice-input settings-select">
+                    <option value="" data-i18n="settings.auto">Automatic</option>
+                    <option value="friendly">Friendly</option><option value="pragmatic">Pragmatic</option><option value="none">None</option>
+                  </select>
+                </div>
+              </div>
+              <div class="settings-field">
+                <label class="voice-label" for="set-web-search" data-i18n="settings.webSearch">web_search · Web search</label>
+                <select id="set-web-search" class="voice-input settings-select">
+                  <option value="" data-i18n="settings.auto">Automatic</option>
+                  <option value="cached">cached</option><option value="indexed">indexed</option>
+                  <option value="live">live</option><option value="disabled">disabled</option>
+                </select>
+                <p class="settings-desc" data-i18n="settings.webSearch.desc">Cached is safer; live fetches the latest web results.</p>
+              </div>
             </div>
 
             <div class="settings-field">

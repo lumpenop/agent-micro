@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld('codexDesktop', {
     ipcRenderer.invoke('voice:transcribeAudio', bytes, mimeType),
   getCodexSettings: () => ipcRenderer.invoke('codexSettings:get'),
   saveCodexSettings: (partial) => ipcRenderer.invoke('codexSettings:save', partial),
+  chooseCodexWorkingDirectory: () => ipcRenderer.invoke('codexSettings:chooseWorkingDirectory'),
   writeCodexIgnore: () => ipcRenderer.invoke('codexSettings:writeIgnore'),
   openCodexConfig: () => ipcRenderer.invoke('codexSettings:openConfig'),
   getPadPrefs: () => ipcRenderer.invoke('padPrefs:get'),

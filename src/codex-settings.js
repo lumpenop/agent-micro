@@ -11,8 +11,15 @@ const BEGIN = '# BEGIN agent-micro-managed';
 const END = '# END agent-micro-managed';
 
 const DEFAULTS = {
+  working_directory: '',
+  model: '',
+  model_reasoning_effort: '',
+  personality: '',
+  web_search: '',
   sandbox_mode: 'workspace-write',
   approval_policy: 'on-request',
+  writable_roots: [],
+  workspace_network_access: false,
   startup_timeout_sec: 30,
   tool_timeout_sec: 60,
   job_max_runtime_seconds: 1800,
@@ -21,6 +28,9 @@ const DEFAULTS = {
 
 const SANDBOX_MODES = ['read-only', 'workspace-write', 'danger-full-access'];
 const APPROVAL_POLICIES = ['untrusted', 'on-request', 'never'];
+const REASONING_EFFORTS = ['', 'minimal', 'low', 'medium', 'high', 'xhigh'];
+const PERSONALITIES = ['', 'friendly', 'pragmatic', 'none'];
+const WEB_SEARCH_MODES = ['', 'cached', 'indexed', 'live', 'disabled'];
 
 const CODEXIGNORE_SAMPLE = `# Agent Micro · Codex ignore (context / RAM)
 node_modules/
@@ -91,8 +101,21 @@ function normalize(raw = {}) {
     ? raw.approval_policy
     : DEFAULTS.approval_policy;
   return {
+    working_directory: typeof raw.working_directory === 'string'
+      ? raw.working_directory.trim().slice(0, 2048) : '',
+    model: typeof raw.model === 'string' ? raw.model.trim().slice(0, 120) : '',
+    model_reasoning_effort: REASONING_EFFORTS.includes(raw.model_reasoning_effort)
+      ? raw.model_reasoning_effort : '',
+    personality: PERSONALITIES.includes(raw.personality) ? raw.personality : '',
+    web_search: WEB_SEARCH_MODES.includes(raw.web_search) ? raw.web_search : '',
     sandbox_mode: sandbox,
     approval_policy: approval,
+    writable_roots: Array.isArray(raw.writable_roots)
+      ? [...new Set(raw.writable_roots
+        .filter((v) => typeof v === 'string')
+        .map((v) => v.trim()).filter(Boolean))].slice(0, 32)
+      : [],
+    workspace_network_access: !!raw.workspace_network_access,
     startup_timeout_sec: clampInt(raw.startup_timeout_sec, 5, 300, DEFAULTS.startup_timeout_sec),
     tool_timeout_sec: clampInt(raw.tool_timeout_sec, 10, 3600, DEFAULTS.tool_timeout_sec),
     job_max_runtime_seconds: clampInt(
@@ -103,6 +126,10 @@ function normalize(raw = {}) {
     ),
     network_proxy: !!raw.network_proxy,
   };
+}
+
+function tomlString(value) {
+  return `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
 function load() {
@@ -119,11 +146,21 @@ function load() {
 
 function profileToml(s) {
   const cfg = normalize(s);
+  const optional = [
+    cfg.model && `model = ${tomlString(cfg.model)}`,
+    cfg.model_reasoning_effort && `model_reasoning_effort = ${tomlString(cfg.model_reasoning_effort)}`,
+    cfg.personality && `personality = ${tomlString(cfg.personality)}`,
+    cfg.web_search && `web_search = ${tomlString(cfg.web_search)}`,
+  ].filter(Boolean).join('\n');
   return `${BEGIN}
 # Written by Agent Micro · use: codex --profile ${PROFILE}
-sandbox_mode = "${cfg.sandbox_mode}"
+${optional ? `${optional}\n` : ''}sandbox_mode = "${cfg.sandbox_mode}"
 approval_policy = "${cfg.approval_policy}"
 agents.job_max_runtime_seconds = ${cfg.job_max_runtime_seconds}
+
+[sandbox_workspace_write]
+writable_roots = [${cfg.writable_roots.map(tomlString).join(', ')}]
+network_access = ${cfg.workspace_network_access}
 
 [features.network_proxy]
 enabled = ${cfg.network_proxy}
@@ -139,11 +176,17 @@ ${END}
 function cliConfigArgs(s = load()) {
   const cfg = normalize(s);
   return [
+    cfg.model && `model=${tomlString(cfg.model)}`,
+    cfg.model_reasoning_effort && `model_reasoning_effort=${tomlString(cfg.model_reasoning_effort)}`,
+    cfg.personality && `personality=${tomlString(cfg.personality)}`,
+    cfg.web_search && `web_search=${tomlString(cfg.web_search)}`,
     `sandbox_mode="${cfg.sandbox_mode}"`,
     `approval_policy="${cfg.approval_policy}"`,
+    `sandbox_workspace_write.writable_roots=[${cfg.writable_roots.map(tomlString).join(',')}]`,
+    `sandbox_workspace_write.network_access=${cfg.workspace_network_access}`,
     `agents.job_max_runtime_seconds=${cfg.job_max_runtime_seconds}`,
     `features.network_proxy.enabled=${cfg.network_proxy}`,
-  ];
+  ].filter(Boolean);
 }
 
 function shellQuote(s) {
@@ -217,6 +260,10 @@ function upsertManagedBlock(toml, block) {
   return trimmed ? `${trimmed}\n\n${block}\n` : `${block}\n`;
 }
 
+function removeManagedBlock(toml) {
+  return String(toml || '').replace(new RegExp(`${BEGIN}[\\s\\S]*?${END}\\n?`, 'm'), '').replace(/^\s+/, '');
+}
+
 function save(partial) {
   const next = normalize({ ...load(), ...partial });
   const warnings = [];
@@ -236,7 +283,9 @@ function save(partial) {
     ensureCodexHome();
     const cfgPath = userConfigPath();
     let toml = fs.existsSync(cfgPath) ? fs.readFileSync(cfgPath, 'utf8') : '';
-    toml = upsertManagedBlock(toml, profileToml(next).trim());
+    // The complete managed settings live in the selected profile file. Remove
+    // legacy copies from global config to avoid duplicate TOML tables.
+    toml = removeManagedBlock(toml);
     toml = patchMcpTimeouts(toml, next.startup_timeout_sec, next.tool_timeout_sec);
     fs.writeFileSync(cfgPath, toml, 'utf8');
   } catch (e) {
@@ -269,6 +318,9 @@ function meta() {
     defaults: { ...DEFAULTS },
     sandboxModes: SANDBOX_MODES,
     approvalPolicies: APPROVAL_POLICIES,
+    reasoningEfforts: REASONING_EFFORTS,
+    personalities: PERSONALITIES,
+    webSearchModes: WEB_SEARCH_MODES,
     profile: PROFILE,
     profilePath: profilePath(),
     configPath: userConfigPath(),
@@ -279,12 +331,16 @@ module.exports = {
   DEFAULTS,
   SANDBOX_MODES,
   APPROVAL_POLICIES,
+  REASONING_EFFORTS,
+  PERSONALITIES,
+  WEB_SEARCH_MODES,
   PROFILE,
   setUserDataPath,
   load,
   save,
   meta,
   cliConfigArgs,
+  profileToml,
   withCliFlags,
   writeCodexIgnore,
   CODEXIGNORE_SAMPLE,

@@ -9,8 +9,9 @@
     "dev": "ELECTRON_RUN_AS_NODE= electron .",
     "test:safe": "node scripts/smoke-features.js",
     "test:voice": "node scripts/test-local-voice.js",
-    "dist:mac": "electron-builder --mac dir --arm64",
-    "postinstall": "node scripts/ensure-electron.js && node scripts/ensure-codex.js"
+    "ensure:whisper": "node scripts/ensure-whisper.js",
+    "dist:mac": "node scripts/ensure-whisper.js && electron-builder --mac dir --arm64",
+    "postinstall": "node scripts/ensure-electron.js && node scripts/ensure-codex.js && node scripts/ensure-whisper.js"
   },
   "keywords": [
     "agent",

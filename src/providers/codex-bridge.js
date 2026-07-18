@@ -741,14 +741,22 @@ class CodexBridge extends EventEmitter {
       base = `'${String(bin).replace(/'/g, `'\\''`)}'`;
     }
     let cmd = base;
+    let workingDirectory = '';
     try {
-      const { withCliFlags } = require('../codex-settings');
+      const { withCliFlags, load } = require('../codex-settings');
       cmd = withCliFlags(base);
+      const configured = load().working_directory;
+      if (configured && fs.existsSync(configured) && fs.statSync(configured).isDirectory()) {
+        workingDirectory = configured;
+      }
     } catch {
       /* keep base */
     }
     const extra = String(sub || '').trim();
-    return extra ? `${cmd} ${extra}` : cmd;
+    const launch = extra ? `${cmd} ${extra}` : cmd;
+    return workingDirectory
+      ? `cd '${workingDirectory.replace(/'/g, `'\\''`)}' && ${launch}`
+      : launch;
   }
 
   /**
@@ -769,7 +777,11 @@ class CodexBridge extends EventEmitter {
 
   async startThread(slot = this.selected) {
     if (!this.connected) return;
-    const cwd = process.env.HOME || process.cwd();
+    let cwd = process.env.HOME || process.cwd();
+    try {
+      const configured = require('../codex-settings').load().working_directory;
+      if (configured && fs.existsSync(configured) && fs.statSync(configured).isDirectory()) cwd = configured;
+    } catch {}
     const result = await this.request('thread/start', { cwd });
     const id = result?.thread?.id || result?.threadId || result?.id;
     if (id) {

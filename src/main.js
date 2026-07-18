@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, globalShortcut, shell, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, globalShortcut, shell, Menu, dialog } = require('electron');
 const fs = require('fs');
 const os = require('os');
 const { execFile } = require('child_process');
@@ -599,9 +599,29 @@ ipcMain.handle('codexSettings:get', () => {
     meta: codexSettings.meta(),
   };
 });
-ipcMain.handle('codexSettings:save', (_e, partial) => {
+ipcMain.handle('codexSettings:save', async (_e, partial) => {
   if (trialLocked()) return trialDenied();
+  if (partial?.sandbox_mode === 'danger-full-access' && partial?.approval_policy === 'never') {
+    const { response } = await dialog.showMessageBox(mainWindow, {
+      type: 'warning',
+      buttons: [i18n.t(padPrefs.getLocale(), 'settings.risk.cancel'), i18n.t(padPrefs.getLocale(), 'settings.risk.confirm')],
+      defaultId: 0,
+      cancelId: 0,
+      title: i18n.t(padPrefs.getLocale(), 'settings.risk.title'),
+      message: i18n.t(padPrefs.getLocale(), 'settings.risk.message'),
+      detail: i18n.t(padPrefs.getLocale(), 'settings.risk.detail'),
+    });
+    if (response !== 1) return { ok: false, canceled: true, reason: 'risk-canceled' };
+  }
   return codexSettings.save(partial || {});
+});
+ipcMain.handle('codexSettings:chooseWorkingDirectory', async () => {
+  if (trialLocked()) return trialDenied();
+  const r = await dialog.showOpenDialog(mainWindow, {
+    title: i18n.t(padPrefs.getLocale(), 'settings.workingDirectory.choose'),
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  return r.canceled ? { ok: false, canceled: true } : { ok: true, path: r.filePaths?.[0] || '' };
 });
 ipcMain.handle('codexSettings:writeIgnore', async () => {
   if (trialLocked()) return trialDenied();
