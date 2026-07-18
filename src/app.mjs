@@ -368,6 +368,37 @@ let micCancelStart = false;
 let pendingMicLatch = false;
 let micStartGen = 0;
 const voiceSink = document.getElementById('voice-sink');
+let voiceStream = null;
+let voiceAudioContext = null;
+let voiceSource = null;
+let voiceProcessor = null;
+let voicePcm = [];
+let voiceSampleRate = 48000;
+
+function encodeVoiceWav(chunks, sampleRate) {
+  const rawLength = chunks.reduce((n, x) => n + x.length, 0);
+  const raw = new Float32Array(rawLength);
+  let cursor = 0;
+  for (const chunk of chunks) { raw.set(chunk, cursor); cursor += chunk.length; }
+  // Do not reject or trim quiet recordings here: laptop/headset input levels vary
+  // greatly. Whisper and the transcript filters handle silence/hallucinations.
+  const samples = raw;
+  const length = samples.length;
+  const buffer = new ArrayBuffer(44 + length * 2);
+  const view = new DataView(buffer);
+  const write = (offset, text) => [...text].forEach((c, i) => view.setUint8(offset + i, c.charCodeAt(0)));
+  write(0, 'RIFF'); view.setUint32(4, 36 + length * 2, true); write(8, 'WAVE');
+  write(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true); view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+  write(36, 'data'); view.setUint32(40, length * 2, true);
+  let offset = 44;
+  for (const value of samples) {
+    const sample = Math.max(-1, Math.min(1, value));
+    view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true); offset += 2;
+  }
+  return new Uint8Array(buffer);
+}
 
 function armVoiceSink({ clear = true } = {}) {
   if (!voiceSink) return;
@@ -391,7 +422,7 @@ function disarmVoiceSink() {
   return text;
 }
 
-/** Mic = macOS dictation into pad sink, then paste into Agent CLI (no Whisper). */
+/** Mic = real audio capture → Apple Speech → selected Agent CLI. */
 async function startRecording({ latched = false } = {}) {
   if (dictationActive || micStarting) return;
   if (padBlocks()) return;
@@ -400,31 +431,38 @@ async function startRecording({ latched = false } = {}) {
   micCancelStart = false;
   pendingMicLatch = latched;
   flashAction(t('flash.codexJump'));
-  armVoiceSink();
-  // Let the sink become first-responder before Fn/dictation hotkey
-  await new Promise((r) => setTimeout(r, 80));
+  const prep = await api?.prepareVoiceCapture?.();
+  if (!prep?.ok) {
+    micStarting = false;
+    flashAction(prep?.error || t('flash.codexApp'));
+    return;
+  }
   if (gen !== micStartGen) {
     micStarting = false;
     return;
   }
-  const r = await api?.beginVoiceDictation?.();
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    voiceStream = stream;
+    voicePcm = [];
+    voiceAudioContext = new AudioContext();
+    voiceSampleRate = voiceAudioContext.sampleRate;
+    voiceSource = voiceAudioContext.createMediaStreamSource(stream);
+    voiceProcessor = voiceAudioContext.createScriptProcessor(4096, 1, 1);
+    voiceProcessor.onaudioprocess = (event) => voicePcm.push(new Float32Array(event.inputBuffer.getChannelData(0)));
+    voiceSource.connect(voiceProcessor);
+    voiceProcessor.connect(voiceAudioContext.destination);
+  } catch (e) {
+    stream?.getTracks?.().forEach((track) => track.stop());
+    micStarting = false;
+    flashAction(e?.name === 'NotAllowedError' ? '마이크 권한을 허용하세요' : String(e?.message || e));
+    return;
+  }
   if (gen !== micStartGen) {
     micStarting = false;
     return;
   }
-  if (!r?.ok) {
-    micStarting = false;
-    disarmVoiceSink();
-    if (r?.code === 'AUTH') {
-      flashAction(r.stale ? t('flash.authStale') : t('flash.needLogin'));
-      await connectAgent({ forceLogin: true });
-      return;
-    }
-    flashAction(r?.error || t('flash.codexApp'));
-    return;
-  }
-  // Re-focus sink after IPC — do not clear (dictation may already be inserting)
-  armVoiceSink({ clear: false });
   dictationActive = true;
   state.recording = true;
   micLatched = latched;
@@ -454,22 +492,18 @@ async function stopRecording({ process = true } = {}) {
   pad3d?.releasePress?.('mic');
   if (!process) {
     flashAction(t('flash.dictationCancel'));
-    await api?.endVoiceDictation?.();
-    disarmVoiceSink();
+    voiceProcessor?.disconnect(); voiceSource?.disconnect(); await voiceAudioContext?.close();
+    voiceStream?.getTracks?.().forEach((track) => track.stop());
+    voiceAudioContext = null; voiceSource = null; voiceProcessor = null; voiceStream = null; voicePcm = [];
     return;
   }
   flashAction(t('flash.codexSending'));
-  // Keep sink focused while dictation stops so text commits into it
-  voiceSink?.focus({ preventScroll: true });
-  await api?.endVoiceDictation?.();
-  // macOS often needs a beat to flush recognized text into the field
-  await new Promise((r) => setTimeout(r, 280));
-  const text = disarmVoiceSink();
-  if (!text) {
-    flashAction(t('flash.dictationCancel'));
-    return;
-  }
-  const sent = await api?.submitVoiceText?.(text);
+  voiceProcessor?.disconnect(); voiceSource?.disconnect(); await voiceAudioContext?.close();
+  voiceStream?.getTracks?.().forEach((track) => track.stop());
+  const bytes = encodeVoiceWav(voicePcm, voiceSampleRate);
+  voiceAudioContext = null; voiceSource = null; voiceProcessor = null; voiceStream = null; voicePcm = [];
+  if (!bytes.length) { flashAction('음성이 너무 작거나 짧습니다'); return; }
+  const sent = await api?.transcribeVoiceAudio?.(bytes, 'audio/wav');
   flashAction(sent?.ok ? t('flash.codexSent') : sent?.error || t('flash.codexApp'));
 }
 

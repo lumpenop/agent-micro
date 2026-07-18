@@ -1,4 +1,7 @@
 const { app, BrowserWindow, ipcMain, screen, globalShortcut, shell, Menu } = require('electron');
+const fs = require('fs');
+const os = require('os');
+const { execFile } = require('child_process');
 const path = require('path');
 const { createCodexBridge, focusCodexDesktop } = require('./providers/create-bridge');
 const codexSettings = require('./codex-settings');
@@ -666,6 +669,50 @@ ipcMain.handle('voice:beginDictation', async () => {
 
   // 3) Start dictation while pad/sink is first-responder
   return bridge.beginVoiceDictation();
+});
+ipcMain.handle('voice:prepareCapture', async () => {
+  if (trialLocked()) return trialDenied();
+  return (await bridge?.prepareVoiceDictation?.()) || { ok: false, error: 'voice unavailable' };
+});
+ipcMain.handle('voice:transcribeAudio', async (_e, bytes, mimeType) => {
+  if (trialLocked()) return trialDenied();
+  const data = Buffer.from(bytes || []);
+  if (!data.length) return { ok: false, code: 'EMPTY_AUDIO', error: 'empty audio' };
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-micro-voice-'));
+  const wav = path.join(dir, 'voice.wav');
+  const resourceRoot = app.isPackaged ? process.resourcesPath : path.join(__dirname, '..', 'assets');
+  const arch = process.arch === 'x64' ? 'darwin-x64' : 'darwin-arm64';
+  const whisper = path.join(resourceRoot, 'bin', arch, 'whisper-cli');
+  const model = path.join(resourceRoot, 'models', 'ggml-base.bin');
+  try {
+    if (!fs.existsSync(whisper)) return { ok: false, code: 'WHISPER_MISSING', error: `Whisper 없음: ${arch}` };
+    if (!fs.existsSync(model)) return { ok: false, code: 'MODEL_MISSING', error: 'Whisper 모델 없음' };
+    fs.writeFileSync(wav, data);
+    let text = await new Promise((resolve, reject) => {
+      execFile(whisper, ['-ng', '-m', model, '-f', wav, '-l', 'ko', '-nt', '-np', '-nf', '-sns'],
+        { timeout: 90000 }, (err, stdout, stderr) => {
+        if (err) reject(new Error(String(stderr || err.message).trim()));
+        else resolve(String(stdout || '').trim());
+      });
+    });
+    // Whisper can repeat the same bracketed short utterance over silence.
+    text = text.replace(/(\[[^\]]+\])(?:\s*\1)+/g, '$1').replace(/\s+/g, ' ').trim();
+    const hallucinations = [
+      '구독과 좋아요 부탁드립니다', '구독과 좋아요를 부탁드립니다',
+      '시청해 주셔서 감사합니다', '시청해주셔서 감사합니다',
+    ];
+    if (hallucinations.some((phrase) => text.replace(/[.!?。]/g, '').includes(phrase))) {
+      return { ok: false, code: 'NO_SPEECH', error: '인식된 음성이 없습니다' };
+    }
+    if (!text) return { ok: false, code: 'EMPTY_TRANSCRIPT', error: '인식된 음성이 없습니다' };
+    const sent = await bridge?.submitVoiceText?.(text);
+    return { ...(sent || { ok: false }), text };
+  } catch (e) {
+    return { ok: false, code: 'TRANSCRIBE', error: e.message };
+  } finally {
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+    refocusPad(380);
+  }
 });
 ipcMain.handle('voice:endDictation', async () => {
   if (trialLocked()) return trialDenied();

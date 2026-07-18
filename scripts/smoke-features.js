@@ -30,8 +30,9 @@ function skip(name, detail = '') {
 
 async function main() {
   console.log('=== Agent Micro feature smoke ===\n');
+  const liveActions = process.env.SMOKE_LIVE_ACTIONS === '1';
 
-  ok('voice.mode', 'macOS dictation only (Whisper removed)');
+  ok('voice.mode', 'bundled local Whisper (WAV capture, no API key)');
 
   // ── settings / prefs ──
   const settings = require('../src/codex-settings');
@@ -117,54 +118,33 @@ async function main() {
       fail('codex.setReasoning', e.message);
     }
 
-    try {
-      await bridge.approve();
-      ok('codex.approve', 'no-op when nothing pending');
-    } catch (e) {
-      fail('codex.approve', e.message);
+    if (liveActions) {
+      try { await bridge.approve(); ok('codex.approve', 'live action'); }
+      catch (e) { fail('codex.approve', e.message); }
+      try { await bridge.decline(); ok('codex.decline', 'live action'); }
+      catch (e) { fail('codex.decline', e.message); }
+    } else {
+      skip('codex.approve', 'set SMOKE_LIVE_ACTIONS=1 (types into visible CLI)');
+      skip('codex.decline', 'set SMOKE_LIVE_ACTIONS=1 (types into visible CLI)');
     }
 
-    try {
-      await bridge.decline();
-      ok('codex.decline', 'no-op when nothing pending');
-    } catch (e) {
-      fail('codex.decline', e.message);
-    }
-
-    try {
-      const before = (bridge.agents || []).map((a) => a?.threadId).join(',');
-      // send a tiny ping on current/selected — starts thread if needed
-      await bridge.send('Agent Micro smoke test ping — reply with exactly: ok');
-      const a = bridge.agents[bridge.selected];
-      ok(
-        'codex.send',
-        `slot=${bridge.selected + 1} status=${a?.status} thread=${a?.threadId ? 'yes' : 'no'}`
-      );
-      // wait briefly for turn
-      await new Promise((r) => setTimeout(r, 4000));
-      const a2 = bridge.agents[bridge.selected];
-      ok('codex.send.followup', `status=${a2?.status} (was ${before ? 'had threads' : 'fresh'})`);
-    } catch (e) {
-      fail('codex.send', e.message);
-    }
-
-    try {
-      if (typeof bridge.voiceToCodex === 'function') {
+    if (liveActions) {
+      try {
+        await bridge.send('Agent Micro smoke test ping — reply with exactly: ok');
+        ok('codex.send', `slot=${bridge.selected + 1}`);
+      } catch (e) { fail('codex.send', e.message); }
+      try {
         await bridge.voiceToCodex('smoke voice text');
         ok('codex.voiceToCodex', 'invoked');
-      } else skip('codex.voiceToCodex', 'missing');
-    } catch (e) {
-      fail('codex.voiceToCodex', e.message);
-    }
-
-    try {
-      if (typeof bridge.skill === 'function') {
+      } catch (e) { fail('codex.voiceToCodex', e.message); }
+      try {
         await bridge.skill('review');
         ok('codex.skill', 'review');
-      } else skip('codex.skill', 'missing');
-    } catch (e) {
-      // skill may fail if no thread — still report
-      fail('codex.skill', e.message);
+      } catch (e) { fail('codex.skill', e.message); }
+    } else {
+      skip('codex.send', 'set SMOKE_LIVE_ACTIONS=1 (sends a real prompt)');
+      skip('codex.voiceToCodex', 'set SMOKE_LIVE_ACTIONS=1 (sends a real prompt)');
+      skip('codex.skill', 'set SMOKE_LIVE_ACTIONS=1 (sends a real prompt)');
     }
 
     try {
@@ -176,14 +156,10 @@ async function main() {
       fail('codex.togglePlan', e.message);
     }
 
-    try {
-      if (typeof bridge.newChat === 'function') {
-        await bridge.newChat();
-        ok('codex.newChat', 'invoked');
-      } else skip('codex.newChat', 'missing');
-    } catch (e) {
-      fail('codex.newChat', e.message);
-    }
+    if (liveActions) {
+      try { await bridge.newChat(); ok('codex.newChat', 'invoked'); }
+      catch (e) { fail('codex.newChat', e.message); }
+    } else skip('codex.newChat', 'set SMOKE_LIVE_ACTIONS=1 (opens a real CLI)');
   } else {
     for (const n of [
       'codex.toggleFast',

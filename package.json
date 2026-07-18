@@ -7,6 +7,9 @@
   "scripts": {
     "start": "ELECTRON_RUN_AS_NODE= electron .",
     "dev": "ELECTRON_RUN_AS_NODE= electron .",
+    "test:safe": "node scripts/smoke-features.js",
+    "test:voice": "node scripts/test-local-voice.js",
+    "dist:mac": "electron-builder --mac dir --arm64",
     "postinstall": "node scripts/ensure-electron.js && node scripts/ensure-codex.js"
   },
   "keywords": [
@@ -18,8 +21,29 @@
   "author": "",
   "license": "MIT",
   "type": "commonjs",
+  "build": {
+    "appId": "com.agentmicro.desktop",
+    "productName": "Agent Micro",
+    "asar": true,
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      { "from": "assets/bin", "to": "bin" },
+      { "from": "assets/models/ggml-base.bin", "to": "models/ggml-base.bin" }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "identity": null,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Agent Micro uses the microphone for local speech-to-text commands."
+      }
+    }
+  },
   "devDependencies": {
-    "electron": "^37.2.0"
+    "electron": "^37.2.0",
+    "electron-builder": "^26.15.3"
   },
   "dependencies": {
     "@openai/codex": "^0.144.5"

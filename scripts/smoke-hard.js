@@ -27,6 +27,10 @@ function skip(name, detail = '') {
 
 async function main() {
   console.log('=== Agent Micro HARD SMOKE ===\n');
+  if (process.env.SMOKE_LIVE_ACTIONS !== '1') {
+    console.log('SKIP  hard smoke — set SMOKE_LIVE_ACTIONS=1; this test opens Terminal and sends real prompts');
+    return;
+  }
 
   const settings = require('../src/codex-settings');
   const prefs = require('../src/pad-prefs');

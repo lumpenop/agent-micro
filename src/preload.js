@@ -33,6 +33,9 @@ contextBridge.exposeInMainWorld('codexDesktop', {
   beginVoiceDictation: () => ipcRenderer.invoke('voice:beginDictation'),
   endVoiceDictation: () => ipcRenderer.invoke('voice:endDictation'),
   submitVoiceText: (text) => ipcRenderer.invoke('voice:submitText', text),
+  prepareVoiceCapture: () => ipcRenderer.invoke('voice:prepareCapture'),
+  transcribeVoiceAudio: (bytes, mimeType) =>
+    ipcRenderer.invoke('voice:transcribeAudio', bytes, mimeType),
   getCodexSettings: () => ipcRenderer.invoke('codexSettings:get'),
   saveCodexSettings: (partial) => ipcRenderer.invoke('codexSettings:save', partial),
   writeCodexIgnore: () => ipcRenderer.invoke('codexSettings:writeIgnore'),

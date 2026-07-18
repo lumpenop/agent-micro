@@ -32,3 +32,7 @@ release/
 # temp / screenshots
 /tmp/
 *.png.tmp
+
+# local Whisper / ML models (too large for GitHub)
+assets/models/
+*.bin

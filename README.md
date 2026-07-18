@@ -3,7 +3,7 @@
 **Agent Micro** — Codex CLI용 플로팅 맥로패드.
 
 Connect = `app-server` · 키/조이스틱/마이크 모두 CLI로 전송합니다.  
-마이크는 **macOS 받아쓰기**만 사용합니다 (Whisper / Platform API 키 없음).
+마이크는 앱에 내장된 **로컬 Whisper**를 사용합니다 (Platform API 키·외부 전송 없음). 최초 사용 시 마이크 권한만 허용하세요.
 
 나중에 “어떤 에이전트를 쓸지” 고르는 UI가 필요하면 그린필드로 붙이세요 (`src/providers/create-bridge.js` 주석 참고).
 

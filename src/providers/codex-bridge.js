@@ -43,11 +43,18 @@ const PLATFORM_BIN = {
 function findCodexNative() {
   const key = `${process.platform}-${process.arch}`;
   const spec = PLATFORM_BIN[key];
-  const root = path.join(__dirname, '..', '..', 'node_modules', '@openai');
+  const roots = [path.join(__dirname, '..', '..', 'node_modules', '@openai')];
+  // electron-builder unpacks native executables next to app.asar. A path inside
+  // app.asar cannot be passed to spawn(), so prefer the real unpacked resource.
+  if (process.resourcesPath) {
+    roots.unshift(path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', '@openai'));
+  }
 
   if (spec) {
-    const hoisted = path.join(root, path.basename(spec.pkg), ...spec.parts);
-    if (fs.existsSync(hoisted)) return hoisted;
+    for (const root of roots) {
+      const hoisted = path.join(root, path.basename(spec.pkg), ...spec.parts);
+      if (fs.existsSync(hoisted)) return hoisted;
+    }
     try {
       const pkgJson = require.resolve(`${spec.pkg}/package.json`);
       const resolved = path.join(path.dirname(pkgJson), ...spec.parts);
@@ -64,8 +71,10 @@ function findCodexNative() {
     /* fall through */
   }
 
-  const js = path.join(root, 'codex', 'bin', 'codex.js');
-  if (fs.existsSync(js)) return { type: 'node', path: js };
+  for (const root of roots) {
+    const js = path.join(root, 'codex', 'bin', 'codex.js');
+    if (fs.existsSync(js)) return { type: 'node', path: js };
+  }
   return null;
 }
 
@@ -908,14 +917,14 @@ class CodexBridge extends EventEmitter {
     const empty = this.agents.findIndex((a) => a.status === 'off');
     const slot = empty === -1 ? this.selected : empty;
     this.selected = slot;
-    if (this.connected) {
-      try {
-        await this.startThread(slot);
-      } catch (e) {
-        this.emit('log', `newChat thread: ${e.message}`);
-      }
-    } else {
+    if (!this.connected) {
       this.agents[slot] = demo('New task', 'idle');
+    } else {
+      // The visible CLI owns the session. Starting a hidden app-server thread here
+      // creates a phantom id with no rollout, so later resume/fork operations fail.
+      this.agents[slot] = {
+        name: 'New task', status: 'idle', threadId: null, turnId: null, approvalId: null,
+      };
     }
     // Always open/focus the visible CLI for that slot
     try {
