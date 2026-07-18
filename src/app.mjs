@@ -1046,6 +1046,8 @@ function closeKeymap() {
 
 /* ——— Codex CLI settings panel ——— */
 const settingsPanel = document.getElementById('settings-panel');
+const mcpPanel = document.getElementById('mcp-panel');
+const mcpList = document.getElementById('mcp-list');
 const setWorkingDirectory = document.getElementById('set-working-directory');
 const setWritableRoots = document.getElementById('set-writable-roots');
 const setWorkspaceNetwork = document.getElementById('set-workspace-network');
@@ -1355,6 +1357,71 @@ function closeSettings() {
   if (settingsPanel) settingsPanel.hidden = true;
 }
 
+function closeMcp() {
+  if (mcpPanel) mcpPanel.hidden = true;
+}
+
+function mcpText(tag, className, value) {
+  const el = document.createElement(tag);
+  if (className) el.className = className;
+  el.textContent = value;
+  return el;
+}
+
+async function refreshMcpServers() {
+  if (!mcpList) return;
+  mcpList.replaceChildren(mcpText('p', 'settings-status is-muted', t('mcp.loading')));
+  const result = await api?.listMcpServers?.();
+  if (!result?.ok) {
+    mcpList.replaceChildren(mcpText('p', 'settings-status is-bad', result?.error || t('mcp.error')));
+    return;
+  }
+  mcpList.replaceChildren();
+  if (!result.servers?.length) {
+    mcpList.append(mcpText('p', 'settings-status is-muted', t('mcp.empty')));
+    return;
+  }
+  for (const server of result.servers) {
+    const card = document.createElement('div'); card.className = 'mcp-server-card';
+    const head = document.createElement('div'); head.className = 'mcp-server-head';
+    head.append(mcpText('span', 'mcp-server-name', server.name));
+    const toggleLabel = document.createElement('label'); toggleLabel.className = 'settings-check';
+    const toggle = document.createElement('input'); toggle.type = 'checkbox'; toggle.checked = server.enabled !== false;
+    toggleLabel.append(toggle, mcpText('span', '', toggle.checked ? t('mcp.enabled') : t('mcp.disabled')));
+    head.append(toggleLabel); card.append(head);
+    const transport = server.transport || {};
+    card.append(mcpText('p', 'mcp-server-meta', `${transport.type || 'unknown'} · ${transport.url || transport.command || ''}`));
+    const row = document.createElement('div'); row.className = 'settings-row';
+    const makeTimeout = (label, value, min, max) => {
+      const field = document.createElement('div'); field.className = 'settings-field';
+      field.append(mcpText('label', 'voice-label', label));
+      const input = document.createElement('input'); input.className = 'voice-input'; input.type = 'number'; input.min = String(min); input.max = String(max); input.value = String(value);
+      field.append(input); return { field, input };
+    };
+    const startup = makeTimeout(t('settings.startup'), server.startup_timeout_sec ?? 30, 5, 300);
+    const tool = makeTimeout(t('settings.tool'), server.tool_timeout_sec ?? 60, 10, 3600);
+    row.append(startup.field, tool.field); card.append(row);
+    const save = async () => {
+      card.style.opacity = '0.55';
+      const saved = await api?.setMcpServerOptions?.(server.name, { enabled: toggle.checked, startup_timeout_sec: Number(startup.input.value), tool_timeout_sec: Number(tool.input.value) });
+      card.style.opacity = '';
+      if (!saved?.ok) flashAction(saved?.error || t('mcp.error'));
+      else { toggleLabel.lastChild.textContent = toggle.checked ? t('mcp.enabled') : t('mcp.disabled'); flashAction(t('mcp.saved')); }
+    };
+    toggle.addEventListener('change', save);
+    startup.input.addEventListener('change', save);
+    tool.input.addEventListener('change', save);
+    mcpList.append(card);
+  }
+}
+
+async function openMcp() {
+  closeSettings(); closeGuide(); closeKeymap(); closeIconPicker();
+  if (!mcpPanel) return;
+  mcpPanel.hidden = false;
+  await refreshMcpServers();
+}
+
 document.getElementById('btn-help')?.addEventListener('click', openGuide);
 document.getElementById('btn-keymap')?.addEventListener('click', openKeymap);
 document.getElementById('mod-picker')?.addEventListener('click', async (e) => {
@@ -1366,6 +1433,13 @@ document.getElementById('mod-picker')?.addEventListener('click', async (e) => {
   flashAction(t(`flash.mod.${mod}`));
 });
 document.getElementById('btn-settings')?.addEventListener('click', openSettings);
+document.getElementById('btn-mcp')?.addEventListener('click', openMcp);
+document.getElementById('mcp-close')?.addEventListener('click', closeMcp);
+document.getElementById('mcp-refresh')?.addEventListener('click', refreshMcpServers);
+document.getElementById('mcp-open-config')?.addEventListener('click', () => api?.openCodexConfig?.());
+document.getElementById('btn-settings')?.addEventListener('click', closeMcp);
+document.getElementById('btn-help')?.addEventListener('click', closeMcp);
+document.getElementById('btn-keymap')?.addEventListener('click', closeMcp);
 document.getElementById('guide-close')?.addEventListener('click', closeGuide);
 document.getElementById('keymap-close')?.addEventListener('click', closeKeymap);
 document.getElementById('settings-close')?.addEventListener('click', closeSettings);
@@ -1379,6 +1453,9 @@ keymapPanel?.addEventListener('click', (e) => {
 });
 settingsPanel?.addEventListener('click', (e) => {
   if (e.target === settingsPanel) closeSettings();
+});
+mcpPanel?.addEventListener('click', (e) => {
+  if (e.target === mcpPanel) closeMcp();
 });
 document.getElementById('settings-save')?.addEventListener('click', async () => {
   const r = await api?.saveCodexSettings?.(readSettingsForm());

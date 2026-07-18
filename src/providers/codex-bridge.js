@@ -326,6 +326,19 @@ class CodexBridge extends EventEmitter {
     }
   }
 
+  async listMcpServers() {
+    const bin = findCodexNative();
+    if (!bin) return { ok: false, error: 'Codex CLI missing', servers: [] };
+    try {
+      const output = await this._runCodex(bin, ['mcp', 'list', '--json'], 15000);
+      const jsonStart = output.indexOf('[');
+      const servers = JSON.parse(jsonStart >= 0 ? output.slice(jsonStart) : output);
+      return { ok: true, servers: Array.isArray(servers) ? servers : [] };
+    } catch (error) {
+      return { ok: false, error: error.message, servers: [] };
+    }
+  }
+
   /** Opens ChatGPT device login in the browser, then reports status. */
   async login() {
     const bin = findCodexNative();

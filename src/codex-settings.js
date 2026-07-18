@@ -357,6 +357,35 @@ function patchMcpTimeouts(toml, startup, tool) {
   return out.join('\n');
 }
 
+function setMcpServerOptions(name, options = {}) {
+  if (!/^[A-Za-z0-9_-]{1,80}$/.test(String(name || ''))) throw new Error('invalid MCP server name');
+  ensureCodexHome();
+  const cfgPath = userConfigPath();
+  let text = fs.existsSync(cfgPath) ? fs.readFileSync(cfgPath, 'utf8') : '';
+  const heading = `[mcp_servers.${name}]`;
+  let lines = text.split(/\r?\n/);
+  let start = lines.findIndex((line) => line.trim() === heading);
+  if (start < 0) {
+    if (text.trim()) lines.push('');
+    lines.push(heading);
+    start = lines.length - 1;
+  }
+  let end = start + 1;
+  while (end < lines.length && !/^\s*\[/.test(lines[end])) end++;
+  const values = {
+    enabled: options.enabled === false ? 'false' : 'true',
+    startup_timeout_sec: String(clampInt(options.startup_timeout_sec, 5, 300, 30)),
+    tool_timeout_sec: String(clampInt(options.tool_timeout_sec, 10, 3600, 60)),
+  };
+  for (const [key, value] of Object.entries(values)) {
+    const at = lines.findIndex((line, index) => index > start && index < end && new RegExp(`^\\s*${key}\\s*=`).test(line));
+    if (at >= 0) lines[at] = `${key} = ${value}`;
+    else { lines.splice(end, 0, `${key} = ${value}`); end++; }
+  }
+  fs.writeFileSync(cfgPath, `${lines.join('\n').replace(/\s*$/, '')}\n`, 'utf8');
+  return { ok: true, name, ...options };
+}
+
 function upsertManagedBlock(toml, block) {
   const src = String(toml || '');
   const re = new RegExp(`${BEGIN}[\\s\\S]*?${END}\\n?`, 'm');
@@ -452,5 +481,6 @@ module.exports = {
   agentRoleToml,
   withCliFlags,
   writeCodexIgnore,
+  setMcpServerOptions,
   CODEXIGNORE_SAMPLE,
 };

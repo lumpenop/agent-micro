@@ -628,6 +628,18 @@ ipcMain.handle('resources:getUsage', () => {
   const totalKb = metrics.reduce((sum, metric) => sum + Number(metric.memory?.workingSetSize || 0), 0);
   return { ok: true, ramMb: Math.round(totalKb / 1024), processCount: metrics.length };
 });
+ipcMain.handle('mcp:list', async () => {
+  if (trialLocked()) return trialDenied();
+  return bridge?.listMcpServers?.() || { ok: false, servers: [], error: 'Codex unavailable' };
+});
+ipcMain.handle('mcp:setOptions', async (_e, name, options) => {
+  if (trialLocked()) return trialDenied();
+  try {
+    return codexSettings.setMcpServerOptions(name, options || {});
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
 ipcMain.handle('codexSettings:writeIgnore', async () => {
   if (trialLocked()) return trialDenied();
   const { dialog } = require('electron');

@@ -18,6 +18,7 @@
           <button type="button" class="link-dot no-drag" id="link-dot" title="Connect / Reconnect" aria-label="Connect"></button>
         </span>
         <div class="chrome-actions no-drag">
+          <button type="button" class="chrome-btn chrome-tab" id="btn-mcp" title="MCP servers" data-i18n-title="chrome.mcp">MCP</button>
           <button type="button" class="chrome-btn" id="btn-help" title="User guide" data-i18n-title="chrome.help">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
           </button>
@@ -424,6 +425,23 @@
             <button type="button" class="voice-btn primary" id="settings-save" data-i18n="settings.save">Save</button>
             <button type="button" class="voice-btn" id="settings-ignore" data-i18n="settings.ignore">.codexignore</button>
             <button type="button" class="voice-btn" id="settings-open-config" data-i18n="settings.openConfig">config.toml</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="icon-picker" id="mcp-panel" hidden>
+        <div class="icon-picker-card provider-card settings-card">
+          <div class="guide-head">
+            <div class="guide-head-copy"><span class="guide-kicker">Codex CLI</span><span class="guide-title" data-i18n="mcp.title">MCP servers</span></div>
+            <button type="button" class="chrome-btn" id="mcp-close" title="Close" data-i18n-title="chrome.close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+          </div>
+          <div class="modal-scroll settings-scroll">
+            <p class="provider-lead" data-i18n="mcp.lead">Installed MCP servers from all active Codex configuration layers.</p>
+            <div class="settings-body" id="mcp-list"><p class="settings-status is-muted" data-i18n="mcp.loading">Loading…</p></div>
+          </div>
+          <div class="voice-actions">
+            <button type="button" class="voice-btn primary" id="mcp-refresh" data-i18n="mcp.refresh">Refresh</button>
+            <button type="button" class="voice-btn" id="mcp-open-config" data-i18n="settings.openConfig">config.toml</button>
           </div>
         </div>
       </div>
