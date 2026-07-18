@@ -932,7 +932,7 @@ export function createPad3D(container, handlers = {}) {
     const max = 0.2;
     const nx = x / max;
     const nz = z / max;
-    const axisLeft = Math.abs(z) * 0.12;
+    const axisLeft = Math.abs(z) * 0.18;
     joyStick.position.x = x * 0.55 - axisLeft;
     joyStick.position.z = z * 0.55;
     joyStick.rotation.z = JOY_REST_TILT_Z - nx * 0.62;
@@ -941,7 +941,7 @@ export function createPad3D(container, handlers = {}) {
 
   /** Screen-space center of the joy socket — nudged left for up/down axis */
   function joyScreenCenter() {
-    _dialScreen.set(-0.03, 0.08, 0);
+    _dialScreen.set(-0.05, 0.08, 0);
     joyGroup.localToWorld(_dialScreen);
     _dialScreen.project(camera);
     const rect = renderer.domElement.getBoundingClientRect();

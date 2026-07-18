@@ -558,11 +558,23 @@ picker?.addEventListener('click', (e) => {
   if (e.target === picker) closeIconPicker();
 });
 
+/** Inline SVGs for guide key badges — avoid unicode glyphs that tofu in UI fonts */
+const GUIDE_MARK_SVG = {
+  reconnect: `<svg class="icon-svg icon-stroke" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>`,
+  settings: `<svg class="icon-svg icon-stroke" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>`,
+  keyboard: `<svg class="icon-svg icon-stroke" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.01"/><path d="M10 8h.01"/><path d="M14 8h.01"/><path d="M18 8h.01"/><path d="M6 12h.01"/><path d="M10 12h.01"/><path d="M14 12h.01"/><path d="M18 12h.01"/><path d="M7 16h10"/></svg>`,
+  // Filled triangles — much clearer than thin unicode ↑↓←→
+  up: `<svg class="icon-svg icon-fill" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M12 5.2 20.4 18.1a1.1 1.1 0 0 1-.95 1.7H4.55a1.1 1.1 0 0 1-.95-1.7L12 5.2z"/></svg>`,
+  down: `<svg class="icon-svg icon-fill" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M12 18.8 3.6 5.9a1.1 1.1 0 0 1 .95-1.7h14.9a1.1 1.1 0 0 1 .95 1.7L12 18.8z"/></svg>`,
+  left: `<svg class="icon-svg icon-fill" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M5.2 12 18.1 3.6a1.1 1.1 0 0 1 1.7.95v14.9a1.1 1.1 0 0 1-1.7.95L5.2 12z"/></svg>`,
+  right: `<svg class="icon-svg icon-fill" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M18.8 12 5.9 20.4a1.1 1.1 0 0 1-1.7-.95V4.55a1.1 1.1 0 0 1 1.7-.95L18.8 12z"/></svg>`,
+};
+
 function getGuideItems() {
   return [
     { section: t('guide.sec.start') },
     {
-      key: '↻ / ·',
+      marks: ['reconnect', 'slash', 'dot'],
       title: t('guide.connect.title'),
       text: t('guide.connect.text'),
     },
@@ -594,7 +606,7 @@ function getGuideItems() {
     },
     { section: t('guide.sec.tips') },
     {
-      key: 'Mic',
+      icons: ['mic'],
       title: t('guide.voice.title'),
       text: t('guide.voice.text'),
     },
@@ -604,12 +616,12 @@ function getGuideItems() {
       text: t('guide.icon.text'),
     },
     {
-      key: '⚙',
+      marks: ['settings'],
       title: t('guide.settings.title'),
       text: t('guide.settings.text'),
     },
     {
-      key: '⌨',
+      marks: ['keyboard'],
       title: t('guide.mod.title'),
       text: t('guide.mod.text'),
     },
@@ -663,50 +675,52 @@ function buildKeymapItems(g = modGlyph()) {
     },
     { section: t('map.sec.controls') },
     {
-      key: `${g}Tab`,
+      marks: ['mod', 'tab'],
+      stack: true,
       title: t('map.touch.title'),
       text: t('map.touch.text'),
     },
     {
-      key: `${g}↑↓←→`,
+      marks: ['mod', 'joyPad'],
+      stack: true,
       title: t('map.joy.title'),
       text: t('map.joy.text'),
     },
     {
-      key: 'Dial',
+      marks: ['dial'],
       title: 'Dial',
       text: 'reasoning: minimal → low → medium → high → xhigh',
     },
     { section: 'Joy · Codex' },
     {
-      key: '↑ ↓',
+      marks: ['up', 'down'],
       title: t('map.joy.codex.ud'),
       text: t('map.joy.codex.ud.text'),
     },
     {
-      key: '← →',
+      marks: ['left', 'right'],
       title: t('map.joy.codex.lr'),
       text: t('map.joy.codex.lr.text'),
     },
     { section: 'Joy · Prompts' },
     {
-      key: '↑ ↓',
+      marks: ['up', 'down'],
       title: t('map.joy.prompts.ud'),
       text: t('map.joy.prompts.ud.text'),
     },
     {
-      key: '← →',
+      marks: ['left', 'right'],
       title: t('map.joy.prompts.lr'),
       text: t('map.joy.prompts.lr.text'),
     },
     { section: 'Joy · App' },
     {
-      key: '↑ ↓',
+      marks: ['up', 'down'],
       title: t('map.joy.app.ud'),
       text: t('map.joy.app.ud.text'),
     },
     {
-      key: '← →',
+      marks: ['left', 'right'],
       title: t('map.joy.app.lr'),
       text: t('map.joy.app.lr.text'),
     },
@@ -737,15 +751,71 @@ function guideAgentsVisual() {
   </div>`;
 }
 
+function guideArrowIco(id) {
+  const svg = GUIDE_MARK_SVG[id];
+  return svg ? `<span class="guide-ico guide-ico--arrow">${svg}</span>` : '';
+}
+
+function guideMarksHtml(marks) {
+  return marks
+    .map((id) => {
+      if (id === 'slash') return '<span class="guide-key-slash">/</span>';
+      if (id === 'dot') return '<span class="guide-key-dot" aria-hidden="true"></span>';
+      if (id === 'mod') return `<span class="guide-key-mod">${modGlyph()}</span>`;
+      if (id === 'tab') return '<span class="guide-key-word">Tab</span>';
+      if (id === 'dial') return '<span class="guide-key-word guide-key-word--lg">Dial</span>';
+      if (id === 'joyPad') {
+        return `<span class="guide-joy-pad" aria-hidden="true">
+          <span></span>${guideArrowIco('up')}<span></span>
+          ${guideArrowIco('left')}<span></span>${guideArrowIco('right')}
+          <span></span>${guideArrowIco('down')}<span></span>
+        </span>`;
+      }
+      const svg = GUIDE_MARK_SVG[id];
+      if (!svg) return '';
+      const arrow = id === 'up' || id === 'down' || id === 'left' || id === 'right';
+      return `<span class="guide-ico${arrow ? ' guide-ico--arrow' : ''}">${svg}</span>`;
+    })
+    .join('');
+}
+
+function formatGuideKeyLabel(key) {
+  const s = String(key || '');
+  // ⌘⇧M / ⇧Tab → mods on top, key below (fills the badge vertically)
+  const chord = s.match(/^([⌘⇧⌃⌥]+)(.+)$/u);
+  if (chord && !/\n/.test(s) && chord[2].length <= 4) {
+    return `<span class="guide-chord"><span class="guide-chord-mods">${chord[1]}</span><span class="guide-chord-key">${chord[2]}</span></span>`;
+  }
+  const html = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\n/g, '<br>');
+  return html;
+}
+
 function guideKeyHtml(item) {
   if (item.visual === 'agents') return guideAgentsVisual();
+  if (item.marks?.length) {
+    const arrowPair =
+      item.marks.length === 2 &&
+      item.marks.every((m) => m === 'up' || m === 'down' || m === 'left' || m === 'right');
+    const cls = [
+      'guide-item-key',
+      'guide-item-key--icons',
+      item.stack ? 'guide-item-key--stack' : '',
+      arrowPair ? 'guide-item-key--arrow-pair' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    return `<div class="${cls}">${guideMarksHtml(item.marks)}</div>`;
+  }
   if (item.icons?.length) {
     const icons = item.icons
       .map((id) => `<span class="guide-ico">${iconMarkup(id)}</span>`)
       .join('<span class="guide-ico-sep" aria-hidden="true"></span>');
     return `<div class="guide-item-key guide-item-key--icons">${icons}</div>`;
   }
-  return `<div class="guide-item-key">${String(item.key || '').replace(/\n/g, '<br>')}</div>`;
+  const raw = String(item.key || '');
+  const wrap = raw.includes('\n') || raw.length > 7;
+  const cls = wrap ? 'guide-item-key guide-item-key--wrap' : 'guide-item-key';
+  return `<div class="${cls}">${formatGuideKeyLabel(raw)}</div>`;
 }
 
 function renderGuideList(items) {

@@ -846,9 +846,9 @@ button {
 
 .guide-item {
   display: grid;
-  grid-template-columns: 56px 1fr;
+  grid-template-columns: 68px 1fr;
   gap: 10px;
-  align-items: center;
+  align-items: stretch;
   padding: 8px;
   border-radius: 12px;
   background: rgba(241, 242, 244, 0.72);
@@ -862,20 +862,22 @@ button {
 }
 
 .guide-item-key {
-  min-height: 36px;
+  min-height: 52px;
+  align-self: stretch;
   display: grid;
   place-items: center;
-  font-size: 10px;
+  font-family: "SF Pro Text", "SF Pro Symbols", "Apple Symbols", "Segoe UI Symbol", "Avenir Next", sans-serif;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.01em;
-  color: #47494c;
+  color: #2e3034;
   background:
     linear-gradient(180deg, #fafafa 0%, #f7f7f6 42%, #eeebe8 100%);
   border: 1px solid rgba(120, 118, 112, 0.28);
   border-radius: 10px;
   padding: 6px 5px;
   text-align: center;
-  line-height: 1.2;
+  line-height: 1.15;
   white-space: pre-line;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.95),
@@ -884,13 +886,125 @@ button {
     0 2px 4px rgba(0, 0, 0, 0.06);
 }
 
+.guide-item-key--wrap {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  padding: 6px 3px;
+  word-break: keep-all;
+}
+
+.guide-chord {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  line-height: 1;
+}
+
+.guide-chord-mods {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #2a2c30;
+}
+
+.guide-chord-key {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #1e2024;
+}
+
+.guide-key-slash {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(40, 44, 50, 0.45);
+  line-height: 1;
+  padding: 0 1px;
+}
+
+.guide-key-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #3ecf7a;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+  flex-shrink: 0;
+}
+
+.guide-key-mod {
+  font-family: "SF Pro Text", "SF Pro Symbols", "Apple Symbols", "Segoe UI Symbol", sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  color: #1e2024;
+  flex-shrink: 0;
+}
+
+.guide-key-word {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: #1e2024;
+}
+
+.guide-key-word--lg {
+  font-size: 13px;
+}
+
 .guide-item-key--icons {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  padding: 6px 5px;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 7px 5px;
   white-space: normal;
+}
+
+.guide-item-key--stack {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 4px;
+  padding: 8px 5px;
+}
+
+.guide-item-key--arrow-pair {
+  gap: 6px;
+}
+
+.guide-item-key--arrow-pair .guide-ico--arrow {
+  width: 18px;
+  height: 18px;
+}
+
+.guide-ico--arrow {
+  width: 16px;
+  height: 16px;
+  color: rgba(22, 26, 32, 0.92);
+}
+
+.guide-ico--arrow .icon-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.guide-joy-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 15px);
+  grid-template-rows: repeat(3, 15px);
+  gap: 2px;
+  place-items: center;
+}
+
+.guide-joy-pad .guide-ico--arrow {
+  width: 14px;
+  height: 14px;
 }
 
 .guide-item-key--agents {
