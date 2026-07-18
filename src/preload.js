@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('codexDesktop', {
   login: () => ipcRenderer.invoke('codex:login'),
   beginVoiceDictation: () => ipcRenderer.invoke('voice:beginDictation'),
   endVoiceDictation: () => ipcRenderer.invoke('voice:endDictation'),
+  submitVoiceText: (text) => ipcRenderer.invoke('voice:submitText', text),
   getCodexSettings: () => ipcRenderer.invoke('codexSettings:get'),
   saveCodexSettings: (partial) => ipcRenderer.invoke('codexSettings:save', partial),
   writeCodexIgnore: () => ipcRenderer.invoke('codexSettings:writeIgnore'),

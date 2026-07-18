@@ -340,23 +340,51 @@ function statusLabel(s) {
 
 let micLatched = false;
 let dictationActive = false;
+const voiceSink = document.getElementById('voice-sink');
 
-/** Mic = macOS dictation into the selected Agent CLI pane (no Whisper). */
+function armVoiceSink({ clear = true } = {}) {
+  if (!voiceSink) return;
+  if (clear) voiceSink.value = '';
+  voiceSink.style.pointerEvents = 'auto';
+  voiceSink.focus({ preventScroll: true });
+  try {
+    const n = voiceSink.value.length;
+    voiceSink.setSelectionRange(n, n);
+  } catch {
+    /* ignore */
+  }
+}
+
+function disarmVoiceSink() {
+  if (!voiceSink) return;
+  const text = String(voiceSink.value || '').trim();
+  voiceSink.blur();
+  voiceSink.style.pointerEvents = 'none';
+  voiceSink.value = '';
+  return text;
+}
+
+/** Mic = macOS dictation into pad sink, then paste into Agent CLI (no Whisper). */
 async function startRecording({ latched = false } = {}) {
   if (dictationActive) return;
   if (padBlocks()) return;
   flashAction(t('flash.codexJump'));
+  armVoiceSink();
+  // Let the sink become first-responder before Fn/dictation hotkey
+  await new Promise((r) => setTimeout(r, 80));
   const r = await api?.beginVoiceDictation?.();
   if (!r?.ok) {
+    disarmVoiceSink();
     if (r?.code === 'AUTH') {
       flashAction(r.stale ? t('flash.authStale') : t('flash.needLogin'));
-      // Stale ChatGPT token — force browser re-login then unlock
       await connectAgent({ forceLogin: true });
       return;
     }
     flashAction(r?.error || t('flash.codexApp'));
     return;
   }
+  // Re-focus sink after IPC — do not clear (dictation may already be inserting)
+  armVoiceSink({ clear: false });
   dictationActive = true;
   state.recording = true;
   micLatched = latched;
@@ -376,11 +404,21 @@ async function stopRecording({ process = true } = {}) {
   if (!process) {
     flashAction(t('flash.dictationCancel'));
     await api?.endVoiceDictation?.();
+    disarmVoiceSink();
     return;
   }
   flashAction(t('flash.codexSending'));
+  // Keep sink focused while dictation stops so text commits into it
+  voiceSink?.focus({ preventScroll: true });
   await api?.endVoiceDictation?.();
-  flashAction(t('flash.codexSent'));
+  await new Promise((r) => setTimeout(r, 120));
+  const text = disarmVoiceSink();
+  if (!text) {
+    flashAction(t('flash.dictationCancel'));
+    return;
+  }
+  const sent = await api?.submitVoiceText?.(text);
+  flashAction(sent?.ok ? t('flash.codexSent') : sent?.error || t('flash.codexApp'));
 }
 
 function applyKeyIcons() {

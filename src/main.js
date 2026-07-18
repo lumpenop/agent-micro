@@ -546,9 +546,14 @@ ipcMain.handle('voice:beginDictation', async () => {
   if (!bridge?.beginVoiceDictation) {
     return { ok: false, error: 'dictation not supported' };
   }
-  // Keep pad visible but not key-focusable so dictation lands in the CLI
+  // Dictation lands in the pad's hidden text sink — keep pad key-focused
   try {
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setFocusable(false);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setFocusable(true);
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
   } catch {
     /* ignore */
   }
@@ -556,17 +561,15 @@ ipcMain.handle('voice:beginDictation', async () => {
 });
 ipcMain.handle('voice:endDictation', async () => {
   if (trialLocked()) return trialDenied();
+  return (await bridge?.endVoiceDictation?.()) || { ok: false };
+});
+ipcMain.handle('voice:submitText', async (_e, text) => {
+  if (trialLocked()) return trialDenied();
   let r = { ok: false };
   try {
-    r = (await bridge?.endVoiceDictation?.()) || { ok: false };
+    r = (await bridge?.submitVoiceText?.(text)) || { ok: false };
   } finally {
-    try {
-      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setFocusable(true);
-    } catch {
-      /* ignore */
-    }
-    // After text commits + Return — then bring pad back
-    refocusPad(500);
+    refocusPad(380);
   }
   return r;
 });

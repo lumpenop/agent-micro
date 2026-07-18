@@ -382,6 +382,12 @@ async function triggerDictationMenu(mode = 'start') {
   }
 }
 
+/** Start/stop macOS dictation in whatever app currently has key focus (pad sink or CLI). */
+async function triggerDictation(mode = 'start') {
+  await triggerDictationMenu(mode === 'stop' ? 'stop' : 'start');
+  return { ok: true, mode };
+}
+
 /**
  * Speak into the focused app via macOS dictation (usually Ghostty CLI pane).
  * Prefer focusing a CLI slot first — see beginVoiceDictation in the bridge.
@@ -1228,6 +1234,7 @@ module.exports = {
   cliDecline,
   beginCodexDictation,
   endCodexDictation,
+  triggerDictation,
   submitCodexComposer,
   cliWindowTitle,
   getDefaultTerminalApp,

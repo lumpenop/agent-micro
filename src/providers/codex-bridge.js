@@ -889,8 +889,8 @@ class CodexBridge extends EventEmitter {
   }
 
   /**
-   * macOS dictation into the selected Agent CLI pane.
-   * Focuses that slot first when pad (or another app) is frontmost.
+   * Start macOS dictation into the pad's hidden text sink (renderer-focused).
+   * CLI TUI often cannot receive system dictation directly.
    */
   async beginVoiceDictation() {
     const slot = this.selected;
@@ -907,16 +907,17 @@ class CodexBridge extends EventEmitter {
         return { ok: false, error: hint, code: 'AUTH', stale: !!login.stale, slot };
       }
 
-      // Ensure selected CLI is frontmost before dictation starts
-      const focus = await this.ensureAgentCliWindow(slot, { focus: true });
+      // Ensure a CLI slot exists so we can paste when dictation ends
+      const focus = await this.ensureAgentCliWindow(slot, { focus: false });
       if (!focus?.ok) {
         const hint = focus?.error || focus?.reason || lt('bridge.dictationFail');
         this.emitState(hint);
         return { ok: false, error: hint, code: focus?.reason || 'NO_CLI', slot };
       }
-      const r = await mac.beginCodexDictation({ slot, alreadyFocused: true });
+
+      await mac.triggerDictation('start');
       this.emitState(lt('bridge.speak'));
-      return { ok: true, mode: 'codex-dictation', app: r?.app, slot };
+      return { ok: true, mode: 'pad-sink', slot };
     } catch (e) {
       this.emit('log', e.message);
       const hint =
@@ -928,17 +929,32 @@ class CodexBridge extends EventEmitter {
     }
   }
 
+  /** Stop dictation only — renderer reads sink text and calls submitVoiceText. */
   async endVoiceDictation() {
     const slot = this.selected;
     try {
-      // Stop dictation first so Ghostty/Terminal flush spoken text, then Return
-      if (typeof mac.endCodexDictation === 'function') {
-        await mac.endCodexDictation({ slot });
-      } else {
-        await mac.submitCodexComposer({ slot });
-      }
+      await mac.triggerDictation('stop');
+      // Let macOS flush composed text into the focused sink
+      await new Promise((r) => setTimeout(r, 420));
+      return { ok: true, slot, mode: 'pad-sink' };
+    } catch (e) {
+      this.emit('log', e.message);
+      return { ok: false, error: e.message, slot };
+    }
+  }
+
+  /** Paste dictated text into the selected Agent CLI and submit. */
+  async submitVoiceText(text) {
+    const slot = this.selected;
+    const body = String(text || '').trim();
+    if (!body) {
+      this.emitState(lt('bridge.emptyVoice'));
+      return { ok: false, reason: 'empty', slot };
+    }
+    try {
+      await mac.submitToCli(slot, body);
       this.emitState(lt('bridge.sent'));
-      return { ok: true, slot };
+      return { ok: true, slot, mode: 'cli-paste' };
     } catch (e) {
       this.emit('log', e.message);
       this.emitState(lt('bridge.submitFail'));

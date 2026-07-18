@@ -55,6 +55,26 @@ button {
   overflow: hidden;
 }
 
+/* Off-screen but real text field — macOS dictation inserts here, then we paste to CLI */
+.voice-sink {
+  position: fixed;
+  left: -2400px;
+  top: 0;
+  width: 480px;
+  height: 160px;
+  opacity: 0;
+  border: none;
+  padding: 8px;
+  margin: 0;
+  resize: none;
+  outline: none;
+  z-index: -1;
+  pointer-events: none;
+  font: 16px/1.4 sans-serif;
+  color: #000;
+  background: #fff;
+}
+
 .drag { -webkit-app-region: drag; }
 .no-drag { -webkit-app-region: no-drag; }
 

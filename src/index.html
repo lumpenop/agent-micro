@@ -333,6 +333,18 @@
       </div>
     </div>
 
+    <!-- Receives macOS dictation (CLI TUI often can't). Text is then pasted into Agent CLI. -->
+    <textarea
+      id="voice-sink"
+      class="voice-sink"
+      tabindex="-1"
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="off"
+      spellcheck="false"
+      aria-hidden="true"
+    ></textarea>
+
     <script type="module" src="./app.mjs"></script>
   </body>
 </html>
