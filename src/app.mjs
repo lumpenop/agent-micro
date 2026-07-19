@@ -290,17 +290,21 @@ async function setGitPanelOpen(open) {
   gitButton?.classList.toggle('is-active', next);
   gitButton?.setAttribute('aria-expanded', String(next));
   await api?.setGitPanel?.(next);
+  if (gitRefreshTimer) clearInterval(gitRefreshTimer);
+  gitRefreshTimer = null;
   if (next) {
     await refreshGitStatus();
+    gitRefreshTimer = setInterval(refreshGitStatus, 4000);
   }
 }
 
 async function refreshGitStatus() {
-  const result = await api?.getGitStatus?.();
-  gitStatusSnapshot = result?.ok ? result : null;
   if (!gitPanel || gitPanel.hidden) return;
   const list = document.getElementById('git-change-list');
-  gitRefresh?.classList.toggle('is-loading', false);
+  gitRefresh?.classList.add('is-loading');
+  const result = await api?.getGitStatus?.();
+  gitStatusSnapshot = result?.ok ? result : null;
+  gitRefresh?.classList.remove('is-loading');
   const branch = document.getElementById('git-branch-name');
   if (branch) branch.textContent = result?.ok ? `${result.branch}${result.tracking ? ` · ${result.tracking}` : ''}` : 'Not a Git repo';
   const remote = document.getElementById('git-remote-status');
@@ -2445,7 +2449,3 @@ document.addEventListener('focusout', () => {
 
 flashAction(t('flash.codexCli'));
 applyStaticI18n();
-
-// Git 상태 백그라운드 감시 — 패널이 닫혀있어도 스냅샷 유지
-refreshGitStatus();
-gitRefreshTimer = setInterval(refreshGitStatus, 4000);
