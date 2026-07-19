@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld('codexDesktop', {
   linkInfo: () => ipcRenderer.invoke('codex:linkInfo'),
   loginStatus: () => ipcRenderer.invoke('codex:loginStatus'),
   login: () => ipcRenderer.invoke('codex:login'),
+  switchProvider: (provider) => ipcRenderer.invoke('codex:switchProvider', provider),
   beginVoiceDictation: () => ipcRenderer.invoke('voice:beginDictation'),
   endVoiceDictation: () => ipcRenderer.invoke('voice:endDictation'),
   submitVoiceText: (text) => ipcRenderer.invoke('voice:submitText', text),

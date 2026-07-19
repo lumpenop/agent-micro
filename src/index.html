@@ -162,7 +162,7 @@
         <div class="icon-picker-card provider-card settings-card">
           <div class="guide-head">
             <div class="guide-head-copy">
-              <span class="guide-kicker">Codex CLI</span>
+              <span class="guide-kicker" id="settings-kicker">Codex CLI</span>
               <span class="guide-title" data-i18n="settings.title">Settings</span>
             </div>
             <button type="button" class="chrome-btn" id="settings-close" title="Close" data-i18n-title="chrome.close">
@@ -170,7 +170,7 @@
             </button>
           </div>
           <div class="modal-scroll settings-scroll">
-          <p class="provider-lead" data-i18n="settings.lead">Codex CLI options · saved to ~/.codex · applies to new CLI windows.</p>
+          <p class="provider-lead" id="settings-lead" data-i18n="settings.lead">Codex CLI options · saved to ~/.codex · applies to new CLI windows.</p>
           <input id="settings-search" class="voice-input settings-search" type="search" data-i18n-placeholder="settings.search" placeholder="Search settings…" />
           <div class="settings-body" id="settings-body">
             <div class="settings-field">
@@ -184,9 +184,17 @@
             <div class="settings-section">
               <p class="settings-section-title" data-i18n="settings.account">Account</p>
               <div class="settings-field">
-                <label class="voice-label" data-i18n="settings.codexLogin">Codex login</label>
+                <label class="voice-label" data-i18n="settings.provider">Provider</label>
+                <div class="settings-row">
+                  <button type="button" class="voice-btn settings-provider-btn" id="settings-provider-codex" data-provider="codex">Codex CLI</button>
+                  <button type="button" class="voice-btn settings-provider-btn" id="settings-provider-claude" data-provider="claude">Claude Code</button>
+                </div>
+                <p class="settings-desc" data-i18n="settings.provider.desc">Switch between Codex CLI and Claude Code. Restarts the connection.</p>
+              </div>
+              <div class="settings-field">
+                <label class="voice-label" id="set-codex-login-label" data-i18n="settings.codexLogin">Codex login</label>
                 <p class="settings-status" id="set-codex-status" data-i18n="settings.codexLogin.unknown">Checking…</p>
-                <p class="settings-desc" data-i18n="settings.codexLogin.desc">
+                <p class="settings-desc" id="set-codex-login-desc" data-i18n="settings.codexLogin.desc">
                   ChatGPT login for Codex CLI. Re-login anytime from here.
                 </p>
                 <div class="voice-actions settings-inline-actions">
@@ -530,19 +538,32 @@
       </div>
 
       <div class="icon-picker trial-lock" id="codex-login-gate" hidden>
-        <div class="icon-picker-card guide-card trial-lock-card">
+        <div class="icon-picker-card guide-card trial-lock-card provider-pick-card">
           <div class="guide-head">
             <div class="guide-head-copy">
-              <span class="guide-kicker">Codex CLI</span>
-              <span class="guide-title" data-i18n="loginGate.title">Codex login</span>
+              <span class="guide-kicker">Agent Micro</span>
+              <span class="guide-title" data-i18n="loginGate.title">Choose provider</span>
             </div>
           </div>
           <p class="provider-lead" data-i18n="loginGate.lead">
-            Sign in with ChatGPT to use Codex CLI. Required on first launch.
+            Pick the AI CLI tool you want to use. Login is required on first launch.
+          </p>
+          <div class="provider-grid" id="login-provider-grid">
+            <button type="button" class="provider-tile active" id="login-pick-codex" data-provider="codex">
+              <strong>Codex CLI</strong>
+              <span data-i18n="loginGate.codexDesc">OpenAI · ChatGPT login · app-server</span>
+            </button>
+            <button type="button" class="provider-tile" id="login-pick-claude" data-provider="claude">
+              <strong>Claude Code</strong>
+              <span data-i18n="loginGate.claudeDesc">Anthropic · Claude login · CLI</span>
+            </button>
+          </div>
+          <p class="provider-lead" id="login-gate-lead" data-i18n="loginGate.codexLead">
+            Sign in with ChatGPT to use Codex CLI.
           </p>
           <div class="voice-actions trial-lock-actions">
             <button type="button" class="voice-btn primary" id="login-gate-btn" data-i18n="loginGate.btn">
-              Log in with ChatGPT
+              Log in
             </button>
           </div>
           <p class="icon-picker-hint" id="login-gate-hint" data-i18n="loginGate.hint">

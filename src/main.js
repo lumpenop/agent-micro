@@ -3,7 +3,7 @@ const fs = require('fs');
 const os = require('os');
 const { execFile, spawn } = require('child_process');
 const path = require('path');
-const { createCodexBridge, focusCodexDesktop } = require('./providers/create-bridge');
+const { createBridge, focusCodexDesktop } = require('./providers/create-bridge');
 const codexSettings = require('./codex-settings');
 const padPrefs = require('./pad-prefs');
 const trial = require('./trial');
@@ -15,6 +15,7 @@ const { findCodexNative } = require('./providers/codex-bridge');
 
 let mainWindow = null;
 let bridge = null;
+let activeProvider = 'codex';
 const devServers = new Map();
 
 function selectedWorkspace() {
@@ -525,12 +526,37 @@ function bindBridge(b) {
   });
 }
 
-function ensureBridge({ autoStart = true } = {}) {
-  if (bridge) return bridge;
-  bridge = createCodexBridge();
+function ensureBridge({ autoStart = true, provider } = {}) {
+  if (bridge && (!provider || provider === activeProvider)) return bridge;
+  const targetProvider = provider || activeProvider || 'codex';
+  if (bridge) {
+    bridge.stop();
+    bridge.removeAllListeners('state');
+    bridge.removeAllListeners('log');
+  }
+  bridge = createBridge(targetProvider);
+  activeProvider = targetProvider;
   bindBridge(bridge);
   if (autoStart) setTimeout(() => bridge.start(), 200);
   return bridge;
+}
+
+/** Switch the active provider at runtime. */
+async function switchProvider(provider) {
+  if (provider !== 'codex' && provider !== 'claude') {
+    return { ok: false, error: `Unknown provider: ${provider}` };
+  }
+  if (provider === activeProvider) return { ok: true, provider };
+  if (bridge) {
+    bridge.stop();
+    bridge.removeAllListeners('state');
+    bridge.removeAllListeners('log');
+    bridge = null;
+  }
+  bridge = createBridge(provider);
+  activeProvider = provider;
+  bindBridge(bridge);
+  return { ok: true, provider };
 }
 
 app.whenReady().then(async () => {
@@ -544,8 +570,9 @@ app.whenReady().then(async () => {
 
   const locked = trialLocked();
   if (!locked) {
-    // Codex CLI (app-server) only
-    bridge = createCodexBridge();
+    // Start with Codex CLI by default
+    bridge = createBridge('codex');
+    activeProvider = 'codex';
     bindBridge(bridge);
     setTimeout(() => bridge.start(), 400);
   }
@@ -570,7 +597,7 @@ app.whenReady().then(async () => {
 function ensureUnlockedRuntime() {
   if (trialLocked()) return false;
   if (!bridge) {
-    bridge = createCodexBridge();
+    bridge = createBridge(activeProvider);
     bindBridge(bridge);
     setTimeout(() => bridge.start(), 200);
   }
@@ -1163,9 +1190,50 @@ ipcMain.handle('codex:linkInfo', () => {
   if (trialLocked()) return { connected: false, trialExpired: true };
   return bridge?.getLinkInfo();
 });
-ipcMain.handle('codex:loginStatus', () => {
+ipcMain.handle('codex:loginStatus', async () => {
   if (trialLocked()) return { ok: false, trialExpired: true };
-  return bridge?.checkLogin();
+
+  // Check both Codex and Claude login status independently
+  let codexStatus = { hasCodex: false, loggedIn: false };
+  let claudeStatus = { hasBinary: false, loggedIn: false };
+
+  try {
+    const { CodexBridge, findCodexNative } = require('./providers/codex-bridge');
+    if (findCodexNative()) {
+      const tempBridge = new CodexBridge();
+      codexStatus = await tempBridge.checkLogin();
+    } else {
+      codexStatus = { hasCodex: false, loggedIn: false };
+    }
+  } catch { /* ignore */ }
+
+  try {
+    const { whichSync } = require('./providers/base-bridge');
+    if (whichSync('claude')) {
+      const { ClaudeBridge } = require('./providers/claude-bridge');
+      const tempBridge = new ClaudeBridge();
+      claudeStatus = await tempBridge.checkLogin();
+    } else {
+      claudeStatus = { hasBinary: false, loggedIn: false };
+    }
+  } catch { /* ignore */ }
+
+  return {
+    hasCodex: codexStatus.hasCodex,
+    hasBinary: claudeStatus.hasBinary,
+    loggedIn: activeProvider === 'claude' ? claudeStatus.loggedIn : codexStatus.loggedIn,
+    codex: codexStatus,
+    claude: claudeStatus,
+    currentProvider: activeProvider,
+  };
+});
+ipcMain.handle('codex:switchProvider', async (_e, provider) => {
+  if (trialLocked()) return trialDenied();
+  const result = await switchProvider(provider);
+  if (result.ok && bridge) {
+    await bridge.connect().catch(() => {});
+  }
+  return result;
 });
 ipcMain.handle('codex:login', () => {
   if (trialLocked()) return trialDenied();

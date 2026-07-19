@@ -1670,6 +1670,20 @@ button {
   border-top: none;
 }
 
+.settings-provider-btn {
+  flex: 1;
+  text-align: center;
+}
+.settings-provider-btn.active {
+  background: rgba(40, 110, 210, 0.12);
+  border-color: rgba(40, 110, 210, 0.28);
+  color: rgba(20, 70, 150, 0.95);
+}
+
+.provider-pick-card {
+  width: min(320px, calc(100% - 28px));
+}
+
 .settings-field {
   display: flex;
   flex-direction: column;

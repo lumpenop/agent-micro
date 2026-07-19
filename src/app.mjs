@@ -474,8 +474,53 @@ function padBlocks() {
 const loginGateEl = document.getElementById('codex-login-gate');
 const loginGateBtn = document.getElementById('login-gate-btn');
 const loginGateHintEl = document.getElementById('login-gate-hint');
+const loginGateLeadEl = document.getElementById('login-gate-lead');
+const loginProviderGrid = document.getElementById('login-provider-grid');
+let _pendingLoginProvider = 'codex';
 
-function showLoginGate({ missing = false } = {}) {
+function updateLoginGateUI() {
+  const provider = _pendingLoginProvider;
+  const btn = loginGateBtn;
+  const lead = loginGateLeadEl;
+  const hint = loginGateHintEl;
+
+  // Update active tile
+  loginProviderGrid?.querySelectorAll('.provider-tile').forEach((tile) => {
+    tile.classList.toggle('active', tile.dataset.provider === provider);
+  });
+
+  if (provider === 'claude') {
+    if (btn) btn.textContent = t('loginGate.claudeBtn');
+    if (lead) lead.textContent = t('loginGate.claudeLead');
+    if (hint) hint.textContent = t('loginGate.claudeHint');
+  } else {
+    if (btn) btn.textContent = t('loginGate.btn');
+    if (lead) lead.textContent = t('loginGate.codexLead');
+    if (hint) hint.textContent = t('loginGate.hint');
+  }
+
+  // Check which binaries are available, auto-select the one that's installed
+  api?.loginStatus?.().then((login) => {
+    const codexTile = document.getElementById('login-pick-codex');
+    const claudeTile = document.getElementById('login-pick-claude');
+    const codexInstalled = !!login?.hasCodex;
+    const claudeInstalled = !!login?.hasBinary;
+
+    if (codexTile) codexTile.classList.toggle('busy', !codexInstalled);
+    if (claudeTile) claudeTile.classList.toggle('busy', !claudeInstalled);
+
+    // Auto-select the installed CLI over the one that's missing
+    if (!codexInstalled && claudeInstalled && provider === 'codex') {
+      _pendingLoginProvider = 'claude';
+      updateLoginGateUI();
+    } else if (!claudeInstalled && codexInstalled && provider === 'claude') {
+      _pendingLoginProvider = 'codex';
+      updateLoginGateUI();
+    }
+  }).catch(() => {});
+}
+
+function showLoginGate({ missingCodex = false, missingClaude = false } = {}) {
   state.needsCodexLogin = true;
   shellEl?.classList.add('login-required');
   closeGuide();
@@ -483,8 +528,12 @@ function showLoginGate({ missing = false } = {}) {
   closeSettings();
   closeIconPicker();
   loginGateEl?.removeAttribute('hidden');
-  if (loginGateHintEl) {
-    loginGateHintEl.textContent = missing ? t('loginGate.missing') : t('loginGate.hint');
+  updateLoginGateUI();
+
+  // If both are missing, show appropriate messaging
+  if (missingCodex && missingClaude) {
+    const hint = loginGateHintEl;
+    if (hint) hint.textContent = t('loginGate.bothMissing');
   }
   flashAction(t('loginGate.flash'));
 }
@@ -497,21 +546,50 @@ function hideLoginGate() {
 
 async function ensureCodexLoginOnEntry() {
   if (trialBlocks()) return;
+
   try {
-    const login = await api?.loginStatus?.();
-    if (!login?.hasCodex) {
-      showLoginGate({ missing: true });
-      return;
-    }
-    if (login.loggedIn) {
+    const loginStatus = await api?.loginStatus?.();
+    const codexInstalled = !!loginStatus?.hasCodex;
+    const codexLoggedIn = codexInstalled && !!loginStatus?.codex?.loggedIn;
+    const claudeInstalled = !!loginStatus?.hasBinary;
+    const claudeLoggedIn = claudeInstalled && !!loginStatus?.claude?.loggedIn;
+
+    // Prefer whichever is already logged in
+    if (codexLoggedIn) {
+      state.provider = 'codex';
       hideLoginGate();
       await connectAgent({ forceLogin: false });
       return;
     }
-    showLoginGate();
+    if (claudeLoggedIn) {
+      state.provider = 'claude';
+      hideLoginGate();
+      await connectAgent({ forceLogin: false });
+      return;
+    }
+
+    // Neither logged in — pick the one that's installed
+    if (claudeInstalled && !codexInstalled) {
+      _pendingLoginProvider = 'claude';
+    } else if (codexInstalled) {
+      _pendingLoginProvider = 'codex';
+    }
+    // If both missing, keep the default (codex) — user can pick in the gate
+
+    state.provider = _pendingLoginProvider;
+    showLoginGate({
+      missingCodex: !codexInstalled,
+      missingClaude: !claudeInstalled,
+    });
   } catch {
     showLoginGate();
   }
+}
+
+function setSelectedProvider(provider) {
+  state.provider = provider;
+  _pendingLoginProvider = provider;
+  updateLoginGateUI();
 }
 
 function statusLabel(s) {
@@ -1531,6 +1609,37 @@ function renderLicenseStatus(status) {
   }
 }
 
+function updateSettingsProviderUI() {
+  const provider = state.provider || 'codex';
+  const isClaude = provider === 'claude';
+
+  // Update kicker and lead text
+  const kicker = document.getElementById('settings-kicker');
+  const lead = document.getElementById('settings-lead');
+  const loginLabel = document.getElementById('set-codex-login-label');
+  const loginDesc = document.getElementById('set-codex-login-desc');
+  const loginBtn = document.getElementById('settings-codex-login');
+
+  if (kicker) kicker.textContent = isClaude ? 'Claude Code' : 'Codex CLI';
+  if (lead) lead.textContent = isClaude
+    ? t('settings.leadClaude')
+    : t('settings.lead');
+  if (loginLabel) loginLabel.textContent = isClaude
+    ? t('settings.claudeLogin')
+    : t('settings.codexLogin');
+  if (loginDesc) loginDesc.textContent = isClaude
+    ? t('settings.claudeLogin.desc')
+    : t('settings.codexLogin.desc');
+  if (loginBtn) loginBtn.textContent = isClaude
+    ? t('settings.claudeLogin.btn')
+    : t('settings.codexLogin.btn');
+
+  // Update provider button active state
+  document.querySelectorAll('.settings-provider-btn').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.provider === provider);
+  });
+}
+
 async function refreshAccountStatus() {
   if (setCodexStatusEl) {
     setCodexStatusEl.textContent = t('settings.codexLogin.unknown');
@@ -1541,18 +1650,29 @@ async function refreshAccountStatus() {
     setStatusTone(setLicenseStatusEl, 'muted');
   }
 
+  updateSettingsProviderUI();
+
   try {
     const login = await api?.loginStatus?.();
+    const isClaude = state.provider === 'claude';
+
     if (!setCodexStatusEl) {
       /* skip */
-    } else if (!login?.hasCodex) {
+    } else if (!login?.hasCodex && !login?.hasBinary && isClaude) {
+      setCodexStatusEl.textContent = t('settings.claudeLogin.missing');
+      setStatusTone(setCodexStatusEl, 'bad');
+    } else if (!login?.hasCodex && !isClaude) {
       setCodexStatusEl.textContent = t('settings.codexLogin.missing');
       setStatusTone(setCodexStatusEl, 'bad');
-    } else if (login.loggedIn) {
-      setCodexStatusEl.textContent = t('settings.codexLogin.ok');
+    } else if ((login?.hasCodex || login?.hasBinary) && login.loggedIn) {
+      setCodexStatusEl.textContent = isClaude
+        ? t('settings.claudeLogin.ok')
+        : t('settings.codexLogin.ok');
       setStatusTone(setCodexStatusEl, 'ok');
     } else {
-      setCodexStatusEl.textContent = t('settings.codexLogin.no');
+      setCodexStatusEl.textContent = isClaude
+        ? t('settings.claudeLogin.no')
+        : t('settings.codexLogin.no');
       setStatusTone(setCodexStatusEl, 'bad');
     }
   } catch {
@@ -1613,6 +1733,7 @@ async function openSettings() {
     fillAutoContinuePrefs({});
   }
   settingsPanel.hidden = false;
+  updateSettingsProviderUI();
   flashAction(t('flash.settings'));
   refreshAccountStatus();
   refreshRamUsage();
@@ -1975,11 +2096,12 @@ function render() {
     : t('hud.continueManual');
   if (hud.continueButton) hud.continueButton.disabled = agentBusy || !state.connected;
   const layerName = layerDisplayName(state.layer);
+  const providerLabel = state.provider === 'claude' ? 'Claude Code' : 'Codex CLI';
   hud.link.textContent = state.connected
-    ? `Codex CLI · ${state.mode} · ${layerName}`
+    ? `${providerLabel} · ${state.mode} · ${layerName}`
     : state.mode === 'offline'
-      ? `demo · CLI · ${layerName}`
-      : `Codex CLI · ${state.mode} · ${layerName}`;
+      ? `demo · ${providerLabel} · ${layerName}`
+      : `${providerLabel} · ${state.mode} · ${layerName}`;
   linkDot.classList.toggle('on', state.connected);
   linkDot.classList.toggle('demo', !state.connected);
   pad3d.setCmdActive('fast', state.fastMode);
@@ -2082,7 +2204,7 @@ function applyBridgeState(s) {
   state.connected = !!s.connected;
   state.mode = s.mode || 'offline';
   state.linkMode = 'cli';
-  state.provider = 'codex';
+  state.provider = s.provider || 'codex';
   const previousSelected = state.selected;
   state.selected = s.selected ?? state.selected;
   state.reasoningIndex = s.reasoningIndex ?? state.reasoningIndex;
@@ -2247,6 +2369,10 @@ async function connectAgent({ forceLogin = false } = {}) {
   linkDot?.classList.add('busy');
   flashAction(forceLogin ? t('flash.login') : t('flash.connecting'));
   try {
+    // Ensure the backend bridge matches the selected provider
+    const currentProvider = state.provider || 'codex';
+    await api?.switchProvider?.(currentProvider);
+
     const result = forceLogin
       ? await api?.connect?.({ forceLogin: true })
       : await api?.reconnect?.();
@@ -2373,6 +2499,31 @@ trialKeyInput?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') trialActivateBtn?.click();
 });
 
+// Settings provider switching
+document.querySelectorAll('.settings-provider-btn').forEach((btn) => {
+  btn.addEventListener('click', async () => {
+    if (trialBlocks()) return;
+    const provider = btn.dataset.provider;
+    if (provider === state.provider) return;
+    btn.disabled = true;
+    try {
+      const r = await api?.switchProvider?.(provider);
+      if (r?.ok) {
+        state.provider = provider;
+        updateSettingsProviderUI();
+        await refreshAccountStatus();
+        flashAction(provider === 'claude' ? 'Claude Code' : 'Codex CLI');
+        // Reconnect with new provider
+        await connectAgent({ forceLogin: false });
+      } else {
+        flashAction(r?.error || 'Provider switch failed');
+      }
+    } finally {
+      btn.disabled = false;
+    }
+  });
+});
+
 settingsCodexLoginBtn?.addEventListener('click', async () => {
   if (trialBlocks()) return;
   settingsCodexLoginBtn.disabled = true;
@@ -2385,16 +2536,42 @@ settingsCodexLoginBtn?.addEventListener('click', async () => {
   }
 });
 
+// Provider selection in login gate
+loginProviderGrid?.addEventListener('click', (e) => {
+  const tile = e.target.closest('.provider-tile');
+  if (!tile) return;
+  if (tile.classList.contains('busy')) {
+    flashAction(t('loginGate.missing'));
+    return;
+  }
+  if (tile.dataset.provider === _pendingLoginProvider) return;
+  setSelectedProvider(tile.dataset.provider);
+});
+
 loginGateBtn?.addEventListener('click', async () => {
   if (trialBlocks()) return;
   loginGateBtn.disabled = true;
   try {
+    state.provider = _pendingLoginProvider;
+
+    // Check if the selected provider's CLI is actually installed
+    const loginStatus = await api?.loginStatus?.();
+    const cliMissing = _pendingLoginProvider === 'claude'
+      ? !loginStatus?.hasBinary
+      : !loginStatus?.hasCodex;
+
+    if (cliMissing) {
+      flashAction(t('flash.missing'));
+      loginGateBtn.disabled = false;
+      return;
+    }
+
     const r = await connectAgent({ forceLogin: true });
     if (r?.ok) {
       hideLoginGate();
       await refreshAccountStatus();
     } else if (r?.reason === 'missing') {
-      showLoginGate({ missing: true });
+      showLoginGate({ missingCodex: true, missingClaude: true });
     } else {
       showLoginGate();
     }

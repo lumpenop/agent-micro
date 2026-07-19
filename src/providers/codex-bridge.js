@@ -55,7 +55,14 @@ const PLATFORM_BIN = {
   },
 };
 
+const { whichSync } = require('./base-bridge');
+
 function findCodexNative() {
+  // 1. Prefer `codex` on PATH (user-installed via Homebrew, npm i -g, etc.)
+  const pathBin = whichSync('codex');
+  if (pathBin) return pathBin;
+
+  // 2. Fall back to bundled binary from @openai/codex
   const key = `${process.platform}-${process.arch}`;
   const spec = PLATFORM_BIN[key];
   const roots = [path.join(__dirname, '..', '..', 'node_modules', '@openai')];

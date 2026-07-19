@@ -12,7 +12,7 @@
     "ensure:whisper": "node scripts/ensure-whisper.js",
     "dist:mac": "node scripts/ensure-whisper.js && electron-builder --mac dir --arm64",
     "dist:dmg": "node scripts/ensure-whisper.js && electron-builder --mac dmg --arm64",
-    "postinstall": "node scripts/ensure-electron.js && node scripts/ensure-codex.js && node scripts/ensure-whisper.js"
+    "postinstall": "node scripts/ensure-electron.js && node scripts/ensure-tools.js && node scripts/ensure-whisper.js"
   },
   "keywords": [
     "agent",
@@ -48,6 +48,7 @@
     "electron-builder": "^26.15.3"
   },
   "dependencies": {
-    "@openai/codex": "^0.144.5"
+    "@openai/codex": "^0.144.5",
+    "@anthropic-ai/claude-code": "^2.1"
   }
 }
