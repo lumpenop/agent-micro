@@ -52,11 +52,12 @@
         <div class="git-repo-card">
           <span class="git-repo-name" id="git-repo-name">—</span>
           <span class="git-branch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="6" r="2"/><path d="M6 7v10"/><path d="M8 17c5 0 8-3 8-9"/></svg><span id="git-branch-name">branch</span></span>
+          <span class="git-remote-status" id="git-remote-status">Checking remote…</span>
         </div>
         <div class="git-sync-actions">
           <button type="button" id="git-pull">↓ Pull</button><button type="button" id="git-push">↑ Push</button>
         </div>
-        <div class="git-section-head"><span>Changes</span><span class="git-section-actions"><button type="button" id="git-refresh" title="Refresh">↻</button><button type="button" id="git-stage-all">+ Stage all</button></span></div>
+        <div class="git-section-head"><span>Changes</span><span class="git-section-actions"><button type="button" class="git-refresh-btn" id="git-refresh" title="Refresh" aria-label="Refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6v5h-5"/><path d="M4 18v-5h5"/><path d="M6.1 9a7 7 0 0 1 11.2-2.1L20 11"/><path d="m4 13 2.7 4.1A7 7 0 0 0 17.9 15"/></svg></button><button type="button" id="git-stage-all">+ Stage all</button></span></div>
         <div class="git-change-list" id="git-change-list"><div class="git-empty">Git 상태를 불러올 준비가 됐어요</div></div>
         <div class="git-commit-box">
           <textarea id="git-commit-message" rows="3" placeholder="Commit message"></textarea>

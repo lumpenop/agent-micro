@@ -54,8 +54,11 @@ button {
   gap: 0;
   overflow: hidden;
 }
-.shell.git-open { align-items: flex-end; padding-right: 4px; }
-.shell.git-open .hud { align-self: flex-end; }
+.shell.git-host { align-items: flex-end; padding-right: 4px; }
+.shell.git-host .chrome { margin-right: 10px; }
+.shell.git-host .pad { margin-right: 2px; }
+.shell.git-host .hud { align-self: flex-end; margin-right: 10px; }
+.shell.git-host .icon-picker { left: auto; right: 0; width: 344px; }
 .git-side-panel {
   position: fixed; left: 8px; top: 8px; bottom: 8px; width: 202px; z-index: 20;
   display: flex; flex-direction: column; gap: 10px; padding: 12px;
@@ -72,17 +75,27 @@ button {
 .git-repo-name { font-size:12px; font-weight:750; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .git-branch { display:flex; align-items:center; gap:5px; color:#687078; font-size:9px; }
 .git-branch svg { width:11px; height:11px; }
+.git-remote-status { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:8px; color:#8a9197; }
+.git-remote-status.is-ready { color:#238636; }
+.git-sync-actions button:disabled { opacity:.4; cursor:default; }
 .git-sync-actions { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
 .git-sync-actions button,.git-section-head button,.git-ai-message { padding:7px; border-radius:9px; background:#fff; border:1px solid rgba(0,0,0,.08); font-size:9px; font-weight:700; }
 .git-section-head { display:flex; align-items:center; justify-content:space-between; font-size:10px; font-weight:800; }
 .git-section-actions { display:flex; gap:4px; }
 .git-section-head button { padding:4px 6px; }
-.git-change-list { min-height:100px; flex:1; overflow:auto; border-radius:11px; background:rgba(255,255,255,.62); border:1px solid rgba(0,0,0,.07); }
+.git-section-head .git-refresh-btn { width:24px; height:24px; display:inline-flex; align-items:center; justify-content:center; padding:0; color:#343a40; }
+.git-refresh-btn svg { width:13px; height:13px; }
+.git-change-list { min-height:100px; flex:1 1 0; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; scrollbar-color:rgba(35,40,45,.24) transparent; border-radius:11px; background:rgba(255,255,255,.62); border:1px solid rgba(0,0,0,.07); }
+.git-change-list::-webkit-scrollbar { width:5px; }
+.git-change-list::-webkit-scrollbar-thumb { background:rgba(35,40,45,.22); border-radius:999px; }
 .git-empty { padding:18px 10px; color:#8a9197; font-size:9px; line-height:1.5; text-align:center; }
-.git-change { display:grid; grid-template-columns:22px 1fr; gap:6px; align-items:center; padding:7px 8px; border-bottom:1px solid rgba(0,0,0,.055); }
+.git-change { display:grid; grid-template-columns:22px minmax(0,1fr) 24px; gap:6px; align-items:center; padding:6px 7px; border-bottom:1px solid rgba(0,0,0,.055); }
 .git-change:last-child { border-bottom:0; }
 .git-change-code { font:800 8px/1 ui-monospace,monospace; color:#7a4da0; }
 .git-change-path { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:9px; }
+.git-file-stage { width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center; border-radius:7px; border:1px solid rgba(0,0,0,.1); background:#fff; color:#596068; font-size:13px; font-weight:800; }
+.git-file-stage.is-staged { background:#238636; border-color:#238636; color:#fff; font-size:10px; }
+.git-file-stage:disabled { opacity:.45; }
 .git-commit-box { display:grid; gap:6px; }
 .git-commit-box textarea { width:100%; resize:none; padding:8px; border:1px solid rgba(0,0,0,.1); border-radius:10px; background:#fff; font:10px/1.4 inherit; outline:none; }
 .git-commit { padding:8px; border-radius:10px; background:#24292f; color:#fff; font-size:10px; font-weight:800; }

@@ -262,6 +262,8 @@ const gitPanel = document.getElementById('git-side-panel');
 const gitClose = document.getElementById('git-side-close');
 const gitRefresh = document.getElementById('git-refresh');
 let gitRefreshTimer = null;
+let gitStatusSnapshot = null;
+shellEl?.classList.add('git-host');
 const trialLockEl = document.getElementById('trial-lock');
 const trialSponsorBtn = document.getElementById('trial-sponsor');
 const trialCloseBtn = document.getElementById('trial-close');
@@ -301,9 +303,32 @@ async function refreshGitStatus() {
   const list = document.getElementById('git-change-list');
   gitRefresh?.classList.add('is-loading');
   const result = await api?.getGitStatus?.();
+  gitStatusSnapshot = result?.ok ? result : null;
   gitRefresh?.classList.remove('is-loading');
   const branch = document.getElementById('git-branch-name');
   if (branch) branch.textContent = result?.ok ? `${result.branch}${result.tracking ? ` · ${result.tracking}` : ''}` : 'Not a Git repo';
+  const remote = document.getElementById('git-remote-status');
+  const pull = document.getElementById('git-pull');
+  const push = document.getElementById('git-push');
+  const remoteReady = !!result?.remote;
+  const upstreamReady = !!result?.upstream;
+  const diverged = Number(result?.ahead) > 0 && Number(result?.behind) > 0;
+  if (remote) {
+    remote.textContent = remoteReady ? `origin · ${result.remote}` : 'Local only · origin not configured';
+    remote.title = result?.remote || '';
+    remote.classList.toggle('is-ready', remoteReady);
+  }
+  if (pull) {
+    pull.textContent = Number(result?.behind) > 0 ? `↓ Pull ${result.behind}` : '↓ Pull';
+    pull.disabled = !remoteReady || !upstreamReady || !result?.clean;
+    pull.title = !result?.clean ? 'Commit or stash changes before pulling' : !upstreamReady ? 'No upstream branch' : '';
+  }
+  if (push) {
+    const publish = remoteReady && !upstreamReady && result?.branch && result.branch !== 'HEAD';
+    push.textContent = publish ? '↑ Publish' : Number(result?.ahead) > 0 ? `↑ Push ${result.ahead}` : '↑ Push';
+    push.disabled = !remoteReady || diverged || (!publish && Number(result?.ahead) < 1);
+    push.title = diverged ? 'Pull and resolve the diverged branch first' : '';
+  }
   if (!list) return;
   list.replaceChildren();
   if (!result?.ok) {
@@ -316,13 +341,73 @@ async function refreshGitStatus() {
     const row = document.createElement('div'); row.className = 'git-change';
     const code = document.createElement('span'); code.className = 'git-change-code'; code.textContent = file.status;
     const name = document.createElement('span'); name.className = 'git-change-path'; name.textContent = file.path; name.title = file.path;
-    row.append(code, name); list.append(row);
+    const stage = document.createElement('button'); stage.type = 'button'; stage.className = `git-file-stage${file.staged ? ' is-staged' : ''}`;
+    stage.textContent = file.staged ? '✓' : '+';
+    stage.title = file.staged ? 'Unstage file' : 'Stage file';
+    stage.addEventListener('click', async () => {
+      stage.disabled = true;
+      const changed = await api?.stageGitFile?.(file.gitPath || file.path, file.staged);
+      if (!changed?.ok) flashAction(changed?.error || 'Git stage failed');
+      await refreshGitStatus();
+    });
+    row.append(code, name, stage); list.append(row);
   }
 }
 
 gitButton?.addEventListener('click', () => setGitPanelOpen(!!gitPanel?.hidden));
 gitClose?.addEventListener('click', () => setGitPanelOpen(false));
 gitRefresh?.addEventListener('click', refreshGitStatus);
+document.getElementById('git-stage-all')?.addEventListener('click', async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const result = await api?.stageAllGit?.();
+    if (!result?.ok) flashAction(result?.error || 'Git stage failed');
+    else flashAction(`Git stage · ${result.count} file${result.count === 1 ? '' : 's'}`);
+    await refreshGitStatus();
+  } finally {
+    button.disabled = false;
+  }
+});
+document.getElementById('git-ai-message')?.addEventListener('click', async (event) => {
+  const button = event.currentTarget;
+  const input = document.getElementById('git-commit-message');
+  button.disabled = true;
+  button.textContent = '✦ Writing…';
+  const result = await api?.generateGitMessage?.();
+  button.disabled = false;
+  button.textContent = '✦ Auto message';
+  if (!result?.ok) flashAction(result?.error || 'Could not generate commit message');
+  else {
+    if (input) input.value = result.message;
+    flashAction(`Commit message · ${result.model}`);
+  }
+});
+document.getElementById('git-commit')?.addEventListener('click', async (event) => {
+  const button = event.currentTarget;
+  const input = document.getElementById('git-commit-message');
+  button.disabled = true;
+  const result = await api?.commitGit?.(input?.value || '');
+  button.disabled = false;
+  if (!result?.ok) flashAction(result?.error || 'Git commit failed');
+  else {
+    if (input) input.value = '';
+    flashAction('Git commit · done');
+    await refreshGitStatus();
+  }
+});
+for (const action of ['pull', 'push']) {
+  document.getElementById(`git-${action}`)?.addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    const result = await api?.syncGit?.(action, {
+      branch: gitStatusSnapshot?.branch,
+      upstream: gitStatusSnapshot?.upstream,
+    });
+    flashAction(result?.ok ? `Git ${action} · done` : result?.error || `Git ${action} failed`);
+    await refreshGitStatus();
+  });
+}
 
 const picker = document.getElementById('icon-picker');
 const pickerGrid = document.getElementById('icon-picker-grid');

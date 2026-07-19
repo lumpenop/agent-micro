@@ -12,6 +12,11 @@ contextBridge.exposeInMainWorld('codexDesktop', {
   suspendPadHotkeys: (suspended) => ipcRenderer.invoke('window:suspendPadHotkeys', suspended),
   setGitPanel: (open) => ipcRenderer.invoke('window:setGitPanel', open),
   getGitStatus: () => ipcRenderer.invoke('git:status'),
+  syncGit: (action, context) => ipcRenderer.invoke('git:sync', action, context),
+  stageGitFile: (file, staged) => ipcRenderer.invoke('git:stageFile', file, staged),
+  stageAllGit: () => ipcRenderer.invoke('git:stageAll'),
+  generateGitMessage: () => ipcRenderer.invoke('git:autoMessage'),
+  commitGit: (message) => ipcRenderer.invoke('git:commit', message),
 
   getState: () => ipcRenderer.invoke('codex:getState'),
   select: (index, focus) => ipcRenderer.invoke('codex:select', index, focus),

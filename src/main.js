@@ -11,6 +11,7 @@ const i18n = require('./i18n');
 const mac = require('./platform/mac');
 const skillManager = require('./skill-manager');
 const { detectDevCommand } = require('./dev-runner');
+const { findCodexNative } = require('./providers/codex-bridge');
 
 let mainWindow = null;
 let bridge = null;
@@ -437,7 +438,9 @@ function installAppMenu() {
 function createWindow() {
   const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
   // Fit chrome + pad (modest outer rim) + hud
-  const winW = 344;
+  // Reserve the Git rail up front. Toggling a transparent macOS window's
+  // bounds causes a full compositor flash, so the window itself stays fixed.
+  const winW = 558;
   const winH = 596;
 
   mainWindow = new BrowserWindow({
@@ -593,33 +596,155 @@ ipcMain.handle('window:minimize', () => mainWindow?.minimize());
 ipcMain.handle('window:close', () => mainWindow?.close());
 ipcMain.handle('window:setGitPanel', (_e, open) => {
   if (!mainWindow || mainWindow.isDestroyed()) return false;
-  const bounds = mainWindow.getBounds();
-  const width = open ? 558 : 344;
-  const right = bounds.x + bounds.width;
-  // Keep the keyboard/header/HUD anchored to the same screen position. Only
-  // reveal extra window space on the left, without macOS resize animation.
-  mainWindow.setBounds({ x: right - width, y: bounds.y, width, height: bounds.height }, false);
   return true;
 });
 ipcMain.handle('git:status', async () => {
   if (trialLocked()) return trialDenied();
   try {
     const cwd = selectedWorkspace();
-    const output = await new Promise((resolve, reject) => {
-      execFile('git', ['status', '--porcelain=v1', '--branch'], { cwd, timeout: 5000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+    const runGit = (args) => new Promise((resolve, reject) => {
+      execFile('git', args, { cwd, timeout: 5000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
         if (error) reject(new Error(String(stderr || error.message).trim()));
         else resolve(String(stdout || ''));
       });
     });
-    const lines = output.split(/\r?\n/).filter(Boolean);
-    const branchLine = lines[0]?.startsWith('## ') ? lines.shift().slice(3) : '';
+    const output = await runGit(['status', '--porcelain=v1', '--branch', '-z']);
+    let remote = '';
+    try {
+      remote = (await runGit(['remote', 'get-url', 'origin'])).trim()
+        .replace(/:\/\/[^/@]+@/, '://');
+    } catch {}
+    const entries = output.split('\0').filter(Boolean);
+    const branchLine = entries[0]?.startsWith('## ') ? entries.shift().slice(3) : '';
     const branch = branchLine.split(/\.\.\.|\s/)[0] || 'HEAD';
+    const upstream = branchLine.match(/\.\.\.([^\s\[]+)/)?.[1] || '';
     const tracking = branchLine.match(/\[(.+)\]/)?.[1] || '';
-    const files = lines.map((line) => ({ status: line.slice(0, 2).trim() || '?', path: line.slice(3) }));
-    return { ok: true, cwd, branch, tracking, files, clean: files.length === 0 };
+    const ahead = Number(tracking.match(/ahead\s+(\d+)/)?.[1] || 0);
+    const behind = Number(tracking.match(/behind\s+(\d+)/)?.[1] || 0);
+    const files = [];
+    for (let i = 0; i < entries.length; i++) {
+      const line = entries[i];
+      const renamed = line[0] === 'R' || line[0] === 'C' || line[1] === 'R' || line[1] === 'C';
+      const gitPath = line.slice(3);
+      const oldPath = renamed ? entries[++i] || '' : '';
+      files.push({
+        status: line.slice(0, 2).trim() || '?',
+        indexStatus: line[0] || ' ',
+        worktreeStatus: line[1] || ' ',
+        staged: line[0] !== ' ' && line[0] !== '?',
+        path: oldPath ? `${oldPath} → ${gitPath}` : gitPath,
+        gitPath,
+      });
+    }
+    return { ok: true, cwd, branch, upstream, tracking, ahead, behind, remote, files, clean: files.length === 0 };
   } catch (error) {
     return { ok: false, error: error.message };
   }
+});
+ipcMain.handle('git:stageFile', async (_e, file, staged) => {
+  if (trialLocked()) return trialDenied();
+  const target = String(file || '').trim();
+  if (!target || target.includes('\0')) return { ok: false, error: 'Invalid file path' };
+  try {
+    const cwd = selectedWorkspace();
+    const args = staged ? ['restore', '--staged', '--', target] : ['add', '--', target];
+    await new Promise((resolve, reject) => {
+      execFile('git', args, { cwd, timeout: 10000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+        if (error) reject(new Error(String(stderr || stdout || error.message).trim()));
+        else resolve();
+      });
+    });
+    return { ok: true, staged: !staged, file: target };
+  } catch (error) { return { ok: false, error: error.message }; }
+});
+ipcMain.handle('git:stageAll', async () => {
+  if (trialLocked()) return trialDenied();
+  try {
+    const cwd = selectedWorkspace();
+    const run = (args) => new Promise((resolve, reject) => {
+      execFile('git', args, { cwd, timeout: 15000, maxBuffer: 2 * 1024 * 1024 }, (error, stdout, stderr) => {
+        if (error) reject(new Error(String(stderr || stdout || error.message).trim()));
+        else resolve(String(stdout || ''));
+      });
+    });
+    await run(['add', '-A']);
+    const staged = (await run(['diff', '--cached', '--name-only', '-z'])).split('\0').filter(Boolean);
+    return { ok: true, count: staged.length };
+  } catch (error) { return { ok: false, error: error.message }; }
+});
+ipcMain.handle('git:autoMessage', async () => {
+  if (trialLocked()) return trialDenied();
+  try {
+    const cwd = selectedWorkspace();
+    const gitOutput = (args) => new Promise((resolve, reject) => {
+      execFile('git', args, { cwd, timeout: 10000, maxBuffer: 2 * 1024 * 1024 }, (error, stdout, stderr) => {
+        if (error) reject(new Error(String(stderr || stdout || error.message).trim()));
+        else resolve(String(stdout || ''));
+      });
+    });
+    const names = await gitOutput(['diff', '--cached', '--name-status']);
+    if (!names.trim()) return { ok: false, error: 'Stage changes before generating a commit message' };
+    const stat = await gitOutput(['diff', '--cached', '--stat']);
+    const diff = (await gitOutput(['diff', '--cached', '--no-ext-diff', '--unified=1'])).slice(0, 48000);
+    const prompt = `Write one concise Git commit subject for the staged changes below.\nRules: output only the subject; no quotes, markdown, body, or period; use imperative English; maximum 72 characters.\n\nFILES:\n${names}\nSTAT:\n${stat}\nDIFF:\n${diff}`;
+    const found = findCodexNative();
+    if (!found) throw new Error('Bundled Codex CLI is unavailable');
+    const command = typeof found === 'object' ? process.execPath : String(found);
+    const prefix = typeof found === 'object' ? [found.path] : [];
+    const args = [...prefix, 'exec', '--ephemeral', '--sandbox', 'read-only', '--color', 'never', '--model', 'gpt-5.6-luna', '-c', 'model_reasoning_effort="low"', '-'];
+    const message = await new Promise((resolve, reject) => {
+      const child = spawn(command, args, { cwd, stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, ELECTRON_RUN_AS_NODE: typeof found === 'object' ? '1' : '' } });
+      let stdout = ''; let stderr = '';
+      const timer = setTimeout(() => { child.kill('SIGTERM'); reject(new Error('Commit message generation timed out')); }, 60000);
+      child.stdout.on('data', (chunk) => { stdout += chunk; });
+      child.stderr.on('data', (chunk) => { stderr += chunk; });
+      child.once('error', (error) => { clearTimeout(timer); reject(error); });
+      child.once('close', (code) => {
+        clearTimeout(timer);
+        if (code !== 0) reject(new Error(stderr.trim() || `Codex exited with ${code}`));
+        else resolve(stdout.trim());
+      });
+      child.stdin.end(prompt);
+    });
+    const subject = String(message).split(/\r?\n/).filter(Boolean).pop()?.replace(/^[`"']+|[`"']+$/g, '').slice(0, 120).trim();
+    if (!subject) throw new Error('Codex returned an empty commit message');
+    return { ok: true, message: subject, model: 'gpt-5.6-luna' };
+  } catch (error) { return { ok: false, error: error.message }; }
+});
+ipcMain.handle('git:commit', async (_e, message) => {
+  if (trialLocked()) return trialDenied();
+  const subject = String(message || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 240);
+  if (!subject) return { ok: false, error: 'Enter a commit message' };
+  try {
+    const cwd = selectedWorkspace();
+    const output = await new Promise((resolve, reject) => {
+      execFile('git', ['commit', '-m', subject], { cwd, timeout: 30000, maxBuffer: 2 * 1024 * 1024 }, (error, stdout, stderr) => {
+        if (error) reject(new Error(String(stderr || stdout || error.message).trim()));
+        else resolve(String(stdout || '').trim());
+      });
+    });
+    return { ok: true, output };
+  } catch (error) { return { ok: false, error: error.message }; }
+});
+ipcMain.handle('git:sync', async (_e, action, context = {}) => {
+  if (trialLocked()) return trialDenied();
+  const mode = action === 'pull' ? 'pull' : action === 'push' ? 'push' : null;
+  if (!mode) return { ok: false, error: 'Unsupported Git action' };
+  try {
+    const cwd = selectedWorkspace();
+    const branch = String(context?.branch || '').trim();
+    const publish = mode === 'push' && !context?.upstream && branch && branch !== 'HEAD';
+    const args = mode === 'pull'
+      ? ['pull', '--ff-only']
+      : publish ? ['push', '-u', 'origin', branch] : ['push'];
+    const output = await new Promise((resolve, reject) => {
+      execFile('git', args, { cwd, timeout: 120000, maxBuffer: 2 * 1024 * 1024 }, (error, stdout, stderr) => {
+        if (error) reject(new Error(String(stderr || stdout || error.message).trim()));
+        else resolve(String(stdout || stderr || '').trim());
+      });
+    });
+    return { ok: true, action: mode, output };
+  } catch (error) { return { ok: false, action: mode, error: error.message }; }
 });
 ipcMain.handle('window:suspendPadHotkeys', (_e, suspended) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
