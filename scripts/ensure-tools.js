@@ -88,7 +88,7 @@ if (resolved || js) {
 }
 
 // ── Fall back to bundled Claude Code ──
-const _claudeRoot = path.join(root, 'node_modules', '@anthropic', 'ai-claude-code', 'bin');
+const _claudeRoot = path.join(root, 'node_modules', '@anthropic-ai', 'claude-code', 'bin');
 const claudeNative = path.join(_claudeRoot, 'claude');
 const claudeNativeExe = path.join(_claudeRoot, 'claude.exe');
 if (fs.existsSync(claudeNative)) {
@@ -110,13 +110,15 @@ const claudePkgName = {
   'win32-arm64': '@anthropic-ai/claude-code-win32-arm64',
 }[key];
 if (claudePkgName) {
-  const claudePlatformNative = path.join(root, 'node_modules', '@anthropic', claudePkgName, 'bin', 'claude');
+  const claudeScope = claudePkgName.split('/')[0];
+  const claudeName = claudePkgName.split('/')[1];
+  const claudePlatformNative = path.join(root, 'node_modules', claudeScope, claudeName, 'bin', 'claude');
   if (fs.existsSync(claudePlatformNative)) {
     console.log(`[ensure-tools] bundled Claude Code (platform) ok · ${claudePlatformNative}`);
     process.exit(0);
   }
   // Some builds use claude.exe even on non-Windows
-  const claudePlatformNativeExe = path.join(root, 'node_modules', '@anthropic', claudePkgName, 'bin', 'claude.exe');
+  const claudePlatformNativeExe = path.join(root, 'node_modules', claudeScope, claudeName, 'bin', 'claude.exe');
   if (fs.existsSync(claudePlatformNativeExe)) {
     console.log(`[ensure-tools] bundled Claude Code (platform exe) ok · ${claudePlatformNativeExe}`);
     process.exit(0);
@@ -128,7 +130,7 @@ let claudeJs = null;
 try {
   claudeJs = require.resolve('@anthropic-ai/claude-code/cli.mjs');
 } catch {
-  const fallback = path.join(root, 'node_modules', '@anthropic', 'ai-claude-code', 'cli.mjs');
+  const fallback = path.join(root, 'node_modules', '@anthropic-ai', 'claude-code', 'cli.mjs');
   if (fs.existsSync(fallback)) claudeJs = fallback;
 }
 if (claudeJs) {

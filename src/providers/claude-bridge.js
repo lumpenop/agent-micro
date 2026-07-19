@@ -80,7 +80,7 @@ function spawnClaude(bin, args, opts = {}) {
   if (typeof bin === 'object' && bin.type === 'node') {
     return spawn(process.execPath, [bin.path, ...args], {
       ...opts,
-      env: { ...process.env, ...(opts.env || {}) },
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', ...(opts.env || {}) },
     });
   }
   return spawn(bin, args, {
