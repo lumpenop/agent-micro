@@ -11,6 +11,7 @@
     "test:voice": "node scripts/test-local-voice.js",
     "ensure:whisper": "node scripts/ensure-whisper.js",
     "dist:mac": "node scripts/ensure-whisper.js && electron-builder --mac dir --arm64",
+    "dist:dmg": "node scripts/ensure-whisper.js && electron-builder --mac dmg --arm64",
     "postinstall": "node scripts/ensure-electron.js && node scripts/ensure-codex.js && node scripts/ensure-whisper.js"
   },
   "keywords": [

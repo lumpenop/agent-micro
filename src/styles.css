@@ -99,8 +99,10 @@ button {
   color: rgba(0, 0, 0, 0.55);
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 4px;
 }
+
+.chrome-brand-label { white-space: nowrap; }
 
 .link-dot {
   width: 9px;
@@ -112,7 +114,7 @@ button {
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
   cursor: pointer;
   vertical-align: middle;
-  margin-left: 2px;
+  margin-left: 0;
 }
 
 .link-dot:hover {
@@ -624,6 +626,18 @@ button {
   width: 100%;
   box-sizing: border-box;
 }
+
+.icon-online-search { display: flex; gap: 6px; margin-bottom: 5px; }
+.icon-online-search input {
+  min-width: 0; flex: 1; border: 1px solid rgba(0, 0, 0, 0.1); border-radius: 9px;
+  padding: 7px 9px; font: inherit; font-size: 11px; background: rgba(255, 255, 255, 0.9); outline: none;
+}
+.icon-online-search input:focus { border-color: rgba(74, 163, 255, 0.65); box-shadow: 0 0 0 2px rgba(74, 163, 255, 0.12); }
+.icon-online-search button { flex: 0 0 auto; border-radius: 9px; padding: 7px 9px; font-size: 10px; font-weight: 650; background: rgba(40, 48, 58, 0.9); color: #fff; }
+.icon-online-status { margin: 0 1px 7px; min-height: 12px; font-size: 9px; color: rgba(0, 0, 0, 0.45); }
+.icon-online-grid { margin-bottom: 9px; padding-bottom: 9px; border-bottom: 1px solid rgba(0, 0, 0, 0.08); }
+.icon-online-grid[hidden] { display: none !important; }
+.icon-online-grid .icon-pick img { width: 26px; height: 26px; object-fit: contain; }
 
 .icon-pick {
   aspect-ratio: 1;
@@ -1537,6 +1551,8 @@ button {
   padding-top: 5px;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
+.settings-card > .voice-actions { margin-bottom: 2px; padding-top: 3px; }
+.settings-card > .voice-actions .voice-btn { flex: 0 1 auto; min-width: 58px; padding: 6px 9px; }
 
 .settings-body {
   padding: 0 2px 4px;

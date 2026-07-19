@@ -82,3 +82,14 @@ pnpm start
 - [`src/providers/`](src/providers/) — Codex / Claude / Cursor / Gemini bridges
 - 공통 IPC (`codex:*`) → 활성 bridge로 위임
 - 선택값은 Electron `userData/provider.json` 에 저장
+
+## Codex Control Center
+
+- 설정: 모델·추론·성격·검색·권한·작업 폴더·멀티에이전트·역할·리소스·Hooks
+- 안전: 저장 전 자동 백업, 복원 전 재백업, 위험 권한 조합 경고
+- MCP 탭: 서버 탐색, 활성화, 타임아웃, HTTP/stdio 추가, OAuth, 검사, 삭제
+- Skills 탭: 앱 안에서 개인 스킬 생성·조회·수정·삭제, 시스템·플러그인 스킬 목록과 플러그인 설정 진단
+- Info: 선택한 에이전트의 실제 작업 폴더 표시
+
+Apple Silicon 개발 앱은 `pnpm dist:mac`, 설치용 DMG는 `pnpm dist:dmg`로 빌드합니다.
+Apple Developer 인증서를 설정하지 않은 로컬 산출물은 서명·공증되지 않습니다.

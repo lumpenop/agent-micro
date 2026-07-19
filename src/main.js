@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, globalShortcut, shell, Menu, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, globalShortcut, shell, Menu, dialog, net } = require('electron');
 const fs = require('fs');
 const os = require('os');
 const { execFile } = require('child_process');
@@ -9,6 +9,7 @@ const padPrefs = require('./pad-prefs');
 const trial = require('./trial');
 const i18n = require('./i18n');
 const mac = require('./platform/mac');
+const skillManager = require('./skill-manager');
 
 let mainWindow = null;
 let bridge = null;
@@ -678,8 +679,48 @@ ipcMain.handle('skills:list', async () => {
   const pluginResult = await bridge?.listPlugins?.();
   return { ok: true, skills: discoverSkills(), plugins: pluginResult?.plugins || [], pluginError: pluginResult?.ok ? null : pluginResult?.error };
 });
-ipcMain.handle('skills:openFolder', () => {
-  const dir = path.join(os.homedir(), '.codex', 'skills'); fs.mkdirSync(dir, { recursive: true }); return shell.openPath(dir);
+ipcMain.handle('skills:personalList', () => ({ ok: true, skills: skillManager.personalSkills() }));
+ipcMain.handle('skills:save', (_e, input) => {
+  if (trialLocked()) return trialDenied();
+  try { return skillManager.saveSkill(input || {}); } catch (error) { return { ok: false, error: error.message }; }
+});
+ipcMain.handle('skills:delete', async (_e, name) => {
+  if (trialLocked()) return trialDenied();
+  try {
+    const target = skillManager.skillPath(name);
+    const { response } = await dialog.showMessageBox(mainWindow, { type: 'warning', buttons: [i18n.t(padPrefs.getLocale(), 'mcp.cancel'), i18n.t(padPrefs.getLocale(), 'skills.delete')], defaultId: 0, cancelId: 0, title: i18n.t(padPrefs.getLocale(), 'skills.deleteTitle'), message: i18n.t(padPrefs.getLocale(), 'skills.deleteMessage', { name }) });
+    if (response !== 1) return { ok: false, canceled: true };
+    await shell.trashItem(target);
+    return { ok: true };
+  } catch (error) { return { ok: false, error: error.message }; }
+});
+ipcMain.handle('icons:search', async (_e, rawQuery) => {
+  if (trialLocked()) return trialDenied();
+  const requestedQuery = String(rawQuery || '').trim().slice(0, 60);
+  const query = /^codex(?: cli)?$/i.test(requestedQuery) ? 'openai' : requestedQuery;
+  if (query.length < 2) return { ok: false, error: 'Enter at least 2 characters' };
+  try {
+    const url = `https://api.iconify.design/search?query=${encodeURIComponent(query)}&limit=24`;
+    const response = await net.fetch(url);
+    if (!response.ok) throw new Error(`Icon search failed (${response.status})`);
+    const data = await response.json();
+    const icons = (Array.isArray(data?.icons) ? data.icons : []).filter((id) => /^[a-z0-9-]+:[a-z0-9-]+$/.test(id)).slice(0, 24);
+    return { ok: true, icons };
+  } catch (error) { return { ok: false, error: error.message }; }
+});
+ipcMain.handle('icons:fetch', async (_e, rawId) => {
+  if (trialLocked()) return trialDenied();
+  const id = String(rawId || '').trim();
+  const match = id.match(/^([a-z0-9-]+):([a-z0-9-]+)$/);
+  if (!match) return { ok: false, error: 'Invalid icon ID' };
+  try {
+    const response = await net.fetch(`https://api.iconify.design/${match[1]}/${match[2]}.svg`);
+    if (!response.ok) throw new Error(`Icon download failed (${response.status})`);
+    let svg = await response.text();
+    if (!/^\s*<svg\b/i.test(svg) || svg.length > 160000 || /<script|\bon\w+\s*=|javascript:|<foreignObject/i.test(svg)) throw new Error('Unsafe icon response');
+    svg = svg.replace(/<\?xml[\s\S]*?\?>/gi, '').trim();
+    return { ok: true, id, label: match[2].replace(/-/g, ' ').slice(0, 24), dataUrl: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}` };
+  } catch (error) { return { ok: false, error: error.message }; }
 });
 ipcMain.handle('codexSettings:writeIgnore', async () => {
   if (trialLocked()) return trialDenied();

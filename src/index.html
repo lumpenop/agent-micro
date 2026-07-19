@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data: blob:; worker-src 'self' blob:;"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data: blob: https://api.iconify.design; worker-src 'self' blob:;"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Agent Micro</title>
@@ -14,7 +14,7 @@
     <div class="shell" id="shell">
       <div class="chrome drag">
         <span class="chrome-title">
-          Agent Micro
+          <span class="chrome-brand-label">Agent Micro</span>
           <button type="button" class="link-dot no-drag" id="link-dot" title="Connect / Reconnect" aria-label="Connect"></button>
         </span>
         <div class="chrome-actions no-drag">
@@ -55,6 +55,12 @@
             </button>
           </div>
           <div class="modal-scroll" id="icon-picker-scroll">
+            <form class="icon-online-search" id="icon-online-search">
+              <input id="icon-online-query" type="search" maxlength="60" autocomplete="off" spellcheck="false" data-i18n-placeholder="picker.onlinePlaceholder" placeholder="Search Codex, Claude, Gemini…" />
+              <button type="submit" data-i18n="picker.onlineSearch">Web search</button>
+            </form>
+            <p class="icon-online-status" id="icon-online-status" data-i18n="picker.onlineHint">Search the Iconify catalog for agent and service icons.</p>
+            <div class="icon-picker-grid icon-online-grid" id="icon-online-grid" hidden></div>
             <div class="icon-picker-grid" id="icon-picker-grid"></div>
             <div class="icon-add-form" id="icon-add-form" hidden>
               <div class="icon-add-preview-wrap">
@@ -69,7 +75,7 @@
             </div>
           </div>
           <input type="file" id="icon-picker-file" accept="image/svg+xml,image/png,image/jpeg,image/webp,.svg" hidden />
-          <p class="icon-picker-hint" data-i18n="picker.hint">Lucide icons · + add SVG/PNG with a name · right-click key to change</p>
+          <p class="icon-picker-hint" data-i18n="picker.hint">Local icons + Iconify web search · right-click key to change</p>
         </div>
       </div>
 
@@ -142,6 +148,14 @@
           <p class="provider-lead" data-i18n="settings.lead">Codex CLI options · saved to ~/.codex · applies to new CLI windows.</p>
           <input id="settings-search" class="voice-input settings-search" type="search" data-i18n-placeholder="settings.search" placeholder="Search settings…" />
           <div class="settings-body" id="settings-body">
+            <div class="settings-field">
+              <label class="voice-label" for="set-locale" data-i18n="settings.language">Language</label>
+              <select id="set-locale" class="voice-input settings-select">
+                <option value="en" data-i18n="settings.lang.en">English</option>
+                <option value="ko" data-i18n="settings.lang.ko">한국어</option>
+              </select>
+            </div>
+
             <div class="settings-section">
               <p class="settings-section-title" data-i18n="settings.account">Account</p>
               <div class="settings-field">
@@ -207,14 +221,6 @@
                 </label>
                 <p class="settings-desc" data-i18n="settings.workspaceNetwork.desc">Allows commands spawned in workspace-write to access the network.</p>
               </div>
-            </div>
-
-            <div class="settings-field">
-              <label class="voice-label" for="set-locale" data-i18n="settings.language">Language</label>
-              <select id="set-locale" class="voice-input settings-select">
-                <option value="en" data-i18n="settings.lang.en">English</option>
-                <option value="ko" data-i18n="settings.lang.ko">한국어</option>
-              </select>
             </div>
 
             <div class="settings-section">
@@ -474,8 +480,19 @@
       <div class="icon-picker" id="skills-panel" hidden>
         <div class="icon-picker-card provider-card settings-card">
           <div class="guide-head"><div class="guide-head-copy"><span class="guide-kicker">Codex</span><span class="guide-title" data-i18n="skills.title">Skills &amp; Plugins</span></div><button type="button" class="chrome-btn" id="skills-close" title="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
-          <div class="modal-scroll settings-scroll"><p class="provider-lead" data-i18n="skills.lead">Installed reusable skills and plugin diagnostics.</p><div class="settings-body" id="skills-list"><p class="settings-status is-muted" data-i18n="skills.loading">Loading…</p></div></div>
-          <div class="voice-actions"><button type="button" class="voice-btn primary" id="skills-refresh" data-i18n="mcp.refresh">Refresh</button><button type="button" class="voice-btn" id="skills-open-folder" data-i18n="skills.openFolder">Open skills folder</button></div>
+          <div class="modal-scroll settings-scroll">
+            <p class="provider-lead" data-i18n="skills.lead">Create and manage personal skills inside Agent Micro.</p>
+            <div class="settings-section">
+              <p class="settings-section-title" data-i18n="skills.editor">Personal skill editor</p>
+              <div class="settings-row"><div class="settings-field"><label class="voice-label" for="skill-edit-select" data-i18n="skills.select">Skill</label><select id="skill-edit-select" class="voice-input settings-select"></select></div><div class="settings-field settings-field--actions"><div class="voice-actions settings-inline-actions"><button type="button" class="voice-btn" id="skill-edit-new" data-i18n="skills.new">New</button><button type="button" class="voice-btn" id="skill-edit-delete" data-i18n="skills.delete">Delete</button></div></div></div>
+              <div class="settings-field"><label class="voice-label" for="skill-edit-name" data-i18n="skills.name">Name</label><input id="skill-edit-name" class="voice-input" type="text" maxlength="63" placeholder="review-changes" /></div>
+              <div class="settings-field"><label class="voice-label" for="skill-edit-description" data-i18n="skills.description">Description and trigger</label><textarea id="skill-edit-description" class="voice-input" rows="3" maxlength="2000"></textarea></div>
+              <div class="settings-field"><label class="voice-label" for="skill-edit-instructions" data-i18n="skills.instructions">Instructions</label><textarea id="skill-edit-instructions" class="voice-input" rows="8" maxlength="100000"></textarea><p class="settings-desc" data-i18n="skills.instructions.desc">Keep instructions concise, imperative, and focused on non-obvious workflow.</p></div>
+              <div class="voice-actions settings-inline-actions"><button type="button" class="voice-btn primary" id="skill-edit-save" data-i18n="skills.save">Save skill</button></div>
+            </div>
+            <div class="settings-body" id="skills-list"><p class="settings-status is-muted" data-i18n="skills.loading">Loading…</p></div>
+          </div>
+          <div class="voice-actions"><button type="button" class="voice-btn primary" id="skills-refresh" data-i18n="mcp.refresh">Refresh</button></div>
         </div>
       </div>
 

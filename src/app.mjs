@@ -521,9 +521,17 @@ const iconAddForm = document.getElementById('icon-add-form');
 const iconAddPreview = document.getElementById('icon-add-preview');
 const iconAddName = document.getElementById('icon-add-name');
 const iconPickerScroll = document.getElementById('icon-picker-scroll');
+const iconOnlineForm = document.getElementById('icon-online-search');
+const iconOnlineQuery = document.getElementById('icon-online-query');
+const iconOnlineStatus = document.getElementById('icon-online-status');
+const iconOnlineGrid = document.getElementById('icon-online-grid');
+const RECOMMENDED_AGENT_ICONS = ['simple-icons:openai', 'simple-icons:claude', 'simple-icons:anthropic', 'simple-icons:googlegemini', 'simple-icons:cursor', 'simple-icons:githubcopilot', 'simple-icons:windsurf', 'simple-icons:perplexity', 'simple-icons:mistralai'];
 
 function showIconGrid() {
   if (pickerGrid) pickerGrid.hidden = false;
+  if (iconOnlineForm) iconOnlineForm.hidden = false;
+  if (iconOnlineStatus) iconOnlineStatus.hidden = false;
+  if (iconOnlineGrid) iconOnlineGrid.hidden = !iconOnlineGrid.childElementCount;
   if (iconAddForm) iconAddForm.hidden = true;
   pendingCustomIcon = null;
   if (iconAddPreview) iconAddPreview.removeAttribute('src');
@@ -533,6 +541,9 @@ function showIconGrid() {
 function showIconAddForm(entry) {
   pendingCustomIcon = entry;
   if (pickerGrid) pickerGrid.hidden = true;
+  if (iconOnlineForm) iconOnlineForm.hidden = true;
+  if (iconOnlineStatus) iconOnlineStatus.hidden = true;
+  if (iconOnlineGrid) iconOnlineGrid.hidden = true;
   if (iconAddForm) iconAddForm.hidden = false;
   if (iconAddPreview) iconAddPreview.src = entry.dataUrl;
   if (iconAddName) {
@@ -546,6 +557,10 @@ function showIconAddForm(entry) {
 
 function renderIconPickerGrid() {
   showIconGrid();
+  if (iconOnlineGrid && !iconOnlineGrid.childElementCount) {
+    renderOnlineIconResults(RECOMMENDED_AGENT_ICONS);
+    if (iconOnlineStatus) iconOnlineStatus.textContent = t('picker.onlineRecommended');
+  }
   if (state.pickingCmd) {
     pickerTitle.textContent = t('picker.title', { cmd: state.pickingCmd });
   }
@@ -568,6 +583,43 @@ function renderIconPickerGrid() {
     </button>`;
   pickerGrid.innerHTML = tiles + addTile;
 }
+
+function renderOnlineIconResults(ids) {
+  if (!iconOnlineGrid) return;
+  iconOnlineGrid.replaceChildren();
+  for (const id of ids) {
+    const [prefix, name] = id.split(':');
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = 'icon-pick'; button.dataset.onlineIcon = id; button.title = id;
+    const img = document.createElement('img'); img.alt = ''; img.loading = 'lazy'; img.src = `https://api.iconify.design/${prefix}/${name}.svg`;
+    const label = document.createElement('span'); label.textContent = name.replace(/-/g, ' ');
+    button.append(img, label); iconOnlineGrid.append(button);
+  }
+  iconOnlineGrid.hidden = !ids.length;
+}
+
+iconOnlineForm?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const query = iconOnlineQuery?.value?.trim() || '';
+  if (iconOnlineStatus) iconOnlineStatus.textContent = t('picker.onlineSearching');
+  if (iconOnlineGrid) { iconOnlineGrid.hidden = true; iconOnlineGrid.replaceChildren(); }
+  const result = await api?.searchOnlineIcons?.(query);
+  if (!result?.ok) { if (iconOnlineStatus) iconOnlineStatus.textContent = result?.error || t('picker.onlineFail'); return; }
+  renderOnlineIconResults(result.icons || []);
+  if (iconOnlineStatus) iconOnlineStatus.textContent = result.icons?.length ? t('picker.onlineResults', { count: result.icons.length }) : t('picker.onlineEmpty');
+});
+
+iconOnlineGrid?.addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-online-icon]');
+  if (!button || button.disabled) return;
+  if (getCustomIcons().length >= MAX_CUSTOM_ICONS) { flashAction(t('picker.addFull')); return; }
+  button.disabled = true;
+  if (iconOnlineStatus) iconOnlineStatus.textContent = t('picker.onlineSearching');
+  const result = await api?.fetchOnlineIcon?.(button.dataset.onlineIcon);
+  button.disabled = false;
+  if (!result?.ok) { if (iconOnlineStatus) iconOnlineStatus.textContent = result?.error || t('picker.onlineFail'); return; }
+  showIconAddForm({ id: `custom_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`, label: result.label, dataUrl: result.dataUrl });
+});
 
 function openIconPicker(cmd) {
   if (padBlocks()) return;
@@ -1051,6 +1103,12 @@ const mcpPanel = document.getElementById('mcp-panel');
 const mcpList = document.getElementById('mcp-list');
 const skillsPanel = document.getElementById('skills-panel');
 const skillsList = document.getElementById('skills-list');
+const skillEditSelect = document.getElementById('skill-edit-select');
+const skillEditName = document.getElementById('skill-edit-name');
+const skillEditDescription = document.getElementById('skill-edit-description');
+const skillEditInstructions = document.getElementById('skill-edit-instructions');
+let personalSkills = [];
+let editingSkillOriginal = '';
 const setWorkingDirectory = document.getElementById('set-working-directory');
 const setWritableRoots = document.getElementById('set-writable-roots');
 const setWorkspaceNetwork = document.getElementById('set-workspace-network');
@@ -1420,9 +1478,29 @@ async function refreshSkills() {
   }
 }
 
+function fillSkillEditor(skill = null) {
+  editingSkillOriginal = skill?.folder || '';
+  if (skillEditName) skillEditName.value = skill?.name || '';
+  if (skillEditDescription) skillEditDescription.value = skill?.description || '';
+  if (skillEditInstructions) skillEditInstructions.value = skill?.instructions || '';
+  const del = document.getElementById('skill-edit-delete'); if (del) del.disabled = !skill;
+}
+
+async function refreshPersonalSkills(preferred = '') {
+  const result = await api?.listPersonalSkills?.(); personalSkills = result?.skills || [];
+  if (!skillEditSelect) return;
+  skillEditSelect.replaceChildren();
+  const draft = document.createElement('option'); draft.value = ''; draft.textContent = t('skills.newDraft'); skillEditSelect.append(draft);
+  for (const skill of personalSkills) { const option = document.createElement('option'); option.value = skill.folder; option.textContent = skill.name; skillEditSelect.append(option); }
+  if (preferred && personalSkills.some((skill) => skill.folder === preferred)) skillEditSelect.value = preferred;
+  const selected = personalSkills.find((skill) => skill.folder === skillEditSelect.value) || null; fillSkillEditor(selected);
+}
+
+async function refreshSkillsWorkspace(preferred = '') { await Promise.all([refreshSkills(), refreshPersonalSkills(preferred)]); }
+
 async function openSkills() {
   closeMcp(); closeSettings(); closeGuide(); closeKeymap(); closeIconPicker();
-  if (!skillsPanel) return; skillsPanel.hidden = false; await refreshSkills();
+  if (!skillsPanel) return; skillsPanel.hidden = false; await refreshSkillsWorkspace();
 }
 
 function mcpText(tag, className, value) {
@@ -1540,8 +1618,22 @@ document.getElementById('btn-settings')?.addEventListener('click', openSettings)
 document.getElementById('btn-mcp')?.addEventListener('click', openMcp);
 document.getElementById('btn-skills')?.addEventListener('click', openSkills);
 document.getElementById('skills-close')?.addEventListener('click', closeSkills);
-document.getElementById('skills-refresh')?.addEventListener('click', refreshSkills);
-document.getElementById('skills-open-folder')?.addEventListener('click', () => api?.openSkillsFolder?.());
+document.getElementById('skills-refresh')?.addEventListener('click', () => refreshSkillsWorkspace(skillEditSelect?.value || ''));
+skillEditSelect?.addEventListener('change', () => fillSkillEditor(personalSkills.find((skill) => skill.folder === skillEditSelect.value) || null));
+document.getElementById('skill-edit-new')?.addEventListener('click', () => { if (skillEditSelect) skillEditSelect.value = ''; fillSkillEditor(null); skillEditName?.focus(); });
+document.getElementById('skill-edit-save')?.addEventListener('click', async () => {
+  const input = { originalName: editingSkillOriginal, name: skillEditName?.value || '', description: skillEditDescription?.value || '', instructions: skillEditInstructions?.value || '' };
+  const result = await api?.savePersonalSkill?.(input);
+  if (!result?.ok) { flashAction(result?.error || t('skills.saveFail')); return; }
+  flashAction(t('skills.saveOk')); await refreshSkillsWorkspace(result.skill.folder);
+});
+document.getElementById('skill-edit-delete')?.addEventListener('click', async () => {
+  if (!editingSkillOriginal) return;
+  const result = await api?.deletePersonalSkill?.(editingSkillOriginal);
+  if (result?.canceled) return;
+  if (!result?.ok) { flashAction(result?.error || t('skills.deleteFail')); return; }
+  flashAction(t('skills.deleteOk')); await refreshSkillsWorkspace();
+});
 document.getElementById('mcp-close')?.addEventListener('click', closeMcp);
 document.getElementById('mcp-refresh')?.addEventListener('click', refreshMcpServers);
 document.getElementById('mcp-open-config')?.addEventListener('click', () => api?.openCodexConfig?.());
