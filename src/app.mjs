@@ -260,6 +260,8 @@ const shellEl = document.getElementById('shell');
 const gitButton = document.getElementById('btn-git');
 const gitPanel = document.getElementById('git-side-panel');
 const gitClose = document.getElementById('git-side-close');
+const gitRefresh = document.getElementById('git-refresh');
+let gitRefreshTimer = null;
 const trialLockEl = document.getElementById('trial-lock');
 const trialSponsorBtn = document.getElementById('trial-sponsor');
 const trialCloseBtn = document.getElementById('trial-close');
@@ -286,10 +288,41 @@ async function setGitPanelOpen(open) {
   gitButton?.classList.toggle('is-active', next);
   gitButton?.setAttribute('aria-expanded', String(next));
   await api?.setGitPanel?.(next);
+  if (gitRefreshTimer) clearInterval(gitRefreshTimer);
+  gitRefreshTimer = null;
+  if (next) {
+    await refreshGitStatus();
+    gitRefreshTimer = setInterval(refreshGitStatus, 4000);
+  }
+}
+
+async function refreshGitStatus() {
+  if (!gitPanel || gitPanel.hidden) return;
+  const list = document.getElementById('git-change-list');
+  gitRefresh?.classList.add('is-loading');
+  const result = await api?.getGitStatus?.();
+  gitRefresh?.classList.remove('is-loading');
+  const branch = document.getElementById('git-branch-name');
+  if (branch) branch.textContent = result?.ok ? `${result.branch}${result.tracking ? ` · ${result.tracking}` : ''}` : 'Not a Git repo';
+  if (!list) return;
+  list.replaceChildren();
+  if (!result?.ok) {
+    const empty = document.createElement('div'); empty.className = 'git-empty'; empty.textContent = result?.error || 'Git status unavailable'; list.append(empty); return;
+  }
+  if (!result.files?.length) {
+    const empty = document.createElement('div'); empty.className = 'git-empty'; empty.textContent = '✓ Working tree clean'; list.append(empty); return;
+  }
+  for (const file of result.files) {
+    const row = document.createElement('div'); row.className = 'git-change';
+    const code = document.createElement('span'); code.className = 'git-change-code'; code.textContent = file.status;
+    const name = document.createElement('span'); name.className = 'git-change-path'; name.textContent = file.path; name.title = file.path;
+    row.append(code, name); list.append(row);
+  }
 }
 
 gitButton?.addEventListener('click', () => setGitPanelOpen(!!gitPanel?.hidden));
 gitClose?.addEventListener('click', () => setGitPanelOpen(false));
+gitRefresh?.addEventListener('click', refreshGitStatus);
 
 const picker = document.getElementById('icon-picker');
 const pickerGrid = document.getElementById('icon-picker-grid');

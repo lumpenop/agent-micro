@@ -601,6 +601,26 @@ ipcMain.handle('window:setGitPanel', (_e, open) => {
   mainWindow.setBounds({ x: right - width, y: bounds.y, width, height: bounds.height }, false);
   return true;
 });
+ipcMain.handle('git:status', async () => {
+  if (trialLocked()) return trialDenied();
+  try {
+    const cwd = selectedWorkspace();
+    const output = await new Promise((resolve, reject) => {
+      execFile('git', ['status', '--porcelain=v1', '--branch'], { cwd, timeout: 5000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+        if (error) reject(new Error(String(stderr || error.message).trim()));
+        else resolve(String(stdout || ''));
+      });
+    });
+    const lines = output.split(/\r?\n/).filter(Boolean);
+    const branchLine = lines[0]?.startsWith('## ') ? lines.shift().slice(3) : '';
+    const branch = branchLine.split(/\.\.\.|\s/)[0] || 'HEAD';
+    const tracking = branchLine.match(/\[(.+)\]/)?.[1] || '';
+    const files = lines.map((line) => ({ status: line.slice(0, 2).trim() || '?', path: line.slice(3) }));
+    return { ok: true, cwd, branch, tracking, files, clean: files.length === 0 };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
 ipcMain.handle('window:suspendPadHotkeys', (_e, suspended) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.__padHotkeysSuspended = !!suspended;
