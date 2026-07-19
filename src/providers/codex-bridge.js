@@ -991,6 +991,45 @@ class CodexBridge extends EventEmitter {
     return this.planMode;
   }
 
+  async openModelPicker() {
+    const slot = this.selected;
+    const agent = this.agents[slot];
+    if (agent?.status === 'thinking' || agent?.status === 'working') {
+      return { ok: false, busy: true, error: 'Wait for the current response to finish before changing models' };
+    }
+    try {
+      const focus = await this.ensureAgentCliWindow(slot, { focus: true });
+      if (!focus?.ok) return { ok: false, error: focus?.error || focus?.reason || 'Codex CLI unavailable', slot };
+      await mac.submitToCli(slot, '/model');
+      this.emitState('Codex · model picker');
+      return { ok: true, slot, mode: 'cli' };
+    } catch (error) {
+      this.emit('log', `model picker cli: ${error.message}`);
+      return { ok: false, error: error.message, slot };
+    }
+  }
+
+  async switchModel(rawModel) {
+    const model = String(rawModel || '').trim();
+    if (!/^gpt-[a-z0-9.-]+$/.test(model)) return { ok: false, error: 'Invalid model name' };
+    const slot = this.selected;
+    const agent = this.agents[slot];
+    if (agent?.status === 'thinking' || agent?.status === 'working') {
+      return { ok: false, busy: true, error: 'Wait for the current response to finish before changing models' };
+    }
+    try {
+      const focus = await this.ensureAgentCliWindow(slot, { focus: true });
+      if (!focus?.ok) return { ok: false, error: focus?.error || focus?.reason || 'Codex CLI unavailable', slot };
+      await mac.submitToCli(slot, `/model ${model}`);
+      if (agent) agent.model = model;
+      this.emitState(`Codex · ${model}`);
+      return { ok: true, slot, model, mode: 'cli' };
+    } catch (error) {
+      this.emit('log', `model switch cli: ${error.message}`);
+      return { ok: false, error: error.message, slot };
+    }
+  }
+
   async skill(name) {
     const text = SKILLS[name] || SKILLS.continue;
     await this.send(text);

@@ -19,6 +19,8 @@ const { t: tRaw, normalizeLocale } = window.agentI18n || {
 };
 
 const REASONING = ['minimal', 'low', 'medium', 'high', 'xhigh'];
+const QUICK_MODEL = 'gpt-5.6-terra';
+const DEEP_MODEL = 'gpt-5.6-sol';
 const api = window.codexDesktop;
 const STORAGE_KEY = 'agent-micro-key-icons-v1';
 const CUSTOM_ICONS_KEY = 'agent-micro-custom-icons-v1';
@@ -28,7 +30,7 @@ const MAX_CUSTOM_ICONS = 32;
  * Joystick layers (Touch cycles these):
  * - Codex: CLI session control (plan, new chat, agent slot history)
  * - Prompts: inject canned skills (review / docs / refactor / debug)
- * - App: desktop Codex UI shortcuts (composer, sidebar, chat history, new chat)
+ * - Tools: active-session model picker and selected-workspace dev server
  */
 const LAYERS = [
   {
@@ -50,12 +52,12 @@ const LAYERS = [
     },
   },
   {
-    name: 'App',
+    name: 'Tools',
     joy: {
-      up: () => api?.desktop('composer'),
-      down: () => api?.desktop('sidebar'),
-      left: () => api?.desktop('historyBack'),
-      right: () => api?.desktop('newChat'),
+      up: () => toggleQuickDeepModel(),
+      down: () => toggleCurrentDevServer(),
+      left: () => flashAction(t('flash.toolsHint')),
+      right: () => sendManualContinue(),
     },
   },
 ];
@@ -93,7 +95,7 @@ function loadKeyIcons() {
     stored = {};
   }
   // Migrate old Codex brand mark → Lucide send
-  if (stored.send === 'codex') stored.send = 'send';
+  if (stored.send === 'codex' || stored.send === 'send') stored.send = 'terminal';
   const merged = { ...DEFAULT_KEY_ICONS, ...stored };
   for (const [cmd, id] of Object.entries(merged)) {
     if (!isPickerIcon(id)) merged[cmd] = DEFAULT_KEY_ICONS[cmd];
@@ -152,7 +154,16 @@ const state = {
   provider: 'codex',
   lastAgentTap: { index: -1, at: 0 },
   lastMicTap: 0,
-  lastSendTap: 0,
+  devServerRunning: false,
+  devServerCwd: '',
+  devServerCommand: '',
+  agentModelModes: Array.from({ length: 6 }, () => 'deep'),
+  autoContinueEnabled: false,
+  autoContinueDelaySec: 30,
+  autoContinueMaxRuns: 1,
+  autoContinueCounts: Array.from({ length: 6 }, () => 0),
+  autoContinueIssued: Array.from({ length: 6 }, () => false),
+  autoContinueTimers: Array.from({ length: 6 }, () => null),
   lastJoy: { dir: null, at: 0 },
   agents: Array.from({ length: 6 }, () => ({ name: '—', status: 'off' })),
   keyIcons: loadKeyIcons(),
@@ -258,6 +269,10 @@ const hud = {
   status: document.getElementById('hud-status'),
   reason: document.getElementById('hud-reason'),
   action: document.getElementById('hud-action'),
+  model: document.getElementById('hud-model'),
+  modelChange: document.getElementById('hud-model-change'),
+  continueStatus: document.getElementById('hud-continue-status'),
+  continueButton: document.getElementById('hud-continue'),
 };
 
 const picker = document.getElementById('icon-picker');
@@ -852,8 +867,8 @@ function buildKeymapItems(g = modGlyph()) {
       text: t('map.mic.text'),
     },
     {
-      icons: ['send'],
-      title: `${g}F · Send`,
+      icons: ['terminal'],
+      title: `${g}F · DEV`,
       text: t('map.send.text'),
     },
     { section: t('map.sec.controls') },
@@ -897,16 +912,16 @@ function buildKeymapItems(g = modGlyph()) {
       title: t('map.joy.prompts.lr'),
       text: t('map.joy.prompts.lr.text'),
     },
-    { section: 'Joy · App' },
+    { section: 'Joy · Tools' },
     {
       marks: ['up', 'down'],
-      title: t('map.joy.app.ud'),
-      text: t('map.joy.app.ud.text'),
+      title: t('map.joy.tools.ud'),
+      text: t('map.joy.tools.ud.text'),
     },
     {
       marks: ['left', 'right'],
-      title: t('map.joy.app.lr'),
-      text: t('map.joy.app.lr.text'),
+      title: t('map.joy.tools.lr'),
+      text: t('map.joy.tools.lr.text'),
     },
   ];
 }
@@ -1156,6 +1171,24 @@ const settingsLicenseKeyEl = document.getElementById('settings-license-key');
 const settingsCodexLoginBtn = document.getElementById('settings-codex-login');
 const settingsLicenseActivateBtn = document.getElementById('settings-license-activate');
 const settingsLicenseBuyBtn = document.getElementById('settings-license-buy');
+const setAutoContinue = document.getElementById('set-auto-continue');
+const setAutoContinueDelay = document.getElementById('set-auto-continue-delay');
+const setAutoContinueMax = document.getElementById('set-auto-continue-max');
+
+function fillAutoContinuePrefs(prefs = {}) {
+  if (setAutoContinue) setAutoContinue.checked = prefs.autoContinueEnabled === true;
+  if (setAutoContinueDelay) setAutoContinueDelay.value = String(prefs.autoContinueDelaySec ?? 30);
+  if (setAutoContinueMax) setAutoContinueMax.value = String(prefs.autoContinueMaxRuns ?? 1);
+  applyAutoContinuePrefs(prefs);
+}
+
+function readAutoContinuePrefs() {
+  return {
+    autoContinueEnabled: !!setAutoContinue?.checked,
+    autoContinueDelaySec: Number(setAutoContinueDelay?.value) || 30,
+    autoContinueMaxRuns: Number(setAutoContinueMax?.value) || 1,
+  };
+}
 
 function readSettingsForm() {
   commitAgentEditor();
@@ -1414,8 +1447,9 @@ async function openSettings() {
   if (!settingsPanel) return;
   if (settingsSearch) settingsSearch.placeholder = t('settings.search');
   try {
-    const r = await api?.getCodexSettings?.();
+    const [r, prefs] = await Promise.all([api?.getCodexSettings?.(), api?.getPadPrefs?.()]);
     fillSettingsForm(r?.settings || {});
+    fillAutoContinuePrefs(prefs || {});
     const setLocaleEl = document.getElementById('set-locale');
     if (setLocaleEl) setLocaleEl.value = state.locale;
     if (settingsHint) {
@@ -1425,6 +1459,7 @@ async function openSettings() {
     }
   } catch {
     fillSettingsForm({});
+    fillAutoContinuePrefs({});
   }
   settingsPanel.hidden = false;
   flashAction(t('flash.settings'));
@@ -1664,6 +1699,8 @@ skillsPanel?.addEventListener('click', (e) => { if (e.target === skillsPanel) cl
 document.getElementById('settings-save')?.addEventListener('click', async () => {
   const r = await api?.saveCodexSettings?.(readSettingsForm());
   if (r?.ok) {
+    const prefs = await api?.setPadPrefs?.(readAutoContinuePrefs());
+    fillAutoContinuePrefs(prefs || readAutoContinuePrefs());
     fillSettingsForm(r.settings);
     flashAction(t('flash.settingsSaved'));
     if (settingsHint) {
@@ -1744,6 +1781,9 @@ document.getElementById('settings-open-config')?.addEventListener('click', () =>
   api?.openCodexConfig?.();
   flashAction(t('flash.configToml'));
 });
+hud.modelChange?.addEventListener('click', toggleQuickDeepModel);
+hud.continueButton?.addEventListener('click', sendManualContinue);
+setInterval(refreshDevServerStatus, 3000);
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeGuide();
@@ -1765,6 +1805,21 @@ function render() {
   hud.folder.title = folder === '—' ? '' : folder;
   hud.status.textContent = statusLabel(current.status || 'off');
   hud.reason.textContent = REASONING[state.reasoningIndex];
+  const agentBusy = current.status === 'thinking' || current.status === 'working';
+  const modelMode = state.agentModelModes[state.selected] || 'deep';
+  if (hud.model) {
+    hud.model.textContent = modelMode === 'light' ? t('hud.modelLight') : t('hud.modelDeep');
+    hud.model.title = modelMode === 'light' ? QUICK_MODEL : DEEP_MODEL;
+  }
+  if (hud.modelChange) {
+    hud.modelChange.disabled = agentBusy || !state.connected;
+    hud.modelChange.textContent = modelMode === 'light' ? t('hud.toDeep') : t('hud.toLight');
+    hud.modelChange.title = modelMode === 'light' ? DEEP_MODEL : QUICK_MODEL;
+  }
+  if (hud.continueStatus) hud.continueStatus.textContent = state.autoContinueEnabled
+    ? t('hud.continueAuto', { sec: state.autoContinueDelaySec, max: state.autoContinueMaxRuns })
+    : t('hud.continueManual');
+  if (hud.continueButton) hud.continueButton.disabled = agentBusy || !state.connected;
   const layerName = layerDisplayName(state.layer);
   hud.link.textContent = state.connected
     ? `Codex CLI · ${state.mode} · ${layerName}`
@@ -1774,9 +1829,87 @@ function render() {
   linkDot.classList.toggle('on', state.connected);
   linkDot.classList.toggle('demo', !state.connected);
   pad3d.setCmdActive('fast', state.fastMode);
+  pad3d.setCmdActive('send', state.devServerRunning, 0x167a45, 0.32);
   const forkOk =
     typeof state.canFork === 'boolean' ? state.canFork : canForkFromAgents(state.agents);
   pad3d.setCmdEnabled?.('fork', forkOk);
+}
+
+async function refreshDevServerStatus() {
+  const result = await api?.getDevServerStatus?.();
+  state.devServerRunning = !!result?.running;
+  state.devServerCwd = result?.cwd || '';
+  state.devServerCommand = result?.command || '';
+  render();
+}
+
+async function toggleQuickDeepModel() {
+  const current = state.agentModelModes[state.selected] || 'deep';
+  const next = current === 'light' ? 'deep' : 'light';
+  const model = next === 'light' ? QUICK_MODEL : DEEP_MODEL;
+  if (hud.modelChange) hud.modelChange.disabled = true;
+  const result = await api?.switchActiveModel?.(model);
+  if (!result?.ok) flashAction(result?.busy ? t('flash.modelBusy') : result?.error || t('flash.modelFail'));
+  else {
+    state.agentModelModes[state.selected] = next;
+    flashAction(next === 'light' ? t('flash.modelLight') : t('flash.modelDeep'));
+  }
+  render();
+}
+
+async function toggleCurrentDevServer() {
+  const result = await api?.toggleDevServer?.();
+  if (!result?.ok) flashAction(result?.error || t('flash.devFail'));
+  else {
+    state.devServerRunning = !!result.running;
+    state.devServerCwd = result.cwd || '';
+    state.devServerCommand = result.command || '';
+    flashAction(result.running ? t('flash.devStarted') : t('flash.devStopped'));
+  }
+  render();
+}
+
+function cancelAutoContinue(index) {
+  const timer = state.autoContinueTimers[index];
+  if (timer) clearTimeout(timer);
+  state.autoContinueTimers[index] = null;
+}
+
+function cancelAllAutoContinue() {
+  state.autoContinueTimers.forEach((_timer, index) => cancelAutoContinue(index));
+}
+
+async function sendManualContinue() {
+  const index = state.selected;
+  cancelAutoContinue(index);
+  state.autoContinueCounts[index] = 0;
+  state.autoContinueIssued[index] = false;
+  const result = await api?.send?.('Continue.');
+  flashAction(result?.ok ? t('flash.continue') : result?.error || t('flash.continueFail'));
+}
+
+function scheduleAutoContinue(index) {
+  cancelAutoContinue(index);
+  if (!state.autoContinueEnabled || index !== state.selected || state.autoContinueCounts[index] >= state.autoContinueMaxRuns) return;
+  state.autoContinueTimers[index] = setTimeout(async () => {
+    state.autoContinueTimers[index] = null;
+    const agent = state.agents[index];
+    if (!state.autoContinueEnabled || index !== state.selected || !['idle', 'complete'].includes(agent?.status)) return;
+    state.autoContinueCounts[index] += 1;
+    state.autoContinueIssued[index] = true;
+    const result = await api?.send?.('Continue.');
+    flashAction(result?.ok
+      ? t('flash.autoContinue', { count: state.autoContinueCounts[index], max: state.autoContinueMaxRuns })
+      : result?.error || t('flash.continueFail'));
+  }, state.autoContinueDelaySec * 1000);
+}
+
+function applyAutoContinuePrefs(prefs = {}) {
+  state.autoContinueEnabled = prefs.autoContinueEnabled === true;
+  state.autoContinueDelaySec = Math.max(5, Math.min(3600, Number(prefs.autoContinueDelaySec) || 30));
+  state.autoContinueMaxRuns = Math.max(1, Math.min(10, Number(prefs.autoContinueMaxRuns) || 1));
+  if (!state.autoContinueEnabled) cancelAllAutoContinue();
+  render();
 }
 
 function canForkFromAgents(agents) {
@@ -1787,10 +1920,12 @@ function canForkFromAgents(agents) {
 
 function applyBridgeState(s) {
   if (!s) return;
+  const previousAgents = state.agents.map((agent) => ({ ...agent }));
   state.connected = !!s.connected;
   state.mode = s.mode || 'offline';
   state.linkMode = 'cli';
   state.provider = 'codex';
+  const previousSelected = state.selected;
   state.selected = s.selected ?? state.selected;
   state.reasoningIndex = s.reasoningIndex ?? state.reasoningIndex;
   state.fastMode = !!s.fastMode;
@@ -1799,9 +1934,25 @@ function applyBridgeState(s) {
   else if (Array.isArray(s.agents)) {
     state.canFork = canForkFromAgents(s.agents);
   }
-  if (Array.isArray(s.agents)) state.agents = s.agents;
+  if (Array.isArray(s.agents)) {
+    state.agents = s.agents;
+    state.agents.forEach((agent, index) => {
+      const before = previousAgents[index]?.status;
+      const after = agent?.status;
+      const beforeBusy = before === 'thinking' || before === 'working';
+      const afterBusy = after === 'thinking' || after === 'working';
+      const afterSettled = after === 'idle' || after === 'complete';
+      if (!afterSettled) cancelAutoContinue(index);
+      if ((before === 'idle' || before === 'complete') && afterBusy) {
+        if (state.autoContinueIssued[index]) state.autoContinueIssued[index] = false;
+        else state.autoContinueCounts[index] = 0;
+      }
+      if (beforeBusy && afterSettled) scheduleAutoContinue(index);
+    });
+  }
   if (s.action) flashAction(s.action);
   render();
+  if (previousSelected !== state.selected) { cancelAllAutoContinue(); refreshDevServerStatus(); }
 }
 
 async function onAgent(index) {
@@ -1849,16 +2000,7 @@ async function onCmd(cmd) {
   }
 
   if (cmd === 'send') {
-    const now = Date.now();
-    const dbl = now - state.lastSendTap < 350;
-    state.lastSendTap = now;
-    if (dbl) {
-      await api?.newChat();
-      flashAction(t('flash.newChat'));
-      return;
-    }
-    await api?.send('Continue.');
-    flashAction(t('flash.continue'));
+    await toggleCurrentDevServer();
     return;
   }
 
@@ -1931,6 +2073,7 @@ try {
   });
   applyKeyIcons();
   render();
+  refreshDevServerStatus();
   flashAction(t('flash.padReady'));
 } catch (err) {
   console.error(err);
@@ -2041,12 +2184,14 @@ api?.onHotkey?.(({ cmd, phase, dir, index } = {}) => {
 api?.onPadPrefs?.((prefs) => {
   if (prefs?.locale) applyLocale(prefs.locale);
   if (prefs?.hotkeyModifier) applyHotkeyModifier(prefs.hotkeyModifier);
+  applyAutoContinuePrefs(prefs || {});
 });
 
 api?.getPadPrefs?.().then((prefs) => {
   if (prefs?.locale) applyLocale(prefs.locale);
   else applyStaticI18n();
   if (prefs?.hotkeyModifier) applyHotkeyModifier(prefs.hotkeyModifier);
+  applyAutoContinuePrefs(prefs || {});
 });
 
 

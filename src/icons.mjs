@@ -19,7 +19,7 @@ export const DEFAULT_KEY_ICONS = {
   decline: 'times',
   fork: 'fork',
   mic: 'mic',
-  send: 'send',
+  send: 'terminal',
 };
 
 /**

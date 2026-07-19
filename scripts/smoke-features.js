@@ -62,6 +62,10 @@ async function main() {
   else fail('codex.binary', 'not found');
 
   const bridge = new CodexBridge();
+  if (typeof bridge.openModelPicker === 'function') ok('codex.modelPicker', 'active-session /model bridge');
+  else fail('codex.modelPicker', 'missing');
+  if (typeof bridge.switchModel === 'function') ok('codex.modelToggle', 'Light/Deep active-session bridge');
+  else fail('codex.modelToggle', 'missing');
   bridge.on('log', (m) => {
     if (process.env.SMOKE_VERBOSE) console.log('  [log]', m);
   });

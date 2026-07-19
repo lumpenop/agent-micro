@@ -428,6 +428,14 @@
               <div class="settings-field"><label class="voice-label" for="set-verbosity" data-i18n="settings.verbosity">Response verbosity</label><select id="set-verbosity" class="voice-input settings-select"><option value="" data-i18n="settings.auto">Automatic</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></div>
               <div class="settings-field"><label class="settings-check" for="set-hooks-enabled"><input id="set-hooks-enabled" type="checkbox" /><span data-i18n="settings.hooks">Enable lifecycle Hooks</span></label><p class="settings-desc" data-i18n="settings.hooks.desc">Runs trusted hooks configured in hooks.json or config.toml.</p></div>
               <div class="settings-field"><label class="settings-check" for="set-prevent-sleep"><input id="set-prevent-sleep" type="checkbox" /><span data-i18n="settings.preventSleep">Prevent sleep while working</span></label></div>
+              <div class="settings-field">
+                <label class="settings-check" for="set-auto-continue"><input id="set-auto-continue" type="checkbox" /><span data-i18n="settings.autoContinue">Automatically send Continue after work stops</span></label>
+                <p class="settings-desc" data-i18n="settings.autoContinue.desc">Only after thinking changes to idle/complete. Never runs for approvals, input requests, or errors.</p>
+              </div>
+              <div class="settings-row">
+                <div class="settings-field"><label class="voice-label" for="set-auto-continue-delay" data-i18n="settings.autoContinueDelay">Wait time (seconds)</label><input id="set-auto-continue-delay" class="voice-input" type="number" min="5" max="3600" step="5" value="30" /></div>
+                <div class="settings-field"><label class="voice-label" for="set-auto-continue-max" data-i18n="settings.autoContinueMax">Maximum automatic runs</label><input id="set-auto-continue-max" class="voice-input" type="number" min="1" max="10" step="1" value="1" /></div>
+              </div>
             </div>
 
             <div class="settings-field settings-field--actions">
@@ -567,6 +575,14 @@
         <div class="hud-row">
           <span class="hud-label">Reasoning</span>
           <span class="hud-value" id="hud-reason">medium</span>
+        </div>
+        <div class="hud-row hud-control-row">
+          <span class="hud-label">Model</span>
+          <span class="hud-control-value"><span class="hud-value" id="hud-model">Deep</span><button type="button" class="hud-action-btn" id="hud-model-change">→ Light</button></span>
+        </div>
+        <div class="hud-row hud-control-row">
+          <span class="hud-label">Continue</span>
+          <span class="hud-control-value"><span class="hud-value" id="hud-continue-status">Manual</span><button type="button" class="hud-action-btn" id="hud-continue">Send</button></span>
         </div>
         <div class="hud-row">
           <span class="hud-label">Action</span>

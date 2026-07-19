@@ -88,7 +88,7 @@ button {
   padding: 0 2px;
   min-height: 24px;
   margin-bottom: 2px;
-  opacity: 0.7;
+  opacity: 0.94;
   flex: 0 0 auto;
 }
 
@@ -96,7 +96,7 @@ button {
   font-size: 11px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.55);
+  color: rgba(0, 0, 0, 0.72);
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -152,8 +152,9 @@ button {
   width: 22px;
   height: 22px;
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.55);
-  color: rgba(0, 0, 0, 0.55);
+  background: rgba(248, 249, 250, 0.86);
+  color: rgba(0, 0, 0, 0.68);
+  border: 1px solid rgba(0, 0, 0, 0.06);
 }
 .chrome-btn.chrome-tab {
   width: auto;
@@ -1849,11 +1850,11 @@ button {
   margin-top: 6px;
   padding: 8px 10px 8px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.54);
-  border: 1px solid rgba(255, 255, 255, 0.66);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+  background: rgba(247, 248, 249, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(9px);
+  -webkit-backdrop-filter: blur(9px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.9);
   display: grid;
   gap: 3px;
 }
@@ -1867,14 +1868,14 @@ button {
 }
 
 .hud-label {
-  color: rgba(0, 0, 0, 0.45);
+  color: rgba(0, 0, 0, 0.58);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-size: 9px;
 }
 
 .hud-value {
-  color: rgba(0, 0, 0, 0.78);
+  color: rgba(0, 0, 0, 0.86);
   font-weight: 560;
   text-align: right;
   overflow: hidden;
@@ -1883,6 +1884,16 @@ button {
   max-width: 190px;
 }
 .hud-folder { max-width: 230px; }
+.hud-control-row { align-items: center; }
+.hud-control-value { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; }
+.hud-action-btn {
+  flex: 0 0 auto; padding: 2px 7px; border-radius: 6px; font-size: 9px; font-weight: 650;
+  color: rgba(0, 0, 0, 0.68); background: rgba(255, 255, 255, 0.7); border: 1px solid rgba(0, 0, 0, 0.08);
+}
+.hud-action-btn:hover { background: rgba(255, 255, 255, 0.95); }
+.hud-action-btn:disabled { opacity: 0.38; cursor: default; }
+.hud-dev-dot { width: 7px; height: 7px; border-radius: 50%; background: #9aa2a8; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08); }
+.hud-dev-dot.on { background: #3ecf7a; box-shadow: 0 0 6px rgba(62, 207, 122, 0.7); }
 
 .legend {
   display: flex;

@@ -64,7 +64,7 @@ pnpm start
 | ✓ / ✕ | Approve / Decline |
 | Fork | 소스 세션 fork → 다음 빈 슬롯에 `codex fork`/`resume` CLI 스플릿 (UI는 6/6일 때만 비활성) |
 | Mic | 홀드 = PTT · 더블탭 = hands-free |
-| Send | Continue · 더블탭 = new chat |
+| DEV (formerly Send) | 현재 선택 에이전트의 작업 폴더 개발 서버 시작·종료 |
 | Dial | reasoning effort |
 | Joystick | 레이어에 따라 다름 |
 | Touch | Core → Skills → Desktop |
@@ -89,6 +89,9 @@ pnpm start
 - 안전: 저장 전 자동 백업, 복원 전 재백업, 위험 권한 조합 경고
 - MCP 탭: 서버 탐색, 활성화, 타임아웃, HTTP/stdio 추가, OAuth, 검사, 삭제
 - Skills 탭: 앱 안에서 개인 스킬 생성·조회·수정·삭제, 시스템·플러그인 스킬 목록과 플러그인 설정 진단
+- 3개 레이어: `Codex → Prompts → Tools` 순환. Tools에서 ↑ `gpt-5.6-terra`(Light) / `gpt-5.6-sol`(Deep) 즉시 전환, ↓ 선택 에이전트 작업 폴더의 `dev` 서버 시작·종료
+- Info Continue: 수동 전송 및 설정 시간 후 자동 Continue. 기본값은 꺼짐·30초·최대 1회이며 승인·입력 대기·오류에서는 자동 실행하지 않음
+- 아이콘 선택기: 로컬 아이콘·사용자 SVG/PNG·Iconify 온라인 AI 에이전트 검색
 - Info: 선택한 에이전트의 실제 작업 폴더 표시
 
 Apple Silicon 개발 앱은 `pnpm dist:mac`, 설치용 DMG는 `pnpm dist:dmg`로 빌드합니다.

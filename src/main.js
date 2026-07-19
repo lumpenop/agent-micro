@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, screen, globalShortcut, shell, Menu, dialog, net } = require('electron');
 const fs = require('fs');
 const os = require('os');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const path = require('path');
 const { createCodexBridge, focusCodexDesktop } = require('./providers/create-bridge');
 const codexSettings = require('./codex-settings');
@@ -13,6 +13,34 @@ const skillManager = require('./skill-manager');
 
 let mainWindow = null;
 let bridge = null;
+const devServers = new Map();
+
+function selectedWorkspace() {
+  const agent = bridge?.agents?.[bridge?.selected || 0];
+  const candidate = agent?.cwd || codexSettings.load()?.working_directory || process.cwd();
+  const resolved = path.resolve(String(candidate || process.cwd()));
+  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) throw new Error('Selected agent working folder is unavailable');
+  return resolved;
+}
+
+function devCommand(cwd) {
+  const manifest = path.join(cwd, 'package.json');
+  if (!fs.existsSync(manifest)) throw new Error('No package.json in the selected agent folder');
+  const pkg = JSON.parse(fs.readFileSync(manifest, 'utf8'));
+  if (!pkg?.scripts?.dev) throw new Error('No dev script in package.json');
+  if (fs.existsSync(path.join(cwd, 'pnpm-lock.yaml'))) return 'pnpm dev';
+  if (fs.existsSync(path.join(cwd, 'yarn.lock'))) return 'yarn dev';
+  if (fs.existsSync(path.join(cwd, 'bun.lock')) || fs.existsSync(path.join(cwd, 'bun.lockb'))) return 'bun run dev';
+  return 'npm run dev';
+}
+
+function stopDevServer(cwd) {
+  const child = devServers.get(cwd);
+  if (!child) return false;
+  devServers.delete(cwd);
+  try { process.kill(-child.pid, 'SIGTERM'); } catch { try { child.kill('SIGTERM'); } catch {} }
+  return true;
+}
 
 function trialLocked() {
   return trial.isLocked();
@@ -420,7 +448,7 @@ function createWindow() {
   const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
   // Fit chrome + pad (modest outer rim) + hud
   const winW = 344;
-  const winH = 520;
+  const winH = 596;
 
   mainWindow = new BrowserWindow({
     width: winW,
@@ -565,6 +593,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  for (const cwd of [...devServers.keys()]) stopDevServer(cwd);
   bridge?.stop();
   stopPadContextWatch();
   globalShortcut.unregisterAll();
@@ -910,6 +939,36 @@ ipcMain.handle('codex:toggleFast', () => {
 ipcMain.handle('codex:togglePlan', () => {
   if (trialLocked()) return trialDenied();
   return bridge?.togglePlan();
+});
+ipcMain.handle('codex:modelPicker', () => {
+  if (trialLocked()) return trialDenied();
+  return bridge?.openModelPicker();
+});
+ipcMain.handle('codex:switchModel', (_e, model) => {
+  if (trialLocked()) return trialDenied();
+  return bridge?.switchModel(model);
+});
+ipcMain.handle('devServer:toggle', () => {
+  if (trialLocked()) return trialDenied();
+  try {
+    const cwd = selectedWorkspace();
+    if (stopDevServer(cwd)) return { ok: true, running: false, cwd };
+    const command = devCommand(cwd);
+    const child = spawn('/bin/zsh', ['-lc', `exec ${command}`], { cwd, detached: true, stdio: 'ignore', env: { ...process.env, ELECTRON_RUN_AS_NODE: '' } });
+    child.unref();
+    devServers.set(cwd, child);
+    child.once('exit', () => { if (devServers.get(cwd) === child) devServers.delete(cwd); });
+    child.once('error', () => { if (devServers.get(cwd) === child) devServers.delete(cwd); });
+    return { ok: true, running: true, cwd, command, pid: child.pid };
+  } catch (error) { return { ok: false, error: error.message }; }
+});
+ipcMain.handle('devServer:status', () => {
+  if (trialLocked()) return trialDenied();
+  try {
+    const cwd = selectedWorkspace();
+    const child = devServers.get(cwd);
+    return { ok: true, running: !!child, cwd, command: child ? devCommand(cwd) : '' };
+  } catch (error) { return { ok: false, running: false, error: error.message }; }
 });
 ipcMain.handle('codex:skill', async (_e, name) => {
   if (trialLocked()) return trialDenied();

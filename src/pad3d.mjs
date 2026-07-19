@@ -732,6 +732,15 @@ export function createPad3D(container, handlers = {}) {
   );
   joyGate.rotation.x = Math.PI / 2;
   joyGate.position.y = 0.06;
+  const joyMarks = new THREE.Group();
+  const joyMarkMaterial = new THREE.MeshStandardMaterial({ color: 0x78828b, roughness: 0.58, metalness: 0.1 });
+  for (let i = 0; i < 4; i++) {
+    const mark = new THREE.Mesh(new RoundedBoxGeometry(0.04, 0.018, 0.075, 2, 0.009), joyMarkMaterial);
+    const angle = (Math.PI / 2) * i;
+    mark.position.set(Math.sin(angle) * 0.37, 0.108, Math.cos(angle) * 0.37);
+    mark.rotation.y = angle;
+    joyMarks.add(mark);
+  }
 
   const joyStick = new THREE.Group();
   const joyBoot = new THREE.Mesh(
@@ -771,7 +780,7 @@ export function createPad3D(container, handlers = {}) {
   );
   joyHit.position.y = 0.28;
   joyHit.userData = { type: 'joy' };
-  joyGroup.add(joyBase, joyGate, joyStick, joyHit);
+  joyGroup.add(joyBase, joyGate, joyMarks, joyStick, joyHit);
   // Bottom-left (swapped with Touch)
   joyGroup.position.set(originX - 0.02, 0.28, originZ + gap * 3 + 0.04);
   joyGroup.userData = { type: 'joy', stick: joyStick };
@@ -783,13 +792,20 @@ export function createPad3D(container, handlers = {}) {
   // touch pad (top-right) + 3 layer LEDs beside it
   const touchGroup = new THREE.Group();
 
+  const touchBezel = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.285, 0.3, 0.075, 40),
+    new THREE.MeshStandardMaterial({ color: 0x555d64, roughness: 0.34, metalness: 0.48 })
+  );
+  touchBezel.position.set(-0.22, 0.025, 0);
+  touchGroup.add(touchBezel);
+
   // circular capacitive pad
   const touch = new THREE.Mesh(
     new THREE.CylinderGeometry(0.22, 0.24, 0.1, 32),
     new THREE.MeshStandardMaterial({
-      color: 0x141414,
-      roughness: 0.35,
-      metalness: 0.35,
+      color: 0x202428,
+      roughness: 0.34,
+      metalness: 0.38,
     })
   );
   touch.castShadow = true;
@@ -799,7 +815,7 @@ export function createPad3D(container, handlers = {}) {
   // glossy highlight ring on pad
   const touchRing = new THREE.Mesh(
     new THREE.TorusGeometry(0.16, 0.012, 8, 32),
-    new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.3, metalness: 0.5 })
+    new THREE.MeshStandardMaterial({ color: 0x747d84, emissive: 0x30363b, emissiveIntensity: 0.22, roughness: 0.3, metalness: 0.44 })
   );
   touchRing.rotation.x = Math.PI / 2;
   touchRing.position.set(-0.22, 0.12, 0);
@@ -1286,11 +1302,11 @@ export function createPad3D(container, handlers = {}) {
       m.userData.iconId = iconId;
       placeKeyIcon(m);
     },
-    setCmdActive(cmd, on) {
+    setCmdActive(cmd, on, color = 0x224466, intensity = 0.15) {
       const m = cmds[cmd];
       if (!m) return;
-      m.material.emissive = new THREE.Color(on ? 0x224466 : 0x000000);
-      m.material.emissiveIntensity = on ? 0.15 : 0;
+      m.material.emissive = new THREE.Color(on ? color : 0x000000);
+      m.material.emissiveIntensity = on ? intensity : 0;
     },
     /** Gray out / ignore a command key (e.g. fork when 6/6). */
     setCmdEnabled(cmd, enabled) {

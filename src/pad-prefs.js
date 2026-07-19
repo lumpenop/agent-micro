@@ -14,6 +14,9 @@ const DEFAULTS = {
   hotkeyModifier: 'command',
   /** @type {'en' | 'ko'} */
   locale: 'en',
+  autoContinueEnabled: false,
+  autoContinueDelaySec: 30,
+  autoContinueMaxRuns: 1,
 };
 
 let userDataDir = null;
@@ -40,9 +43,16 @@ function normalizeModifier(raw) {
 }
 
 function normalize(raw) {
+  const clampInt = (value, min, max, fallback) => {
+    const number = Number.parseInt(value, 10);
+    return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : fallback;
+  };
   return {
     hotkeyModifier: normalizeModifier(raw?.hotkeyModifier),
     locale: normalizeLocale(raw?.locale ?? DEFAULTS.locale),
+    autoContinueEnabled: raw?.autoContinueEnabled === true,
+    autoContinueDelaySec: clampInt(raw?.autoContinueDelaySec, 5, 3600, DEFAULTS.autoContinueDelaySec),
+    autoContinueMaxRuns: clampInt(raw?.autoContinueMaxRuns, 1, 10, DEFAULTS.autoContinueMaxRuns),
   };
 }
 
