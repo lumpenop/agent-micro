@@ -88,9 +88,15 @@ if (resolved || js) {
 }
 
 // ── Fall back to bundled Claude Code ──
-const claudeNative = path.join(root, 'node_modules', '@anthropic', 'ai-claude-code', 'bin', 'claude');
+const _claudeRoot = path.join(root, 'node_modules', '@anthropic', 'ai-claude-code', 'bin');
+const claudeNative = path.join(_claudeRoot, 'claude');
+const claudeNativeExe = path.join(_claudeRoot, 'claude.exe');
 if (fs.existsSync(claudeNative)) {
   console.log(`[ensure-tools] bundled Claude Code native ok · ${claudeNative}`);
+  process.exit(0);
+}
+if (fs.existsSync(claudeNativeExe)) {
+  console.log(`[ensure-tools] bundled Claude Code native (exe) ok · ${claudeNativeExe}`);
   process.exit(0);
 }
 

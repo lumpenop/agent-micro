@@ -23,17 +23,20 @@ function findClaudeBin() {
   if (pathBin) return pathBin;
 
   // 2. Look for bundled native binary inside @anthropic-ai/claude-code
-  const roots = [path.join(__dirname, '..', '..', 'node_modules', '@anthropic')];
+  const roots = [path.join(__dirname, '..', '..', 'node_modules')];
   if (process.resourcesPath) {
     roots.unshift(
-      path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', '@anthropic')
+      path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules')
     );
   }
 
   // 2a. Native binary: node_modules/@anthropic-ai/claude-code/bin/claude
   for (const root of roots) {
-    const native = path.join(root, 'ai-claude-code', 'bin', 'claude');
+    const native = path.join(root, '@anthropic-ai', 'claude-code', 'bin', 'claude');
     if (fs.existsSync(native)) return native;
+    // Some versions name it claude.exe on all platforms (observed on macOS 2.1.x)
+    const nativeExe = path.join(root, '@anthropic-ai', 'claude-code', 'bin', 'claude.exe');
+    if (fs.existsSync(nativeExe)) return nativeExe;
   }
 
   // 2b. Platform-specific native package (e.g. @anthropic-ai/claude-code-darwin-arm64)
@@ -65,7 +68,7 @@ function findClaudeBin() {
     /* not bundled */
   }
   for (const root of roots) {
-    const cliJs = path.join(root, 'ai-claude-code', 'cli.mjs');
+    const cliJs = path.join(root, '@anthropic-ai', 'claude-code', 'cli.mjs');
     if (fs.existsSync(cliJs)) return { type: 'node', path: cliJs };
   }
 
