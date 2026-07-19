@@ -217,6 +217,7 @@ class CodexBridge extends EventEmitter {
     this.agents[target] = {
       name,
       status,
+      cwd: src.cwd || this._configuredWorkingDirectory(),
       threadId,
       turnId: null,
       approvalId: null,
@@ -332,11 +333,58 @@ class CodexBridge extends EventEmitter {
     try {
       const output = await this._runCodex(bin, ['mcp', 'list', '--json'], 15000);
       const jsonStart = output.indexOf('[');
-      const servers = JSON.parse(jsonStart >= 0 ? output.slice(jsonStart) : output);
+      const jsonEnd = output.lastIndexOf(']');
+      const servers = JSON.parse(jsonStart >= 0 && jsonEnd >= jsonStart ? output.slice(jsonStart, jsonEnd + 1) : output);
       return { ok: true, servers: Array.isArray(servers) ? servers : [] };
     } catch (error) {
       return { ok: false, error: error.message, servers: [] };
     }
+  }
+
+  async mcpCommand(action, payload = {}) {
+    const bin = findCodexNative();
+    const name = String(payload.name || '');
+    if (!bin) return { ok: false, error: 'Codex CLI missing' };
+    if (!/^[A-Za-z0-9_-]{1,80}$/.test(name)) return { ok: false, error: 'Invalid MCP server name' };
+    let args;
+    if (action === 'add') {
+      if (payload.type === 'http') {
+        let parsed;
+        try { parsed = new URL(String(payload.url || '')); } catch { return { ok: false, error: 'Invalid MCP URL' }; }
+        if (!/^https?:$/.test(parsed.protocol)) return { ok: false, error: 'MCP URL must use http or https' };
+        args = ['mcp', 'add', name, '--url', parsed.toString()];
+        if (payload.bearer_token_env_var) args.push('--bearer-token-env-var', String(payload.bearer_token_env_var));
+      } else {
+        const command = String(payload.command || '').trim();
+        if (!command) return { ok: false, error: 'MCP command is required' };
+        const commandArgs = Array.isArray(payload.args) ? payload.args.map(String).filter(Boolean).slice(0, 64) : [];
+        args = ['mcp', 'add', name, '--', command, ...commandArgs];
+      }
+    } else if (['remove', 'login', 'logout', 'get'].includes(action)) {
+      args = ['mcp', action, name];
+      if (action === 'get') args.push('--json');
+    } else return { ok: false, error: 'Unsupported MCP action' };
+    try {
+      const output = await this._runCodex(bin, args, action === 'login' ? 180000 : 20000);
+      if (action === 'get') {
+        const start = output.indexOf('{'); const end = output.lastIndexOf('}');
+        return { ok: true, output: JSON.parse(output.slice(start, end + 1)) };
+      }
+      return { ok: true, output };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  }
+
+  async listPlugins() {
+    const bin = findCodexNative();
+    if (!bin) return { ok: false, error: 'Codex CLI missing', plugins: [] };
+    try {
+      const output = await this._runCodex(bin, ['plugin', 'list', '--json'], 20000);
+      const start = output.indexOf('['); const end = output.lastIndexOf(']');
+      const plugins = JSON.parse(output.slice(start, end + 1));
+      return { ok: true, plugins: Array.isArray(plugins) ? plugins : [] };
+    } catch (error) { return { ok: false, error: error.message, plugins: [] }; }
   }
 
   /** Opens ChatGPT device login in the browser, then reports status. */
@@ -673,6 +721,7 @@ class CodexBridge extends EventEmitter {
       this.agents[i] = {
         name: t.title || t.preview || t.cwd || prev.name || `Agent ${i + 1}`,
         status,
+        cwd: t.cwd || prev.cwd || this._configuredWorkingDirectory(),
         threadId: t.id,
         turnId: prev.turnId,
         approvalId: prev.approvalId,
@@ -713,6 +762,7 @@ class CodexBridge extends EventEmitter {
       if (a.status === 'off') {
         a.status = 'idle';
         if (!a.name || a.name === '—') a.name = `Agent ${slot + 1}`;
+        a.cwd = this._configuredWorkingDirectory();
       }
       if (r?.opened && r.mode === 'window') {
         this.emitState(lt('bridge.window', { n: slot + 1 }));
@@ -734,6 +784,14 @@ class CodexBridge extends EventEmitter {
   /** Shell command to launch interactive Codex CLI in Terminal. */
   _codexCliCommand() {
     return this._codexSubcommand('');
+  }
+
+  _configuredWorkingDirectory() {
+    try {
+      const configured = require('../codex-settings').load().working_directory;
+      if (configured && fs.existsSync(configured) && fs.statSync(configured).isDirectory()) return configured;
+    } catch {}
+    return process.env.HOME || process.cwd();
   }
 
   /**
@@ -801,6 +859,7 @@ class CodexBridge extends EventEmitter {
       this.agents[slot] = {
         name: 'New task',
         status: 'idle',
+        cwd,
         threadId: id,
         turnId: null,
         approvalId: null,
@@ -948,7 +1007,7 @@ class CodexBridge extends EventEmitter {
       // The visible CLI owns the session. Starting a hidden app-server thread here
       // creates a phantom id with no rollout, so later resume/fork operations fail.
       this.agents[slot] = {
-        name: 'New task', status: 'idle', threadId: null, turnId: null, approvalId: null,
+        name: 'New task', status: 'idle', cwd: this._configuredWorkingDirectory(), threadId: null, turnId: null, approvalId: null,
       };
     }
     // Always open/focus the visible CLI for that slot

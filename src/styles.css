@@ -173,6 +173,9 @@ button {
 .mcp-server-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .mcp-server-name { font-size: 12px; font-weight: 750; }
 .mcp-server-meta { font-size: 10px; color: rgba(20, 20, 20, 0.55); word-break: break-word; }
+.settings-backup-select { min-width: 118px; max-width: 150px; font-size: 9px; }
+.settings-search { position: sticky; top: 0; z-index: 2; margin-bottom: 10px; background: rgba(255,255,255,.94); backdrop-filter: blur(10px); }
+.settings-filter-hidden { display: none !important; }
 
 .chrome-btn svg {
   width: 12px;
@@ -1863,6 +1866,7 @@ button {
   white-space: nowrap;
   max-width: 190px;
 }
+.hud-folder { max-width: 230px; }
 
 .legend {
   display: flex;

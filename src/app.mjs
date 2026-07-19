@@ -254,6 +254,7 @@ const trialActivateBtn = document.getElementById('trial-activate');
 const hud = {
   link: document.getElementById('hud-link'),
   task: document.getElementById('hud-task'),
+  folder: document.getElementById('hud-folder'),
   status: document.getElementById('hud-status'),
   reason: document.getElementById('hud-reason'),
   action: document.getElementById('hud-action'),
@@ -1048,6 +1049,8 @@ function closeKeymap() {
 const settingsPanel = document.getElementById('settings-panel');
 const mcpPanel = document.getElementById('mcp-panel');
 const mcpList = document.getElementById('mcp-list');
+const skillsPanel = document.getElementById('skills-panel');
+const skillsList = document.getElementById('skills-list');
 const setWorkingDirectory = document.getElementById('set-working-directory');
 const setWritableRoots = document.getElementById('set-writable-roots');
 const setWorkspaceNetwork = document.getElementById('set-workspace-network');
@@ -1070,6 +1073,11 @@ const setAgentDescription = document.getElementById('set-agent-description');
 const setAgentInstructions = document.getElementById('set-agent-instructions');
 const setAgentModel = document.getElementById('set-agent-model');
 const setAgentReasoning = document.getElementById('set-agent-reasoning');
+const setPlanReasoning = document.getElementById('set-plan-reasoning');
+const setReasoningSummary = document.getElementById('set-reasoning-summary');
+const setVerbosity = document.getElementById('set-verbosity');
+const setHooksEnabled = document.getElementById('set-hooks-enabled');
+const setPreventSleep = document.getElementById('set-prevent-sleep');
 let agentRoles = [];
 const setModel = document.getElementById('set-model');
 const setReasoning = document.getElementById('set-reasoning');
@@ -1082,6 +1090,8 @@ const setTool = document.getElementById('set-tool');
 const setJob = document.getElementById('set-job');
 const setProxy = document.getElementById('set-proxy');
 const settingsHint = document.getElementById('settings-hint');
+const settingsSearch = document.getElementById('settings-search');
+const settingsBackupSelect = document.getElementById('settings-backup-select');
 const setCodexStatusEl = document.getElementById('set-codex-status');
 const setLicenseStatusEl = document.getElementById('set-license-status');
 const settingsLicenseKeyEl = document.getElementById('settings-license-key');
@@ -1106,6 +1116,11 @@ function readSettingsForm() {
     tool_output_token_limit: Number(setToolOutputLimit?.value) || 0,
     ram_warning_mb: Number(setRamWarning?.value) || 2048,
     agent_roles: agentRoles,
+    plan_mode_reasoning_effort: setPlanReasoning?.value || '',
+    model_reasoning_summary: setReasoningSummary?.value || '',
+    model_verbosity: setVerbosity?.value || '',
+    hooks_enabled: !!setHooksEnabled?.checked,
+    prevent_idle_sleep: !!setPreventSleep?.checked,
     model: setModel?.value?.trim() || '',
     model_reasoning_effort: setReasoning?.value || '',
     personality: setPersonality?.value || '',
@@ -1141,6 +1156,11 @@ function fillSettingsForm(s = {}) {
   if (setRamWarning) setRamWarning.value = String(s.ram_warning_mb ?? 2048);
   agentRoles = Array.isArray(s.agent_roles) ? s.agent_roles.map((role) => ({ ...role })) : [];
   renderAgentRoleList();
+  if (setPlanReasoning) setPlanReasoning.value = s.plan_mode_reasoning_effort || '';
+  if (setReasoningSummary) setReasoningSummary.value = s.model_reasoning_summary || '';
+  if (setVerbosity) setVerbosity.value = s.model_verbosity || '';
+  if (setHooksEnabled) setHooksEnabled.checked = !!s.hooks_enabled;
+  if (setPreventSleep) setPreventSleep.checked = !!s.prevent_idle_sleep;
   if (setModel) {
     setModel.value = s.model || '';
     setModel.placeholder = t('settings.model.placeholder');
@@ -1334,6 +1354,7 @@ async function openSettings() {
   closeGuide();
   closeKeymap();
   if (!settingsPanel) return;
+  if (settingsSearch) settingsSearch.placeholder = t('settings.search');
   try {
     const r = await api?.getCodexSettings?.();
     fillSettingsForm(r?.settings || {});
@@ -1351,14 +1372,57 @@ async function openSettings() {
   flashAction(t('flash.settings'));
   refreshAccountStatus();
   refreshRamUsage();
+  refreshBackups();
+}
+
+async function refreshBackups() {
+  if (!settingsBackupSelect) return;
+  const result = await api?.listCodexBackups?.(); settingsBackupSelect.replaceChildren();
+  for (const backup of result?.backups || []) {
+    const option = document.createElement('option'); option.value = backup.id;
+    option.textContent = new Date(backup.createdAt).toLocaleString(); settingsBackupSelect.append(option);
+  }
+  settingsBackupSelect.hidden = !settingsBackupSelect.options.length;
+  const button = document.getElementById('settings-restore'); if (button) button.disabled = !settingsBackupSelect.options.length;
 }
 
 function closeSettings() {
   if (settingsPanel) settingsPanel.hidden = true;
 }
+settingsSearch?.addEventListener('input', () => {
+  const query = settingsSearch.value.trim().toLocaleLowerCase();
+  document.querySelectorAll('#settings-body > .settings-section, #settings-body > .settings-field, #settings-body > .settings-row').forEach((section) => {
+    section.classList.toggle('settings-filter-hidden', !!query && !section.textContent.toLocaleLowerCase().includes(query));
+  });
+});
 
 function closeMcp() {
   if (mcpPanel) mcpPanel.hidden = true;
+}
+function closeSkills() { if (skillsPanel) skillsPanel.hidden = true; }
+
+async function refreshSkills() {
+  if (!skillsList) return;
+  skillsList.replaceChildren(mcpText('p', 'settings-status is-muted', t('skills.loading')));
+  const result = await api?.listSkillsAndPlugins?.();
+  skillsList.replaceChildren();
+  if (!result?.ok) { skillsList.append(mcpText('p', 'settings-status is-bad', result?.error || t('skills.error'))); return; }
+  if (result.pluginError) skillsList.append(mcpText('p', 'settings-status is-bad', `${t('skills.pluginError')} · ${result.pluginError}`));
+  const skillTitle = mcpText('p', 'settings-section-title', `${t('skills.installed')} · ${result.skills?.length || 0}`); skillsList.append(skillTitle);
+  for (const skill of result.skills || []) {
+    const card = document.createElement('div'); card.className = 'mcp-server-card';
+    const head = document.createElement('div'); head.className = 'mcp-server-head'; head.append(mcpText('span', 'mcp-server-name', skill.name), mcpText('span', 'mcp-server-meta', skill.source));
+    card.append(head, mcpText('p', 'mcp-server-meta', skill.description || skill.path), mcpText('p', 'mcp-server-meta', skill.path)); skillsList.append(card);
+  }
+  if (result.plugins?.length) {
+    skillsList.append(mcpText('p', 'settings-section-title', `${t('skills.plugins')} · ${result.plugins.length}`));
+    for (const plugin of result.plugins) skillsList.append(mcpText('p', 'settings-status', plugin.name || plugin.id || JSON.stringify(plugin)));
+  }
+}
+
+async function openSkills() {
+  closeMcp(); closeSettings(); closeGuide(); closeKeymap(); closeIconPicker();
+  if (!skillsPanel) return; skillsPanel.hidden = false; await refreshSkills();
 }
 
 function mcpText(tag, className, value) {
@@ -1390,7 +1454,7 @@ async function refreshMcpServers() {
     toggleLabel.append(toggle, mcpText('span', '', toggle.checked ? t('mcp.enabled') : t('mcp.disabled')));
     head.append(toggleLabel); card.append(head);
     const transport = server.transport || {};
-    card.append(mcpText('p', 'mcp-server-meta', `${transport.type || 'unknown'} · ${transport.url || transport.command || ''}`));
+    card.append(mcpText('p', 'mcp-server-meta', `${transport.type || 'unknown'} · ${transport.url || transport.command || ''} · ${server.auth_status || 'auth unknown'}`));
     const row = document.createElement('div'); row.className = 'settings-row';
     const makeTimeout = (label, value, min, max) => {
       const field = document.createElement('div'); field.className = 'settings-field';
@@ -1401,6 +1465,23 @@ async function refreshMcpServers() {
     const startup = makeTimeout(t('settings.startup'), server.startup_timeout_sec ?? 30, 5, 300);
     const tool = makeTimeout(t('settings.tool'), server.tool_timeout_sec ?? 60, 10, 3600);
     row.append(startup.field, tool.field); card.append(row);
+    const actions = document.createElement('div'); actions.className = 'voice-actions settings-inline-actions';
+    const actionButton = (label, action) => {
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'voice-btn'; button.textContent = label;
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        const done = await api?.mcpCommand?.(action, { name: server.name });
+        button.disabled = false;
+        if (done?.canceled) return;
+        flashAction(done?.ok ? t(`mcp.${action}Ok`) : done?.error || t('mcp.error'));
+        if (done?.ok && action === 'remove') refreshMcpServers();
+      });
+      return button;
+    };
+    actions.append(actionButton(t('mcp.check'), 'get'));
+    if (transport.type === 'streamable_http') actions.append(actionButton(t('mcp.login'), 'login'), actionButton(t('mcp.logout'), 'logout'));
+    actions.append(actionButton(t('mcp.remove'), 'remove'));
+    card.append(actions);
     const save = async () => {
       card.style.opacity = '0.55';
       const saved = await api?.setMcpServerOptions?.(server.name, { enabled: toggle.checked, startup_timeout_sec: Number(startup.input.value), tool_timeout_sec: Number(tool.input.value) });
@@ -1416,11 +1497,34 @@ async function refreshMcpServers() {
 }
 
 async function openMcp() {
-  closeSettings(); closeGuide(); closeKeymap(); closeIconPicker();
+  closeSkills(); closeSettings(); closeGuide(); closeKeymap(); closeIconPicker();
   if (!mcpPanel) return;
   mcpPanel.hidden = false;
   await refreshMcpServers();
 }
+
+const mcpAddType = document.getElementById('mcp-add-type');
+const mcpAddHttpFields = document.getElementById('mcp-add-http-fields');
+const mcpAddStdioFields = document.getElementById('mcp-add-stdio-fields');
+mcpAddType?.addEventListener('change', () => {
+  const http = mcpAddType.value === 'http';
+  if (mcpAddHttpFields) mcpAddHttpFields.hidden = !http;
+  if (mcpAddStdioFields) mcpAddStdioFields.hidden = http;
+});
+document.getElementById('mcp-add-submit')?.addEventListener('click', async () => {
+  const type = mcpAddType?.value || 'http';
+  const payload = {
+    type,
+    name: document.getElementById('mcp-add-name')?.value?.trim() || '',
+    url: document.getElementById('mcp-add-url')?.value?.trim() || '',
+    bearer_token_env_var: document.getElementById('mcp-add-token-env')?.value?.trim() || '',
+    command: document.getElementById('mcp-add-command')?.value?.trim() || '',
+    args: String(document.getElementById('mcp-add-args')?.value || '').split(/\r?\n/).map((v) => v.trim()).filter(Boolean),
+  };
+  const done = await api?.mcpCommand?.('add', payload);
+  flashAction(done?.ok ? t('mcp.addOk') : done?.error || t('mcp.error'));
+  if (done?.ok) refreshMcpServers();
+});
 
 document.getElementById('btn-help')?.addEventListener('click', openGuide);
 document.getElementById('btn-keymap')?.addEventListener('click', openKeymap);
@@ -1434,12 +1538,19 @@ document.getElementById('mod-picker')?.addEventListener('click', async (e) => {
 });
 document.getElementById('btn-settings')?.addEventListener('click', openSettings);
 document.getElementById('btn-mcp')?.addEventListener('click', openMcp);
+document.getElementById('btn-skills')?.addEventListener('click', openSkills);
+document.getElementById('skills-close')?.addEventListener('click', closeSkills);
+document.getElementById('skills-refresh')?.addEventListener('click', refreshSkills);
+document.getElementById('skills-open-folder')?.addEventListener('click', () => api?.openSkillsFolder?.());
 document.getElementById('mcp-close')?.addEventListener('click', closeMcp);
 document.getElementById('mcp-refresh')?.addEventListener('click', refreshMcpServers);
 document.getElementById('mcp-open-config')?.addEventListener('click', () => api?.openCodexConfig?.());
 document.getElementById('btn-settings')?.addEventListener('click', closeMcp);
 document.getElementById('btn-help')?.addEventListener('click', closeMcp);
 document.getElementById('btn-keymap')?.addEventListener('click', closeMcp);
+document.getElementById('btn-settings')?.addEventListener('click', closeSkills);
+document.getElementById('btn-help')?.addEventListener('click', closeSkills);
+document.getElementById('btn-keymap')?.addEventListener('click', closeSkills);
 document.getElementById('guide-close')?.addEventListener('click', closeGuide);
 document.getElementById('keymap-close')?.addEventListener('click', closeKeymap);
 document.getElementById('settings-close')?.addEventListener('click', closeSettings);
@@ -1457,6 +1568,7 @@ settingsPanel?.addEventListener('click', (e) => {
 mcpPanel?.addEventListener('click', (e) => {
   if (e.target === mcpPanel) closeMcp();
 });
+skillsPanel?.addEventListener('click', (e) => { if (e.target === skillsPanel) closeSkills(); });
 document.getElementById('settings-save')?.addEventListener('click', async () => {
   const r = await api?.saveCodexSettings?.(readSettingsForm());
   if (r?.ok) {
@@ -1467,9 +1579,16 @@ document.getElementById('settings-save')?.addEventListener('click', async () => 
         ? t('flash.savedWarn', { warn: r.warning })
         : t('flash.savedApply', { path: r.profile || 'agent-micro' });
     }
+    refreshBackups();
   } else if (!r?.canceled) {
     flashAction(t('flash.settingsFail'));
   }
+});
+document.getElementById('settings-restore')?.addEventListener('click', async () => {
+  const id = settingsBackupSelect?.value; if (!id) return;
+  const result = await api?.restoreCodexBackup?.(id);
+  if (result?.ok) { fillSettingsForm(result.settings || {}); flashAction(t('settings.restoreOk')); refreshBackups(); }
+  else if (!result?.canceled) flashAction(result?.error || t('settings.restoreFail'));
 });
 document.getElementById('settings-choose-directory')?.addEventListener('click', async () => {
   const r = await api?.chooseCodexWorkingDirectory?.();
@@ -1549,6 +1668,9 @@ function render() {
   });
   const current = state.agents[state.selected] || {};
   hud.task.textContent = current.name || '—';
+  const folder = current.cwd || '—';
+  hud.folder.textContent = folder;
+  hud.folder.title = folder === '—' ? '' : folder;
   hud.status.textContent = statusLabel(current.status || 'off');
   hud.reason.textContent = REASONING[state.reasoningIndex];
   const layerName = layerDisplayName(state.layer);

@@ -19,6 +19,7 @@
         </span>
         <div class="chrome-actions no-drag">
           <button type="button" class="chrome-btn chrome-tab" id="btn-mcp" title="MCP servers" data-i18n-title="chrome.mcp">MCP</button>
+          <button type="button" class="chrome-btn chrome-tab" id="btn-skills" title="Skills & Plugins" data-i18n-title="chrome.skills">SK</button>
           <button type="button" class="chrome-btn" id="btn-help" title="User guide" data-i18n-title="chrome.help">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
           </button>
@@ -139,6 +140,7 @@
           </div>
           <div class="modal-scroll settings-scroll">
           <p class="provider-lead" data-i18n="settings.lead">Codex CLI options · saved to ~/.codex · applies to new CLI windows.</p>
+          <input id="settings-search" class="voice-input settings-search" type="search" data-i18n-placeholder="settings.search" placeholder="Search settings…" />
           <div class="settings-body" id="settings-body">
             <div class="settings-section">
               <p class="settings-section-title" data-i18n="settings.account">Account</p>
@@ -411,6 +413,17 @@
               </div>
             </div>
 
+            <div class="settings-section">
+              <p class="settings-section-title" data-i18n="settings.advanced">Advanced</p>
+              <div class="settings-row">
+                <div class="settings-field"><label class="voice-label" for="set-plan-reasoning" data-i18n="settings.planReasoning">Plan mode reasoning</label><select id="set-plan-reasoning" class="voice-input settings-select"><option value="" data-i18n="settings.auto">Automatic</option><option value="none">none</option><option value="minimal">minimal</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option><option value="xhigh">xhigh</option></select></div>
+                <div class="settings-field"><label class="voice-label" for="set-reasoning-summary" data-i18n="settings.reasoningSummary">Reasoning summary</label><select id="set-reasoning-summary" class="voice-input settings-select"><option value="" data-i18n="settings.auto">Automatic</option><option value="auto">auto</option><option value="concise">concise</option><option value="detailed">detailed</option><option value="none">none</option></select></div>
+              </div>
+              <div class="settings-field"><label class="voice-label" for="set-verbosity" data-i18n="settings.verbosity">Response verbosity</label><select id="set-verbosity" class="voice-input settings-select"><option value="" data-i18n="settings.auto">Automatic</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select></div>
+              <div class="settings-field"><label class="settings-check" for="set-hooks-enabled"><input id="set-hooks-enabled" type="checkbox" /><span data-i18n="settings.hooks">Enable lifecycle Hooks</span></label><p class="settings-desc" data-i18n="settings.hooks.desc">Runs trusted hooks configured in hooks.json or config.toml.</p></div>
+              <div class="settings-field"><label class="settings-check" for="set-prevent-sleep"><input id="set-prevent-sleep" type="checkbox" /><span data-i18n="settings.preventSleep">Prevent sleep while working</span></label></div>
+            </div>
+
             <div class="settings-field settings-field--actions">
               <p class="settings-desc" data-i18n-html="settings.actions.desc">
                 <strong>.codexignore</strong> — sample ignore for RAM/context.<br />
@@ -423,6 +436,8 @@
           </div>
           <div class="voice-actions">
             <button type="button" class="voice-btn primary" id="settings-save" data-i18n="settings.save">Save</button>
+            <select id="settings-backup-select" class="voice-input settings-select settings-backup-select"></select>
+            <button type="button" class="voice-btn" id="settings-restore" data-i18n="settings.restore">Restore</button>
             <button type="button" class="voice-btn" id="settings-ignore" data-i18n="settings.ignore">.codexignore</button>
             <button type="button" class="voice-btn" id="settings-open-config" data-i18n="settings.openConfig">config.toml</button>
           </div>
@@ -437,12 +452,30 @@
           </div>
           <div class="modal-scroll settings-scroll">
             <p class="provider-lead" data-i18n="mcp.lead">Installed MCP servers from all active Codex configuration layers.</p>
+            <div class="settings-section">
+              <p class="settings-section-title" data-i18n="mcp.addTitle">Add MCP server</p>
+              <div class="settings-row">
+                <div class="settings-field"><label class="voice-label" for="mcp-add-name" data-i18n="mcp.name">Name</label><input id="mcp-add-name" class="voice-input" type="text" placeholder="my-server" /></div>
+                <div class="settings-field"><label class="voice-label" for="mcp-add-type" data-i18n="mcp.transport">Transport</label><select id="mcp-add-type" class="voice-input settings-select"><option value="http">HTTP</option><option value="stdio">stdio</option></select></div>
+              </div>
+              <div class="settings-field" id="mcp-add-http-fields"><label class="voice-label" for="mcp-add-url">URL</label><input id="mcp-add-url" class="voice-input" type="url" placeholder="https://example.com/mcp" /><label class="voice-label" for="mcp-add-token-env" data-i18n="mcp.tokenEnv">Bearer token environment variable (optional)</label><input id="mcp-add-token-env" class="voice-input" type="text" placeholder="MCP_TOKEN" /></div>
+              <div class="settings-field" id="mcp-add-stdio-fields" hidden><label class="voice-label" for="mcp-add-command" data-i18n="mcp.command">Command</label><input id="mcp-add-command" class="voice-input" type="text" placeholder="npx" /><label class="voice-label" for="mcp-add-args" data-i18n="mcp.args">Arguments · one per line</label><textarea id="mcp-add-args" class="voice-input" rows="3" placeholder="-y&#10;@example/mcp-server"></textarea></div>
+              <div class="voice-actions settings-inline-actions"><button type="button" class="voice-btn primary" id="mcp-add-submit" data-i18n="mcp.add">Add server</button></div>
+            </div>
             <div class="settings-body" id="mcp-list"><p class="settings-status is-muted" data-i18n="mcp.loading">Loading…</p></div>
           </div>
           <div class="voice-actions">
             <button type="button" class="voice-btn primary" id="mcp-refresh" data-i18n="mcp.refresh">Refresh</button>
             <button type="button" class="voice-btn" id="mcp-open-config" data-i18n="settings.openConfig">config.toml</button>
           </div>
+        </div>
+      </div>
+
+      <div class="icon-picker" id="skills-panel" hidden>
+        <div class="icon-picker-card provider-card settings-card">
+          <div class="guide-head"><div class="guide-head-copy"><span class="guide-kicker">Codex</span><span class="guide-title" data-i18n="skills.title">Skills &amp; Plugins</span></div><button type="button" class="chrome-btn" id="skills-close" title="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+          <div class="modal-scroll settings-scroll"><p class="provider-lead" data-i18n="skills.lead">Installed reusable skills and plugin diagnostics.</p><div class="settings-body" id="skills-list"><p class="settings-status is-muted" data-i18n="skills.loading">Loading…</p></div></div>
+          <div class="voice-actions"><button type="button" class="voice-btn primary" id="skills-refresh" data-i18n="mcp.refresh">Refresh</button><button type="button" class="voice-btn" id="skills-open-folder" data-i18n="skills.openFolder">Open skills folder</button></div>
         </div>
       </div>
 
@@ -505,6 +538,10 @@
         <div class="hud-row">
           <span class="hud-label">Task</span>
           <span class="hud-value" id="hud-task">—</span>
+        </div>
+        <div class="hud-row">
+          <span class="hud-label">Folder</span>
+          <span class="hud-value hud-folder" id="hud-folder" title="">—</span>
         </div>
         <div class="hud-row">
           <span class="hud-label">Status</span>

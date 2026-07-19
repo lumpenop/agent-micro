@@ -15,7 +15,7 @@ const SKILLS = {
 };
 
 function emptyAgent() {
-  return { name: '—', status: 'off', threadId: null, turnId: null, approvalId: null };
+  return { name: '—', status: 'off', cwd: null, threadId: null, turnId: null, approvalId: null };
 }
 
 function demo(name, status, approvalId = null) {
@@ -25,6 +25,7 @@ function demo(name, status, approvalId = null) {
     threadId: `demo-${name}`,
     turnId: null,
     approvalId,
+    cwd: null,
   };
 }
 

@@ -640,6 +640,47 @@ ipcMain.handle('mcp:setOptions', async (_e, name, options) => {
     return { ok: false, error: error.message };
   }
 });
+ipcMain.handle('mcp:command', async (_e, action, payload) => {
+  if (trialLocked()) return trialDenied();
+  if (action === 'remove') {
+    const { response } = await dialog.showMessageBox(mainWindow, {
+      type: 'warning', buttons: [i18n.t(padPrefs.getLocale(), 'mcp.cancel'), i18n.t(padPrefs.getLocale(), 'mcp.remove')],
+      defaultId: 0, cancelId: 0, title: i18n.t(padPrefs.getLocale(), 'mcp.removeTitle'),
+      message: i18n.t(padPrefs.getLocale(), 'mcp.removeMessage', { name: payload?.name || '' }),
+    });
+    if (response !== 1) return { ok: false, canceled: true };
+  }
+  return bridge?.mcpCommand?.(action, payload || {}) || { ok: false, error: 'Codex unavailable' };
+});
+
+function discoverSkills() {
+  const roots = [path.join(os.homedir(), '.codex', 'skills'), path.join(os.homedir(), '.codex', 'plugins', 'cache')];
+  const found = [];
+  const walk = (dir, depth = 0) => {
+    if (depth > 7 || !fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full, depth + 1);
+      else if (entry.isFile() && entry.name === 'SKILL.md') {
+        const text = fs.readFileSync(full, 'utf8').slice(0, 12000);
+        const front = text.match(/^---\s*\n([\s\S]*?)\n---/);
+        const name = front?.[1].match(/^name:\s*["']?([^\n"']+)/m)?.[1]?.trim() || path.basename(path.dirname(full));
+        const description = front?.[1].match(/^description:\s*["']?([^\n"']+)/m)?.[1]?.trim() || '';
+        found.push({ name, description, path: full, source: full.includes('/plugins/') ? 'plugin' : full.includes('/.system/') ? 'system' : 'personal' });
+      }
+    }
+  };
+  roots.forEach((root) => walk(root));
+  return found.sort((a, b) => a.name.localeCompare(b.name));
+}
+ipcMain.handle('skills:list', async () => {
+  if (trialLocked()) return trialDenied();
+  const pluginResult = await bridge?.listPlugins?.();
+  return { ok: true, skills: discoverSkills(), plugins: pluginResult?.plugins || [], pluginError: pluginResult?.ok ? null : pluginResult?.error };
+});
+ipcMain.handle('skills:openFolder', () => {
+  const dir = path.join(os.homedir(), '.codex', 'skills'); fs.mkdirSync(dir, { recursive: true }); return shell.openPath(dir);
+});
 ipcMain.handle('codexSettings:writeIgnore', async () => {
   if (trialLocked()) return trialDenied();
   const { dialog } = require('electron');
@@ -654,6 +695,12 @@ ipcMain.handle('codexSettings:openConfig', () => {
   if (trialLocked()) return trialDenied();
   const p = codexSettings.meta().configPath;
   return shell.openPath(p);
+});
+ipcMain.handle('codexSettings:listBackups', () => ({ ok: true, backups: codexSettings.listBackups() }));
+ipcMain.handle('codexSettings:restoreBackup', async (_e, id) => {
+  const { response } = await dialog.showMessageBox(mainWindow, { type: 'warning', buttons: [i18n.t(padPrefs.getLocale(), 'settings.risk.cancel'), i18n.t(padPrefs.getLocale(), 'settings.restore')], defaultId: 0, cancelId: 0, title: i18n.t(padPrefs.getLocale(), 'settings.restoreTitle'), message: i18n.t(padPrefs.getLocale(), 'settings.restoreMessage') });
+  if (response !== 1) return { ok: false, canceled: true };
+  try { return codexSettings.restoreBackup(id); } catch (error) { return { ok: false, error: error.message }; }
 });
 /** Sync i18n for sandboxed preload (cannot require ./i18n there) */
 ipcMain.on('i18n:t', (event, payload = {}) => {

@@ -32,6 +32,11 @@ const DEFAULTS = {
   tool_output_token_limit: 0,
   ram_warning_mb: 2048,
   agent_roles: [],
+  plan_mode_reasoning_effort: '',
+  model_reasoning_summary: '',
+  model_verbosity: '',
+  hooks_enabled: false,
+  prevent_idle_sleep: false,
   startup_timeout_sec: 30,
   tool_timeout_sec: 60,
   job_max_runtime_seconds: 1800,
@@ -140,6 +145,11 @@ function normalize(raw = {}) {
     tool_output_token_limit: clampInt(raw.tool_output_token_limit, 0, 1000000, 0),
     ram_warning_mb: clampInt(raw.ram_warning_mb, 256, 65536, 2048),
     agent_roles: normalizeAgentRoles(raw.agent_roles),
+    plan_mode_reasoning_effort: ['', 'none', 'minimal', 'low', 'medium', 'high', 'xhigh'].includes(raw.plan_mode_reasoning_effort) ? raw.plan_mode_reasoning_effort : '',
+    model_reasoning_summary: ['', 'auto', 'concise', 'detailed', 'none'].includes(raw.model_reasoning_summary) ? raw.model_reasoning_summary : '',
+    model_verbosity: ['', 'low', 'medium', 'high'].includes(raw.model_verbosity) ? raw.model_verbosity : '',
+    hooks_enabled: !!raw.hooks_enabled,
+    prevent_idle_sleep: !!raw.prevent_idle_sleep,
     startup_timeout_sec: clampInt(raw.startup_timeout_sec, 5, 300, DEFAULTS.startup_timeout_sec),
     tool_timeout_sec: clampInt(raw.tool_timeout_sec, 10, 3600, DEFAULTS.tool_timeout_sec),
     job_max_runtime_seconds: clampInt(
@@ -241,6 +251,9 @@ function profileToml(s) {
     cfg.web_search && `web_search = ${tomlString(cfg.web_search)}`,
     cfg.model_auto_compact_token_limit > 0 && `model_auto_compact_token_limit = ${cfg.model_auto_compact_token_limit}`,
     cfg.tool_output_token_limit > 0 && `tool_output_token_limit = ${cfg.tool_output_token_limit}`,
+    cfg.plan_mode_reasoning_effort && `plan_mode_reasoning_effort = ${tomlString(cfg.plan_mode_reasoning_effort)}`,
+    cfg.model_reasoning_summary && `model_reasoning_summary = ${tomlString(cfg.model_reasoning_summary)}`,
+    cfg.model_verbosity && `model_verbosity = ${tomlString(cfg.model_verbosity)}`,
   ].filter(Boolean).join('\n');
   return `${BEGIN}
 # Written by Agent Micro · use: codex --profile ${PROFILE}
@@ -254,6 +267,10 @@ agents.interrupt_message = ${cfg.interrupt_message}
 [sandbox_workspace_write]
 writable_roots = [${cfg.writable_roots.map(tomlString).join(', ')}]
 network_access = ${cfg.workspace_network_access}
+
+[features]
+hooks = ${cfg.hooks_enabled}
+prevent_idle_sleep = ${cfg.prevent_idle_sleep}
 
 [features.network_proxy]
 enabled = ${cfg.network_proxy}
@@ -279,6 +296,9 @@ function cliConfigArgs(s = load()) {
     cfg.web_search && `web_search=${tomlString(cfg.web_search)}`,
     cfg.model_auto_compact_token_limit > 0 && `model_auto_compact_token_limit=${cfg.model_auto_compact_token_limit}`,
     cfg.tool_output_token_limit > 0 && `tool_output_token_limit=${cfg.tool_output_token_limit}`,
+    cfg.plan_mode_reasoning_effort && `plan_mode_reasoning_effort=${tomlString(cfg.plan_mode_reasoning_effort)}`,
+    cfg.model_reasoning_summary && `model_reasoning_summary=${tomlString(cfg.model_reasoning_summary)}`,
+    cfg.model_verbosity && `model_verbosity=${tomlString(cfg.model_verbosity)}`,
     `sandbox_mode="${cfg.sandbox_mode}"`,
     `approval_policy="${cfg.approval_policy}"`,
     `agents.max_threads=${cfg.max_threads}`,
@@ -288,6 +308,8 @@ function cliConfigArgs(s = load()) {
     `agents.job_max_runtime_seconds=${cfg.job_max_runtime_seconds}`,
     `agents.interrupt_message=${cfg.interrupt_message}`,
     `features.network_proxy.enabled=${cfg.network_proxy}`,
+    `features.hooks=${cfg.hooks_enabled}`,
+    `features.prevent_idle_sleep=${cfg.prevent_idle_sleep}`,
     `features.rollout_budget.enabled=${cfg.rollout_budget_enabled}`,
     cfg.rollout_budget_enabled && `features.rollout_budget.limit_tokens=${cfg.rollout_limit_tokens}`,
     cfg.rollout_budget_enabled && `features.rollout_budget.reminder_interval_tokens=${Math.min(cfg.rollout_reminder_tokens, cfg.rollout_limit_tokens)}`,
@@ -311,6 +333,42 @@ function ensureCodexHome() {
   const home = codexHome();
   if (!fs.existsSync(home)) fs.mkdirSync(home, { recursive: true });
   return home;
+}
+
+function backupsDir() { return path.join(userDataDir || os.tmpdir(), 'config-backups'); }
+
+function createBackup(reason = 'save') {
+  const dir = backupsDir(); fs.mkdirSync(dir, { recursive: true });
+  const id = new Date().toISOString().replace(/[:.]/g, '-');
+  const dest = path.join(dir, id); fs.mkdirSync(dest, { recursive: true, mode: 0o700 });
+  const files = [
+    ['config.toml', userConfigPath()], ['agent-micro.config.toml', profilePath()], ['settings.json', settingsJsonPath()],
+  ];
+  const present = [];
+  for (const [name, source] of files) if (fs.existsSync(source)) { fs.copyFileSync(source, path.join(dest, name)); fs.chmodSync(path.join(dest, name), 0o600); present.push(name); }
+  fs.writeFileSync(path.join(dest, 'meta.json'), JSON.stringify({ id, reason, createdAt: new Date().toISOString(), files: present }, null, 2), { mode: 0o600 });
+  const all = fs.readdirSync(dir).sort().reverse();
+  for (const old of all.slice(20)) fs.rmSync(path.join(dir, old), { recursive: true, force: true });
+  return { id, createdAt: new Date().toISOString(), files: present };
+}
+
+function listBackups() {
+  const dir = backupsDir(); if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir).sort().reverse().map((id) => {
+    try { return JSON.parse(fs.readFileSync(path.join(dir, id, 'meta.json'), 'utf8')); } catch { return null; }
+  }).filter(Boolean);
+}
+
+function restoreBackup(id) {
+  if (!/^[0-9TZ-]+$/.test(String(id || ''))) throw new Error('invalid backup id');
+  const source = path.join(backupsDir(), id); const meta = JSON.parse(fs.readFileSync(path.join(source, 'meta.json'), 'utf8'));
+  createBackup('before-restore');
+  const targets = { 'config.toml': userConfigPath(), 'agent-micro.config.toml': profilePath(), 'settings.json': settingsJsonPath() };
+  for (const [name, target] of Object.entries(targets)) {
+    const from = path.join(source, name);
+    if (meta.files.includes(name) && fs.existsSync(from)) { fs.mkdirSync(path.dirname(target), { recursive: true }); fs.copyFileSync(from, target); }
+  }
+  return { ok: true, id, settings: load() };
 }
 
 /** Patch existing [mcp_servers.NAME] blocks with timeout defaults. */
@@ -402,6 +460,8 @@ function save(partial) {
   const next = normalize({ ...load(), ...partial });
   const warnings = [];
 
+  try { createBackup('save'); } catch (e) { warnings.push(`backup: ${e.message}`); }
+
   const jsonPath = settingsJsonPath();
   fs.mkdirSync(path.dirname(jsonPath), { recursive: true });
   fs.writeFileSync(jsonPath, JSON.stringify(next, null, 2), 'utf8');
@@ -482,5 +542,8 @@ module.exports = {
   withCliFlags,
   writeCodexIgnore,
   setMcpServerOptions,
+  createBackup,
+  listBackups,
+  restoreBackup,
   CODEXIGNORE_SAMPLE,
 };
