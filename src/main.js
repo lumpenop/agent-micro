@@ -17,7 +17,7 @@ const devServers = new Map();
 
 function selectedWorkspace() {
   const agent = bridge?.agents?.[bridge?.selected || 0];
-  const candidate = agent?.cwd || codexSettings.load()?.working_directory || process.cwd();
+  const candidate = agent?.projectRoot || agent?.cwd || codexSettings.load()?.working_directory || process.cwd();
   const resolved = path.resolve(String(candidate || process.cwd()));
   if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) throw new Error('Selected agent working folder is unavailable');
   return resolved;

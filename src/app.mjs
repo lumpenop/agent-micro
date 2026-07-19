@@ -1800,8 +1800,9 @@ function render() {
   });
   const current = state.agents[state.selected] || {};
   hud.task.textContent = current.name || '—';
-  const folder = current.cwd || '—';
-  hud.folder.textContent = folder;
+  const folder = current.projectRoot || current.cwd || '—';
+  const projectName = current.projectName || (folder === '—' ? '—' : folder.replace(/[\\/]+$/, '').split(/[\\/]/).pop()) || folder;
+  hud.folder.textContent = projectName;
   hud.folder.title = folder === '—' ? '' : folder;
   hud.status.textContent = statusLabel(current.status || 'off');
   hud.reason.textContent = REASONING[state.reasoningIndex];

@@ -91,6 +91,7 @@ pnpm start
 - Skills 탭: 앱 안에서 개인 스킬 생성·조회·수정·삭제, 시스템·플러그인 스킬 목록과 플러그인 설정 진단
 - 3개 레이어: `Codex → Prompts → Tools` 순환. Tools에서 ↑ `gpt-5.6-terra`(Light) / `gpt-5.6-sol`(Deep) 즉시 전환, ↓ 선택 에이전트 작업 폴더의 `dev` 서버 시작·종료
 - Info Continue: 수동 전송 및 설정 시간 후 자동 Continue. 기본값은 꺼짐·30초·최대 1회이며 승인·입력 대기·오류에서는 자동 실행하지 않음
+- Info Project: 선택한 Agent CLI의 실제 작업 폴더에서 `package.json.name`을 우선 표시하고, 없으면 폴더명을 표시. 전체 경로는 툴팁으로 확인
 - 아이콘 선택기: 로컬 아이콘·사용자 SVG/PNG·Iconify 온라인 AI 에이전트 검색
 - Info: 선택한 에이전트의 실제 작업 폴더 표시
 

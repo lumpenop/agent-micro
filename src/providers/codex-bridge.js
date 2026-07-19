@@ -8,9 +8,24 @@ const mac = require('../platform/mac');
 const { REASONING, SKILLS, emptyAgent, demo, truncate } = require('./base-bridge');
 const { t } = require('../i18n');
 const padPrefs = require('../pad-prefs');
+const { detectActiveProject, detectProjectFromRollout } = require('../agent-project-context');
 
 function lt(key, vars) {
   return t(padPrefs.getLocale(), key, vars);
+}
+
+function parsePluginListOutput(output) {
+  const text = String(output || '').trim();
+  let parsed;
+  try { parsed = JSON.parse(text); }
+  catch {
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start < 0 || end < start) throw new Error('Codex plugin list did not return a JSON object');
+    parsed = JSON.parse(text.slice(start, end + 1));
+  }
+  if (Array.isArray(parsed)) return parsed;
+  return Array.isArray(parsed?.installed) ? parsed.installed : [];
 }
 
 const PLATFORM_BIN = {
@@ -381,9 +396,7 @@ class CodexBridge extends EventEmitter {
     if (!bin) return { ok: false, error: 'Codex CLI missing', plugins: [] };
     try {
       const output = await this._runCodex(bin, ['plugin', 'list', '--json'], 20000);
-      const start = output.indexOf('['); const end = output.lastIndexOf(']');
-      const plugins = JSON.parse(output.slice(start, end + 1));
-      return { ok: true, plugins: Array.isArray(plugins) ? plugins : [] };
+      return { ok: true, plugins: parsePluginListOutput(output) };
     } catch (error) { return { ok: false, error: error.message, plugins: [] }; }
   }
 
@@ -722,11 +735,24 @@ class CodexBridge extends EventEmitter {
         name: t.title || t.preview || t.cwd || prev.name || `Agent ${i + 1}`,
         status,
         cwd: t.cwd || prev.cwd || this._configuredWorkingDirectory(),
+        projectRoot: prev.projectRoot,
+        rolloutPath: prev.rolloutPath,
+        projectName: this._projectName(t.cwd || prev.cwd || this._configuredWorkingDirectory()),
         threadId: t.id,
         turnId: prev.turnId,
         approvalId: prev.approvalId,
       };
     }
+    const liveSlots = this.agents
+      .map((agent, slot) => ({ agent, slot }))
+      .filter(({ agent }) => agent.status !== 'off');
+    await Promise.all(liveSlots.map(async ({ agent, slot }) => {
+      const liveCwd = await mac.getCliSlotWorkingDirectory?.(slot);
+      if (!liveCwd) return;
+      agent.cwd = liveCwd;
+      const rollout = await mac.getCliSlotRolloutPath?.(slot);
+      this._updateProjectContext(agent, liveCwd, rollout);
+    }));
     this.emitState(null);
   }
 
@@ -763,6 +789,13 @@ class CodexBridge extends EventEmitter {
         a.status = 'idle';
         if (!a.name || a.name === '—') a.name = `Agent ${slot + 1}`;
         a.cwd = this._configuredWorkingDirectory();
+        a.projectName = this._projectName(a.cwd);
+      }
+      const liveCwd = await mac.getCliSlotWorkingDirectory?.(slot);
+      if (liveCwd) {
+        a.cwd = liveCwd;
+        const rollout = await mac.getCliSlotRolloutPath?.(slot);
+        this._updateProjectContext(a, liveCwd, rollout);
       }
       if (r?.opened && r.mode === 'window') {
         this.emitState(lt('bridge.window', { n: slot + 1 }));
@@ -792,6 +825,28 @@ class CodexBridge extends EventEmitter {
       if (configured && fs.existsSync(configured) && fs.statSync(configured).isDirectory()) return configured;
     } catch {}
     return process.env.HOME || process.cwd();
+  }
+
+  _projectName(cwd) {
+    const folder = String(cwd || '').trim();
+    if (!folder) return '—';
+    try {
+      const manifest = path.join(folder, 'package.json');
+      if (fs.existsSync(manifest)) {
+        const name = JSON.parse(fs.readFileSync(manifest, 'utf8'))?.name;
+        if (name) return String(name);
+      }
+    } catch {}
+    return path.basename(folder) || folder;
+  }
+
+  _updateProjectContext(agent, liveCwd, rolloutPath = null) {
+    const projectRoot = (rolloutPath && detectProjectFromRollout(rolloutPath, liveCwd))
+      || detectActiveProject(liveCwd)
+      || liveCwd;
+    agent.rolloutPath = rolloutPath || agent.rolloutPath || null;
+    agent.projectRoot = projectRoot;
+    agent.projectName = this._projectName(projectRoot);
   }
 
   /**
@@ -1325,4 +1380,4 @@ function focusChatGPT() {
   });
 }
 
-module.exports = { CodexBridge, REASONING, SKILLS, focusChatGPT, findCodexNative };
+module.exports = { CodexBridge, REASONING, SKILLS, focusChatGPT, findCodexNative, parsePluginListOutput };

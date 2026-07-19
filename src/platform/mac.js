@@ -32,6 +32,14 @@ function delay(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+function execText(file, args, timeout = 3000) {
+  return new Promise((resolve) => {
+    execFile(file, args, { timeout, maxBuffer: 2 * 1024 * 1024 }, (err, stdout) => {
+      resolve(err ? '' : String(stdout || ''));
+    });
+  });
+}
+
 async function frontmostAppName() {
   try {
     return await osa(
@@ -733,6 +741,65 @@ async function listOpenCodexCliSlots() {
   }
 }
 
+/** Full live working directory for a tracked Agent CLI pane. */
+async function getCliSlotWorkingDirectory(slot) {
+  if (process.platform !== 'darwin') return null;
+  const index = Math.max(0, Math.min(5, Number(slot) || 0));
+  const app = cachedDefaultTerminal || (await getDefaultTerminalApp());
+  if (terminalKind(app) !== 'ghostty') return null;
+  const terminalId = slotTerminalIds.get(index);
+  if (!terminalId) return null;
+  try {
+    const appName = asEscape(app.name || 'Ghostty');
+    const out = await osa(`
+      tell application "${appName}"
+        set targetId to "${asEscape(String(terminalId))}"
+        repeat with term in terminals
+          try
+            if (id of term as text) is targetId then return working directory of term as text
+          end try
+        end repeat
+        return ""
+      end tell`, { timeout: 1800 });
+    const cwd = String(out || '').trim();
+    if (cwd && path.isAbsolute(cwd) && fs.existsSync(cwd) && fs.statSync(cwd).isDirectory()) return cwd;
+  } catch {
+    /* fall back to the workspace recorded on the agent */
+  }
+  return null;
+}
+
+let rolloutMapCache = { at: 0, paths: [] };
+
+/** Map Agent Micro CLI slots to the rollout file each Codex process has open. */
+async function getCliSlotRolloutPath(slot) {
+  const now = Date.now();
+  if (now - rolloutMapCache.at > 5000) {
+    const output = await execText('/bin/ps', ['-axo', 'pid=,lstart=,command=']);
+    const processes = [];
+    for (const line of output.split('\n')) {
+      const m = line.match(/^\s*(\d+)\s+(\w{3}\s+\w{3}\s+\d+\s+\d+:\d+:\d+\s+\d{4})\s+(.*)$/);
+      if (!m) continue;
+      const command = m[3];
+      if (!command.includes('/codex') || !command.includes('--profile agent-micro')) continue;
+      if (/app-server|code-mode-host/.test(command)) continue;
+      // Keep the native worker only; the Node launcher is its parent and has no rollout open.
+      if (command.includes('/Electron ')) continue;
+      processes.push({ pid: Number(m[1]), started: Date.parse(m[2]) || 0 });
+    }
+    processes.sort((a, b) => a.started - b.started);
+    const paths = await Promise.all(processes.map(async ({ pid }) => {
+      const open = await execText('/usr/sbin/lsof', ['-Fn', '-p', String(pid)], 4000);
+      return open.split('\n')
+        .filter((line) => line.startsWith('n'))
+        .map((line) => line.slice(1))
+        .find((file) => file.includes('/.codex/sessions/') && file.endsWith('.jsonl')) || null;
+    }));
+    rolloutMapCache = { at: now, paths: paths.filter(Boolean) };
+  }
+  return rolloutMapCache.paths[Math.max(0, Math.min(5, Number(slot) || 0))] || null;
+}
+
 /** Open slots with a known terminal id (after hydrate; may still be stale until prune). */
 function rememberedOpenSlots() {
   hydrateCliSession();
@@ -1252,6 +1319,8 @@ module.exports = {
   cliWindowTitle,
   getDefaultTerminalApp,
   listOpenCodexCliSlots,
+  getCliSlotWorkingDirectory,
+  getCliSlotRolloutPath,
   hasCodexCliWindow,
   focusCodexCliWindow,
   resolveCliSlot,
