@@ -596,7 +596,9 @@ ipcMain.handle('window:setGitPanel', (_e, open) => {
   const bounds = mainWindow.getBounds();
   const width = open ? 558 : 344;
   const right = bounds.x + bounds.width;
-  mainWindow.setBounds({ x: right - width, y: bounds.y, width, height: bounds.height }, true);
+  // Keep the keyboard/header/HUD anchored to the same screen position. Only
+  // reveal extra window space on the left, without macOS resize animation.
+  mainWindow.setBounds({ x: right - width, y: bounds.y, width, height: bounds.height }, false);
   return true;
 });
 ipcMain.handle('window:suspendPadHotkeys', (_e, suspended) => {
