@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('codexDesktop', {
   minimize: () => ipcRenderer.invoke('window:minimize'),
   close: () => ipcRenderer.invoke('window:close'),
   suspendPadHotkeys: (suspended) => ipcRenderer.invoke('window:suspendPadHotkeys', suspended),
+  setGitPanel: (open) => ipcRenderer.invoke('window:setGitPanel', open),
 
   getState: () => ipcRenderer.invoke('codex:getState'),
   select: (index, focus) => ipcRenderer.invoke('codex:select', index, focus),

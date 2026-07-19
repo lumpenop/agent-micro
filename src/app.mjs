@@ -157,6 +157,7 @@ const state = {
   devServerRunning: false,
   devServerCwd: '',
   devServerCommand: '',
+  devServerKind: '',
   agentModelModes: Array.from({ length: 6 }, () => 'deep'),
   autoContinueEnabled: false,
   autoContinueDelaySec: 30,
@@ -256,6 +257,9 @@ const padEl = document.getElementById('pad');
 const canvasHost = document.getElementById('pad-canvas');
 const linkDot = document.getElementById('link-dot');
 const shellEl = document.getElementById('shell');
+const gitButton = document.getElementById('btn-git');
+const gitPanel = document.getElementById('git-side-panel');
+const gitClose = document.getElementById('git-side-close');
 const trialLockEl = document.getElementById('trial-lock');
 const trialSponsorBtn = document.getElementById('trial-sponsor');
 const trialCloseBtn = document.getElementById('trial-close');
@@ -274,6 +278,18 @@ const hud = {
   continueStatus: document.getElementById('hud-continue-status'),
   continueButton: document.getElementById('hud-continue'),
 };
+
+async function setGitPanelOpen(open) {
+  const next = !!open;
+  if (gitPanel) gitPanel.hidden = !next;
+  shellEl?.classList.toggle('git-open', next);
+  gitButton?.classList.toggle('is-active', next);
+  gitButton?.setAttribute('aria-expanded', String(next));
+  await api?.setGitPanel?.(next);
+}
+
+gitButton?.addEventListener('click', () => setGitPanelOpen(!!gitPanel?.hidden));
+gitClose?.addEventListener('click', () => setGitPanelOpen(false));
 
 const picker = document.getElementById('icon-picker');
 const pickerGrid = document.getElementById('icon-picker-grid');
@@ -1804,6 +1820,8 @@ function render() {
   const projectName = current.projectName || (folder === '—' ? '—' : folder.replace(/[\\/]+$/, '').split(/[\\/]/).pop()) || folder;
   hud.folder.textContent = projectName;
   hud.folder.title = folder === '—' ? '' : folder;
+  const gitRepoName = document.getElementById('git-repo-name');
+  if (gitRepoName) { gitRepoName.textContent = projectName; gitRepoName.title = folder === '—' ? '' : folder; }
   hud.status.textContent = statusLabel(current.status || 'off');
   hud.reason.textContent = REASONING[state.reasoningIndex];
   const agentBusy = current.status === 'thinking' || current.status === 'working';
@@ -1841,6 +1859,7 @@ async function refreshDevServerStatus() {
   state.devServerRunning = !!result?.running;
   state.devServerCwd = result?.cwd || '';
   state.devServerCommand = result?.command || '';
+  state.devServerKind = result?.kind || '';
   render();
 }
 
@@ -1865,7 +1884,10 @@ async function toggleCurrentDevServer() {
     state.devServerRunning = !!result.running;
     state.devServerCwd = result.cwd || '';
     state.devServerCommand = result.command || '';
-    flashAction(result.running ? t('flash.devStarted') : t('flash.devStopped'));
+    state.devServerKind = result.kind || state.devServerKind || '';
+    flashAction(result.running
+      ? `${t('flash.devStarted')} · ${result.kind || result.command || ''}`
+      : t('flash.devStopped'));
   }
   render();
 }

@@ -10,6 +10,7 @@ const trial = require('./trial');
 const i18n = require('./i18n');
 const mac = require('./platform/mac');
 const skillManager = require('./skill-manager');
+const { detectDevCommand } = require('./dev-runner');
 
 let mainWindow = null;
 let bridge = null;
@@ -21,17 +22,6 @@ function selectedWorkspace() {
   const resolved = path.resolve(String(candidate || process.cwd()));
   if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) throw new Error('Selected agent working folder is unavailable');
   return resolved;
-}
-
-function devCommand(cwd) {
-  const manifest = path.join(cwd, 'package.json');
-  if (!fs.existsSync(manifest)) throw new Error('No package.json in the selected agent folder');
-  const pkg = JSON.parse(fs.readFileSync(manifest, 'utf8'));
-  if (!pkg?.scripts?.dev) throw new Error('No dev script in package.json');
-  if (fs.existsSync(path.join(cwd, 'pnpm-lock.yaml'))) return 'pnpm dev';
-  if (fs.existsSync(path.join(cwd, 'yarn.lock'))) return 'yarn dev';
-  if (fs.existsSync(path.join(cwd, 'bun.lock')) || fs.existsSync(path.join(cwd, 'bun.lockb'))) return 'bun run dev';
-  return 'npm run dev';
 }
 
 function stopDevServer(cwd) {
@@ -601,6 +591,14 @@ app.on('will-quit', () => {
 
 ipcMain.handle('window:minimize', () => mainWindow?.minimize());
 ipcMain.handle('window:close', () => mainWindow?.close());
+ipcMain.handle('window:setGitPanel', (_e, open) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  const bounds = mainWindow.getBounds();
+  const width = open ? 558 : 344;
+  const right = bounds.x + bounds.width;
+  mainWindow.setBounds({ x: right - width, y: bounds.y, width, height: bounds.height }, true);
+  return true;
+});
 ipcMain.handle('window:suspendPadHotkeys', (_e, suspended) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.__padHotkeysSuspended = !!suspended;
@@ -953,13 +951,14 @@ ipcMain.handle('devServer:toggle', () => {
   try {
     const cwd = selectedWorkspace();
     if (stopDevServer(cwd)) return { ok: true, running: false, cwd };
-    const command = devCommand(cwd);
+    const detected = detectDevCommand(cwd);
+    const command = detected.command;
     const child = spawn('/bin/zsh', ['-lc', `exec ${command}`], { cwd, detached: true, stdio: 'ignore', env: { ...process.env, ELECTRON_RUN_AS_NODE: '' } });
     child.unref();
     devServers.set(cwd, child);
     child.once('exit', () => { if (devServers.get(cwd) === child) devServers.delete(cwd); });
     child.once('error', () => { if (devServers.get(cwd) === child) devServers.delete(cwd); });
-    return { ok: true, running: true, cwd, command, pid: child.pid };
+    return { ok: true, running: true, cwd, command, kind: detected.kind, pid: child.pid };
   } catch (error) { return { ok: false, error: error.message }; }
 });
 ipcMain.handle('devServer:status', () => {
@@ -967,7 +966,8 @@ ipcMain.handle('devServer:status', () => {
   try {
     const cwd = selectedWorkspace();
     const child = devServers.get(cwd);
-    return { ok: true, running: !!child, cwd, command: child ? devCommand(cwd) : '' };
+    const detected = detectDevCommand(cwd);
+    return { ok: true, running: !!child, cwd, command: detected.command, kind: detected.kind };
   } catch (error) { return { ok: false, running: false, error: error.message }; }
 });
 ipcMain.handle('codex:skill', async (_e, name) => {

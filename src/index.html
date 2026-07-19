@@ -14,10 +14,13 @@
     <div class="shell" id="shell">
       <div class="chrome drag">
         <span class="chrome-title">
-          <span class="chrome-brand-label">Agent Micro</span>
+          <span class="chrome-brand-label">AM</span>
           <button type="button" class="link-dot no-drag" id="link-dot" title="Connect / Reconnect" aria-label="Connect"></button>
         </span>
         <div class="chrome-actions no-drag">
+          <button type="button" class="chrome-btn" id="btn-git" title="Git" aria-label="Git">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M6 9v1a8 8 0 0 0 8 8"/><path d="M18 9v1a8 8 0 0 1-8 8"/></svg>
+          </button>
           <button type="button" class="chrome-btn chrome-tab" id="btn-mcp" title="MCP servers" data-i18n-title="chrome.mcp">MCP</button>
           <button type="button" class="chrome-btn chrome-tab" id="btn-skills" title="Skills & Plugins" data-i18n-title="chrome.skills">SK</button>
           <button type="button" class="chrome-btn" id="btn-help" title="User guide" data-i18n-title="chrome.help">
@@ -40,6 +43,27 @@
           </button>
         </div>
       </div>
+
+      <aside class="git-side-panel no-drag" id="git-side-panel" hidden>
+        <div class="git-side-head">
+          <div><span class="git-kicker">PROJECT GIT</span><strong>Changes</strong></div>
+          <button type="button" class="chrome-btn" id="git-side-close" title="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+        <div class="git-repo-card">
+          <span class="git-repo-name" id="git-repo-name">—</span>
+          <span class="git-branch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="6" r="2"/><path d="M6 7v10"/><path d="M8 17c5 0 8-3 8-9"/></svg><span id="git-branch-name">branch</span></span>
+        </div>
+        <div class="git-sync-actions">
+          <button type="button" id="git-pull">↓ Pull</button><button type="button" id="git-push">↑ Push</button>
+        </div>
+        <div class="git-section-head"><span>Changes</span><button type="button" id="git-stage-all">+ Stage all</button></div>
+        <div class="git-change-list" id="git-change-list"><div class="git-empty">Git 상태를 불러올 준비가 됐어요</div></div>
+        <div class="git-commit-box">
+          <textarea id="git-commit-message" rows="3" placeholder="Commit message"></textarea>
+          <button type="button" class="git-ai-message" id="git-ai-message">✦ Auto message</button>
+          <button type="button" class="git-commit" id="git-commit">Commit</button>
+        </div>
+      </aside>
 
       <div class="pad pad-3d" id="pad" role="application" aria-label="Agent Micro">
         <div class="pad-ring" id="pad-ring" aria-hidden="true"></div>

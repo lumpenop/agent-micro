@@ -54,6 +54,33 @@ button {
   gap: 0;
   overflow: hidden;
 }
+.shell.git-open { align-items: flex-end; padding-right: 4px; }
+.git-side-panel {
+  position: fixed; left: 8px; top: 8px; bottom: 8px; width: 202px; z-index: 20;
+  display: flex; flex-direction: column; gap: 10px; padding: 12px;
+  border: 1px solid rgba(0,0,0,.1); border-radius: 18px;
+  background: rgba(241,244,246,.97); box-shadow: 0 18px 48px rgba(0,0,0,.22);
+  backdrop-filter: blur(18px); color: #202326;
+}
+.git-side-panel[hidden] { display: none; }
+.git-side-head { display:flex; align-items:center; justify-content:space-between; }
+.git-side-head > div { display:flex; flex-direction:column; gap:2px; }
+.git-side-head strong { font-size:15px; }
+.git-kicker { font-size:8px; font-weight:800; letter-spacing:.12em; color:#788087; }
+.git-repo-card { display:grid; gap:6px; padding:10px; border-radius:12px; background:#fff; border:1px solid rgba(0,0,0,.07); }
+.git-repo-name { font-size:12px; font-weight:750; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.git-branch { display:flex; align-items:center; gap:5px; color:#687078; font-size:9px; }
+.git-branch svg { width:11px; height:11px; }
+.git-sync-actions { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.git-sync-actions button,.git-section-head button,.git-ai-message { padding:7px; border-radius:9px; background:#fff; border:1px solid rgba(0,0,0,.08); font-size:9px; font-weight:700; }
+.git-section-head { display:flex; align-items:center; justify-content:space-between; font-size:10px; font-weight:800; }
+.git-section-head button { padding:4px 6px; }
+.git-change-list { min-height:100px; flex:1; overflow:auto; border-radius:11px; background:rgba(255,255,255,.62); border:1px solid rgba(0,0,0,.07); }
+.git-empty { padding:18px 10px; color:#8a9197; font-size:9px; line-height:1.5; text-align:center; }
+.git-commit-box { display:grid; gap:6px; }
+.git-commit-box textarea { width:100%; resize:none; padding:8px; border:1px solid rgba(0,0,0,.1); border-radius:10px; background:#fff; font:10px/1.4 inherit; outline:none; }
+.git-commit { padding:8px; border-radius:10px; background:#24292f; color:#fff; font-size:10px; font-weight:800; }
+.chrome-btn.is-active { background:#24292f; color:#fff; border-color:#24292f; }
 
 /* Tiny on-screen field — macOS dictation often ignores fully off-screen inputs */
 .voice-sink {
