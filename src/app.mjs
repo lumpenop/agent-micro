@@ -337,6 +337,12 @@ async function refreshGitStatus() {
   if (!result.files?.length) {
     const empty = document.createElement('div'); empty.className = 'git-empty'; empty.textContent = '✓ Working tree clean'; list.append(empty); return;
   }
+  const allStaged = result.files.length > 0 && result.files.every((f) => f.staged);
+  const stageAllBtn = document.getElementById('git-stage-all');
+  if (stageAllBtn) {
+    stageAllBtn.textContent = allStaged ? '– Unstage all' : '+ Stage all';
+    stageAllBtn.dataset.allStaged = allStaged ? '1' : '0';
+  }
   for (const file of result.files) {
     const row = document.createElement('div'); row.className = 'git-change';
     const code = document.createElement('span'); code.className = 'git-change-code'; code.textContent = file.status;
@@ -361,9 +367,16 @@ document.getElementById('git-stage-all')?.addEventListener('click', async (event
   const button = event.currentTarget;
   button.disabled = true;
   try {
-    const result = await api?.stageAllGit?.();
-    if (!result?.ok) flashAction(result?.error || 'Git stage failed');
-    else flashAction(`Git stage · ${result.count} file${result.count === 1 ? '' : 's'}`);
+    const unstage = button.dataset.allStaged === '1';
+    if (unstage) {
+      const result = await api?.unstageAllGit?.();
+      if (!result?.ok) flashAction(result?.error || 'Git unstage failed');
+      else flashAction('Git unstage all');
+    } else {
+      const result = await api?.stageAllGit?.();
+      if (!result?.ok) flashAction(result?.error || 'Git stage failed');
+      else flashAction(`Git stage · ${result.count} file${result.count === 1 ? '' : 's'}`);
+    }
     await refreshGitStatus();
   } finally {
     button.disabled = false;

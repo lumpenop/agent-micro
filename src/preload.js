@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('codexDesktop', {
   syncGit: (action, context) => ipcRenderer.invoke('git:sync', action, context),
   stageGitFile: (file, staged) => ipcRenderer.invoke('git:stageFile', file, staged),
   stageAllGit: () => ipcRenderer.invoke('git:stageAll'),
+  unstageAllGit: () => ipcRenderer.invoke('git:unstageAll'),
   generateGitMessage: () => ipcRenderer.invoke('git:autoMessage'),
   commitGit: (message) => ipcRenderer.invoke('git:commit', message),
 

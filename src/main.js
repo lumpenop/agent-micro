@@ -672,6 +672,19 @@ ipcMain.handle('git:stageAll', async () => {
     return { ok: true, count: staged.length };
   } catch (error) { return { ok: false, error: error.message }; }
 });
+ipcMain.handle('git:unstageAll', async () => {
+  if (trialLocked()) return trialDenied();
+  try {
+    const cwd = selectedWorkspace();
+    await new Promise((resolve, reject) => {
+      execFile('git', ['reset', 'HEAD', '--', '.'], { cwd, timeout: 15000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+        if (error) reject(new Error(String(stderr || stdout || error.message).trim()));
+        else resolve();
+      });
+    });
+    return { ok: true };
+  } catch (error) { return { ok: false, error: error.message }; }
+});
 ipcMain.handle('git:autoMessage', async () => {
   if (trialLocked()) return trialDenied();
   try {
