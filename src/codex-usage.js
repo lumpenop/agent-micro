@@ -30,26 +30,31 @@ function recentRollouts(limit = 160) {
   return found.sort((a, b) => b.mtime - a.mtime).slice(0, limit);
 }
 
-function lastUsage(file) {
-  let text;
+function usageEvents(file) {
   try {
-    const stat = fs.statSync(file);
-    const size = Math.min(stat.size, 1024 * 1024);
-    const fd = fs.openSync(file, 'r');
-    const buf = Buffer.alloc(size);
-    fs.readSync(fd, buf, 0, size, Math.max(0, stat.size - size));
-    fs.closeSync(fd);
-    text = buf.toString('utf8');
-  } catch { return null; }
-  const lines = text.split('\n').reverse();
-  for (const line of lines) {
-    if (!line.includes('"type":"token_count"')) continue;
-    try {
-      const row = JSON.parse(line);
-      if (row?.payload?.info || row?.payload?.rate_limits) return row;
-    } catch {}
-  }
-  return null;
+    const text = fs.readFileSync(file, 'utf8');
+    return text.split('\n').map((line) => {
+      if (!line.includes('"type":"token_count"')) return null;
+      try {
+        const row = JSON.parse(line);
+        return row?.payload?.info || row?.payload?.rate_limits ? row : null;
+      } catch { return null; }
+    }).filter(Boolean);
+  } catch { return []; }
+}
+
+function lastUsage(events) {
+  return events[events.length - 1] || null;
+}
+
+function localDateKey(timestamp) {
+  if (!timestamp) return null;
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date(timestamp));
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return values.year && values.month && values.day
+    ? `${values.year}-${values.month}-${values.day}` : null;
 }
 
 function normalize(row, file) {
@@ -77,20 +82,37 @@ function normalize(row, file) {
 
 function getUsage({ currentRolloutPath = null } = {}) {
   const entries = recentRollouts();
-  const rows = entries.map(({ file }) => normalize(lastUsage(file), file)).filter((row) => row.timestamp || row.totalTokens || row.usedPercent != null);
-  const current = currentRolloutPath ? rows.find((row) => row.file === currentRolloutPath) || normalize(lastUsage(currentRolloutPath), currentRolloutPath) : rows[0] || null;
+  const histories = entries.map(({ file }) => ({ file, events: usageEvents(file) }));
+  const rows = histories.map(({ file, events }) => normalize(lastUsage(events), file)).filter((row) => row.timestamp || row.totalTokens || row.usedPercent != null);
+  const current = currentRolloutPath
+    ? rows.find((row) => row.file === currentRolloutPath) || normalize(lastUsage(usageEvents(currentRolloutPath)), currentRolloutPath)
+    : rows[0] || null;
   const primary = rows.find((row) => row.usedPercent != null) || null;
-  const now = new Date();
-  const today = now.toISOString().slice(0, 10);
+  const today = localDateKey(new Date());
   const month = today.slice(0, 7);
-  const sum = (prefix) => rows.reduce((total, row) => row.timestamp?.startsWith(prefix) ? total + row.totalTokens : total, 0);
+  let todayTokens = 0;
+  let monthTokens = 0;
+  for (const { events } of histories) {
+    let previousTotal = 0;
+    for (const event of events) {
+      const total = Number(event?.payload?.info?.total_token_usage?.total_tokens);
+      if (!Number.isFinite(total)) continue;
+      // total_token_usage is cumulative within a rollout. Count only the
+      // increase since the preceding token_count event, not the whole total.
+      const delta = total >= previousTotal ? total - previousTotal : total;
+      previousTotal = total;
+      const date = localDateKey(event.timestamp);
+      if (date === today) todayTokens += delta;
+      if (date?.startsWith(month)) monthTokens += delta;
+    }
+  }
   return {
     ok: true,
     source: 'Codex rollout logs',
     current,
     sessions: rows.length,
-    todayTokens: sum(today),
-    monthTokens: sum(month),
+    todayTokens,
+    monthTokens,
     rateLimit: primary ? { usedPercent: primary.usedPercent, windowMinutes: primary.windowMinutes, resetsAt: primary.resetsAt, planType: primary.planType } : null,
     checkedAt: Date.now(),
   };

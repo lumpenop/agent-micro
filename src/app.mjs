@@ -1609,12 +1609,12 @@ async function refreshCodexUsage() {
   if (!result?.ok) return;
   const current = result.current || {};
   if (hud.usage) {
-    const session = formatTokens(current.lastTokens || current.totalTokens);
+    const session = formatTokens(current.totalTokens);
     const limit = result.rateLimit?.usedPercent != null ? ` · ${result.rateLimit.usedPercent}%` : '';
     hud.usage.textContent = session === t('settings.usage.none') ? '—' : `${session}${limit}`;
     hud.usage.title = result.rateLimit?.resetsAt ? `Resets ${formatUsageDate(result.rateLimit.resetsAt)}` : 'Codex rollout usage';
   }
-  if (usageSessionEl) usageSessionEl.textContent = formatTokens(current.lastTokens || current.totalTokens);
+  if (usageSessionEl) usageSessionEl.textContent = formatTokens(current.totalTokens);
   if (usageTodayEl) usageTodayEl.textContent = formatTokens(result.todayTokens);
   if (usageMonthEl) usageMonthEl.textContent = formatTokens(result.monthTokens);
   if (usageContextEl) usageContextEl.textContent = current.contextWindow ? formatTokens(current.contextWindow) : '—';
