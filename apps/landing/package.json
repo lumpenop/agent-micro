@@ -1,0 +1,10 @@
+{
+  "name": "@agent-micro/landing",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Agent Micro product landing page",
+  "scripts": {
+    "dev": "python3 -m http.server 4173",
+    "preview": "python3 -m http.server 4173"
+  }
+}

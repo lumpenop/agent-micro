@@ -1,3 +1,6 @@
+packages:
+  - 'apps/*'
+
 allowBuilds:
   '@anthropic-ai/claude-code': true
   electron: true
