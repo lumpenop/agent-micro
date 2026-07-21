@@ -1367,6 +1367,12 @@ const setCompactLimit = document.getElementById('set-compact-limit');
 const setToolOutputLimit = document.getElementById('set-tool-output-limit');
 const setRamWarning = document.getElementById('set-ram-warning');
 const setRamStatus = document.getElementById('set-ram-status');
+const usageSessionEl = document.getElementById('usage-session');
+const usageTodayEl = document.getElementById('usage-today');
+const usageMonthEl = document.getElementById('usage-month');
+const usageContextEl = document.getElementById('usage-context');
+const usageRateEl = document.getElementById('usage-rate');
+const usageMetaEl = document.getElementById('usage-meta');
 const setAgentRole = document.getElementById('set-agent-role');
 const setAgentEditor = document.getElementById('set-agent-editor');
 const setAgentEnabled = document.getElementById('set-agent-enabled');
@@ -1584,6 +1590,34 @@ function setStatusTone(el, tone) {
   if (tone) el.classList.add(`is-${tone}`);
 }
 
+function formatTokens(value) {
+  const n = Number(value) || 0;
+  if (!n) return t('settings.usage.none');
+  if (n >= 1000000) return `${(n / 1000000).toFixed(2)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return n.toLocaleString();
+}
+
+function formatUsageDate(epochSeconds) {
+  if (!epochSeconds) return '—';
+  return new Date(Number(epochSeconds) * 1000).toLocaleString(state.locale === 'ko' ? 'ko-KR' : undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+async function refreshCodexUsage() {
+  const result = await api?.getCodexUsage?.();
+  if (!result?.ok) return;
+  const current = result.current || {};
+  if (usageSessionEl) usageSessionEl.textContent = formatTokens(current.lastTokens || current.totalTokens);
+  if (usageTodayEl) usageTodayEl.textContent = formatTokens(result.todayTokens);
+  if (usageMonthEl) usageMonthEl.textContent = formatTokens(result.monthTokens);
+  if (usageContextEl) usageContextEl.textContent = current.contextWindow ? formatTokens(current.contextWindow) : '—';
+  const rate = result.rateLimit;
+  if (usageRateEl) usageRateEl.textContent = rate?.usedPercent != null
+    ? t('settings.usage.rate', { used: rate.usedPercent, date: formatUsageDate(rate.resetsAt) })
+    : t('settings.usage.noRate');
+  if (usageMetaEl) usageMetaEl.textContent = t('settings.usage.checked', { date: new Date(result.checkedAt || Date.now()).toLocaleTimeString(state.locale === 'ko' ? 'ko-KR' : undefined), sessions: result.sessions || 0 });
+}
+
 function renderLicenseStatus(status) {
   if (!setLicenseStatusEl) return;
   if (!status) {
@@ -1733,6 +1767,7 @@ async function openSettings() {
     fillAutoContinuePrefs({});
   }
   settingsPanel.hidden = false;
+  refreshCodexUsage();
   updateSettingsProviderUI();
   flashAction(t('flash.settings'));
   refreshAccountStatus();
@@ -1922,6 +1957,7 @@ document.getElementById('mod-picker')?.addEventListener('click', async (e) => {
   flashAction(t(`flash.mod.${mod}`));
 });
 document.getElementById('btn-settings')?.addEventListener('click', openSettings);
+document.getElementById('settings-usage-refresh')?.addEventListener('click', refreshCodexUsage);
 document.getElementById('btn-mcp')?.addEventListener('click', openMcp);
 document.getElementById('btn-skills')?.addEventListener('click', openSkills);
 document.getElementById('skills-close')?.addEventListener('click', closeSkills);

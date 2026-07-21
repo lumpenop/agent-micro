@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('codexDesktop', {
   saveCodexSettings: (partial) => ipcRenderer.invoke('codexSettings:save', partial),
   chooseCodexWorkingDirectory: () => ipcRenderer.invoke('codexSettings:chooseWorkingDirectory'),
   getResourceUsage: () => ipcRenderer.invoke('resources:getUsage'),
+  getCodexUsage: () => ipcRenderer.invoke('codex:usage'),
   listMcpServers: () => ipcRenderer.invoke('mcp:list'),
   setMcpServerOptions: (name, options) => ipcRenderer.invoke('mcp:setOptions', name, options),
   mcpCommand: (action, payload) => ipcRenderer.invoke('mcp:command', action, payload),

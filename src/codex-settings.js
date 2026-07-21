@@ -50,6 +50,44 @@ const PERSONALITIES = ['', 'friendly', 'pragmatic', 'none'];
 const WEB_SEARCH_MODES = ['', 'cached', 'indexed', 'live', 'disabled'];
 const RESOURCE_PRESETS = ['saver', 'balanced', 'performance', 'custom'];
 
+const SENSITIVE_ROOT_NAMES = new Set(['.ssh', '.aws', '.azure', '.gnupg', '.kube']);
+
+function isWithin(parent, target) {
+  const rel = path.relative(parent, target);
+  return rel === '' || (rel && !rel.startsWith(`..${path.sep}`) && rel !== '..' && !path.isAbsolute(rel));
+}
+
+function validateWritableRoots(roots) {
+  const home = path.resolve(os.homedir());
+  const filesystemRoot = path.parse(home).root;
+  for (const raw of roots || []) {
+    const value = String(raw || '').trim();
+    if (!path.isAbsolute(value)) throw new Error(`Writable root must be an absolute path: ${value}`);
+    const resolved = path.resolve(value);
+    const base = path.basename(resolved).toLowerCase();
+    if (resolved === filesystemRoot || resolved === home) {
+      throw new Error('Refusing to add the filesystem root or home folder as writable');
+    }
+    if (SENSITIVE_ROOT_NAMES.has(base) || [...SENSITIVE_ROOT_NAMES].some((name) => isWithin(path.join(home, name), resolved))) {
+      throw new Error(`Refusing to add a sensitive folder as writable: ${resolved}`);
+    }
+  }
+  return true;
+}
+
+function safetyWarnings(settings) {
+  const cfg = normalize(settings);
+  const warnings = [];
+  if (cfg.sandbox_mode === 'danger-full-access') {
+    warnings.push('danger-full-access allows writes outside the project');
+  }
+  if (cfg.sandbox_mode === 'workspace-write' && cfg.workspace_network_access && cfg.approval_policy === 'never') {
+    warnings.push('workspace-write network access with approval disabled');
+  }
+  if (cfg.hooks_enabled) warnings.push('lifecycle hooks can run configured commands');
+  return warnings;
+}
+
 const CODEXIGNORE_SAMPLE = `# Agent Micro · Codex ignore (context / RAM)
 node_modules/
 .pnpm-store/
@@ -458,6 +496,7 @@ function removeManagedBlock(toml) {
 
 function save(partial) {
   const next = normalize({ ...load(), ...partial });
+  validateWritableRoots(next.writable_roots);
   const warnings = [];
 
   try { createBackup('save'); } catch (e) { warnings.push(`backup: ${e.message}`); }
@@ -534,6 +573,7 @@ module.exports = {
   PROFILE,
   setUserDataPath,
   load,
+  normalize,
   save,
   meta,
   cliConfigArgs,
@@ -546,4 +586,6 @@ module.exports = {
   listBackups,
   restoreBackup,
   CODEXIGNORE_SAMPLE,
+  validateWritableRoots,
+  safetyWarnings,
 };

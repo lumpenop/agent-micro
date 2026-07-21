@@ -374,8 +374,13 @@ class CodexBridge extends EventEmitter {
         let parsed;
         try { parsed = new URL(String(payload.url || '')); } catch { return { ok: false, error: 'Invalid MCP URL' }; }
         if (!/^https?:$/.test(parsed.protocol)) return { ok: false, error: 'MCP URL must use http or https' };
+        if (parsed.username || parsed.password) return { ok: false, error: 'MCP URL must not contain embedded credentials' };
         args = ['mcp', 'add', name, '--url', parsed.toString()];
-        if (payload.bearer_token_env_var) args.push('--bearer-token-env-var', String(payload.bearer_token_env_var));
+        if (payload.bearer_token_env_var) {
+          const envName = String(payload.bearer_token_env_var).trim();
+          if (!/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(envName)) return { ok: false, error: 'Invalid bearer token environment variable' };
+          args.push('--bearer-token-env-var', envName);
+        }
       } else {
         const command = String(payload.command || '').trim();
         if (!command) return { ok: false, error: 'MCP command is required' };

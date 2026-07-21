@@ -226,6 +226,22 @@
               </div>
             </div>
 
+            <div class="settings-section usage-section">
+              <div class="settings-section-heading">
+                <p class="settings-section-title" data-i18n="settings.usage.title">Usage</p>
+                <button type="button" class="voice-btn" id="settings-usage-refresh" data-i18n="settings.usage.refresh">Refresh</button>
+              </div>
+              <p class="settings-desc" data-i18n="settings.usage.desc">Usage reported by Codex rollout logs. Plan quota is shown only when Codex provides it.</p>
+              <div class="usage-grid">
+                <div class="usage-card"><span data-i18n="settings.usage.session">Current session</span><strong id="usage-session">—</strong></div>
+                <div class="usage-card"><span data-i18n="settings.usage.today">Today</span><strong id="usage-today">—</strong></div>
+                <div class="usage-card"><span data-i18n="settings.usage.month">This month</span><strong id="usage-month">—</strong></div>
+                <div class="usage-card"><span data-i18n="settings.usage.context">Context window</span><strong id="usage-context">—</strong></div>
+              </div>
+              <div class="usage-rate" id="usage-rate">—</div>
+              <p class="settings-desc usage-meta" id="usage-meta">—</p>
+            </div>
+
             <div class="settings-section">
               <p class="settings-section-title" data-i18n="settings.workspace">Workspace</p>
               <div class="settings-field">

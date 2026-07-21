@@ -5,6 +5,7 @@ const { execFile, spawn } = require('child_process');
 const path = require('path');
 const { createBridge, focusCodexDesktop } = require('./providers/create-bridge');
 const codexSettings = require('./codex-settings');
+const codexUsage = require('./codex-usage');
 const padPrefs = require('./pad-prefs');
 const trial = require('./trial');
 const i18n = require('./i18n');
@@ -816,7 +817,15 @@ ipcMain.handle('codexSettings:get', () => {
 });
 ipcMain.handle('codexSettings:save', async (_e, partial) => {
   if (trialLocked()) return trialDenied();
-  if (partial?.sandbox_mode === 'danger-full-access' && partial?.approval_policy === 'never') {
+  let merged;
+  try {
+    merged = { ...codexSettings.load(), ...(partial || {}) };
+    codexSettings.validateWritableRoots(codexSettings.normalize(merged).writable_roots);
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+  const safetyWarnings = codexSettings.safetyWarnings(merged);
+  if (safetyWarnings.length) {
     const { response } = await dialog.showMessageBox(mainWindow, {
       type: 'warning',
       buttons: [i18n.t(padPrefs.getLocale(), 'settings.risk.cancel'), i18n.t(padPrefs.getLocale(), 'settings.risk.confirm')],
@@ -824,7 +833,7 @@ ipcMain.handle('codexSettings:save', async (_e, partial) => {
       cancelId: 0,
       title: i18n.t(padPrefs.getLocale(), 'settings.risk.title'),
       message: i18n.t(padPrefs.getLocale(), 'settings.risk.message'),
-      detail: i18n.t(padPrefs.getLocale(), 'settings.risk.detail'),
+      detail: `${i18n.t(padPrefs.getLocale(), 'settings.risk.detail')}\n\n${safetyWarnings.map((warning) => `• ${warning}`).join('\n')}`,
     });
     if (response !== 1) return { ok: false, canceled: true, reason: 'risk-canceled' };
   }
@@ -843,6 +852,10 @@ ipcMain.handle('resources:getUsage', () => {
   const totalKb = metrics.reduce((sum, metric) => sum + Number(metric.memory?.workingSetSize || 0), 0);
   return { ok: true, ramMb: Math.round(totalKb / 1024), processCount: metrics.length };
 });
+ipcMain.handle('codex:usage', () => {
+  const current = bridge?.agents?.[bridge?.selected]?.rolloutPath || null;
+  return codexUsage.getUsage({ currentRolloutPath: current });
+});
 ipcMain.handle('mcp:list', async () => {
   if (trialLocked()) return trialDenied();
   return bridge?.listMcpServers?.() || { ok: false, servers: [], error: 'Codex unavailable' };
@@ -857,6 +870,20 @@ ipcMain.handle('mcp:setOptions', async (_e, name, options) => {
 });
 ipcMain.handle('mcp:command', async (_e, action, payload) => {
   if (trialLocked()) return trialDenied();
+  if (action === 'add') {
+    const type = payload?.type === 'stdio' ? 'stdio' : payload?.type === 'http' ? 'http' : '';
+    if (!type) return { ok: false, error: 'Unsupported MCP transport' };
+    const { response } = await dialog.showMessageBox(mainWindow, {
+      type: 'warning',
+      buttons: [i18n.t(padPrefs.getLocale(), 'mcp.cancel'), i18n.t(padPrefs.getLocale(), 'mcp.addConfirm')],
+      defaultId: 0,
+      cancelId: 0,
+      title: i18n.t(padPrefs.getLocale(), 'mcp.addTitle'),
+      message: i18n.t(padPrefs.getLocale(), 'mcp.addMessage', { name: payload?.name || '', target: type === 'stdio' ? payload?.command || '' : payload?.url || '' }),
+      detail: i18n.t(padPrefs.getLocale(), 'mcp.addDetail'),
+    });
+    if (response !== 1) return { ok: false, canceled: true };
+  }
   if (action === 'remove') {
     const { response } = await dialog.showMessageBox(mainWindow, {
       type: 'warning', buttons: [i18n.t(padPrefs.getLocale(), 'mcp.cancel'), i18n.t(padPrefs.getLocale(), 'mcp.remove')],
