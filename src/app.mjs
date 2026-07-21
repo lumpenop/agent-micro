@@ -281,6 +281,7 @@ const hud = {
   modelChange: document.getElementById('hud-model-change'),
   continueStatus: document.getElementById('hud-continue-status'),
   continueButton: document.getElementById('hud-continue'),
+  usage: document.getElementById('hud-usage'),
 };
 
 async function setGitPanelOpen(open) {
@@ -431,7 +432,7 @@ const pickerGrid = document.getElementById('icon-picker-grid');
 const pickerTitle = document.getElementById('icon-picker-title');
 
 function flashAction(text) {
-  if (text) hud.action.textContent = text;
+  if (text && hud.action) hud.action.textContent = text;
 }
 
 function applyTrialLock(status) {
@@ -1607,6 +1608,12 @@ async function refreshCodexUsage() {
   const result = await api?.getCodexUsage?.();
   if (!result?.ok) return;
   const current = result.current || {};
+  if (hud.usage) {
+    const session = formatTokens(current.lastTokens || current.totalTokens);
+    const limit = result.rateLimit?.usedPercent != null ? ` · ${result.rateLimit.usedPercent}%` : '';
+    hud.usage.textContent = session === t('settings.usage.none') ? '—' : `${session}${limit}`;
+    hud.usage.title = result.rateLimit?.resetsAt ? `Resets ${formatUsageDate(result.rateLimit.resetsAt)}` : 'Codex rollout usage';
+  }
   if (usageSessionEl) usageSessionEl.textContent = formatTokens(current.lastTokens || current.totalTokens);
   if (usageTodayEl) usageTodayEl.textContent = formatTokens(result.todayTokens);
   if (usageMonthEl) usageMonthEl.textContent = formatTokens(result.monthTokens);
@@ -2065,6 +2072,7 @@ setRamWarning?.addEventListener('input', refreshRamUsage);
   if (setResourcePreset) setResourcePreset.value = 'custom';
 }));
 setInterval(refreshRamUsage, 3000);
+setInterval(refreshCodexUsage, 5000);
 document.getElementById('settings-add-writable-root')?.addEventListener('click', async () => {
   const r = await api?.chooseCodexWorkingDirectory?.();
   if (!r?.ok || !r.path || !setWritableRoots) return;
@@ -2133,7 +2141,7 @@ function render() {
   if (hud.continueButton) hud.continueButton.disabled = agentBusy || !state.connected;
   const layerName = layerDisplayName(state.layer);
   const providerLabel = state.provider === 'claude' ? 'Claude Code' : 'Codex CLI';
-  hud.link.textContent = state.connected
+  if (hud.link) hud.link.textContent = state.connected
     ? `${providerLabel} · ${state.mode} · ${layerName}`
     : state.mode === 'offline'
       ? `demo · ${providerLabel} · ${layerName}`
