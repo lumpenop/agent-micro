@@ -14,6 +14,42 @@ function lt(key, vars) {
   return t(padPrefs.getLocale(), key, vars);
 }
 
+// Rollout logs are the reliable source when a model is changed through the
+// visible CLI picker (that change is not always echoed by app-server).
+const rolloutModelCache = new Map();
+
+function readRolloutModel(file) {
+  if (!file) return { model: '', reasoning: '', changed: false };
+  let stat;
+  try { stat = fs.statSync(file); } catch { return { model: '', changed: false }; }
+  const cached = rolloutModelCache.get(file);
+  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+    return { model: cached.model, reasoning: cached.reasoning, changed: false };
+  }
+
+  let model = '';
+  let reasoning = '';
+  try {
+    const text = fs.readFileSync(file, 'utf8');
+    for (const line of text.split('\n')) {
+      if (!line.includes('thread_settings_applied') && !line.includes('"model"')) continue;
+      let row;
+      try { row = JSON.parse(line); } catch { continue; }
+      const payload = row?.payload || {};
+      const settings = payload.thread_settings || payload.threadSettings || {};
+      const candidate = settings.model || (payload.type === 'turn_context' ? payload.model : '') || payload.model || '';
+      const effort = settings.reasoning_effort || payload.reasoning_effort || '';
+      if (typeof candidate === 'string' && candidate.trim()) model = candidate.trim();
+      if (typeof effort === 'string' && REASONING.includes(effort.trim())) reasoning = effort.trim();
+    }
+  } catch {
+    model = cached?.model || '';
+    reasoning = cached?.reasoning || '';
+  }
+  rolloutModelCache.set(file, { mtimeMs: stat.mtimeMs, size: stat.size, model, reasoning });
+  return { model, reasoning, changed: true };
+}
+
 function parsePluginListOutput(output) {
   const text = String(output || '').trim();
   let parsed;
@@ -57,12 +93,36 @@ const PLATFORM_BIN = {
 
 const { whichSync } = require('./base-bridge');
 
+function nativeFromCodexEntrypoint(entrypoint) {
+  const key = `${process.platform}-${process.arch}`;
+  const spec = PLATFORM_BIN[key];
+  if (!spec || !entrypoint) return null;
+
+  let real;
+  try { real = fs.realpathSync(entrypoint); } catch { real = entrypoint; }
+  if (!/[/\\]codex[/\\]bin[/\\]codex\.js$/.test(real)) return null;
+
+  const packageRoot = path.dirname(path.dirname(real));
+  const candidate = path.join(packageRoot, 'node_modules', '@openai', path.basename(spec.pkg), ...spec.parts);
+  return fs.existsSync(candidate) ? candidate : null;
+}
+
 function findCodexNative() {
-  // 1. Prefer `codex` on PATH (user-installed via Homebrew, npm i -g, etc.)
+  // 1. Prefer the native binary belonging to a PATH-installed JS launcher.
+  // Running the JS wrapper from an Electron-launched Terminal can lose pnpm's
+  // module resolution and incorrectly print “pnpm add -g @openai/codex”.
   const pathBin = whichSync('codex');
+  const pathNative = nativeFromCodexEntrypoint(pathBin);
+  if (pathNative) return pathNative;
+
+  // 2. Agent Micro's on-demand installation.
+  const managedBin = process.env.AGENT_MICRO_CODEX_BIN;
+  if (managedBin && fs.existsSync(managedBin)) return managedBin;
+
+  // 3. A native binary already available on PATH (Homebrew, standalone, …).
   if (pathBin) return pathBin;
 
-  // 2. Fall back to bundled binary from @openai/codex
+  // 4. Development fallback from @openai/codex.
   const key = `${process.platform}-${process.arch}`;
   const spec = PLATFORM_BIN[key];
   const roots = [path.join(__dirname, '..', '..', 'node_modules', '@openai')];
@@ -101,15 +161,28 @@ function findCodexNative() {
 }
 
 function spawnCodex(bin, args, opts = {}) {
+  // When the native binary is launched directly from a package-manager
+  // install, Codex cannot infer its package root and may run its first-run
+  // PATH/update repair flow on every app start. Pass the package metadata
+  // explicitly so an already-installed CLI is treated as authoritative.
+  const managedEnv = {};
+  if (typeof bin === 'string') {
+    const marker = `${path.sep}node_modules${path.sep}@openai${path.sep}codex${path.sep}`;
+    const markerIndex = bin.indexOf(marker);
+    if (markerIndex >= 0) {
+      managedEnv.CODEX_MANAGED_BY_PNPM = '1';
+      managedEnv.CODEX_MANAGED_PACKAGE_ROOT = bin.slice(0, markerIndex + marker.length - 1);
+    }
+  }
   if (typeof bin === 'object' && bin.type === 'node') {
     return spawn(process.execPath, [bin.path, ...args], {
       ...opts,
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', ...(opts.env || {}) },
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', ...managedEnv, ...(opts.env || {}) },
     });
   }
   return spawn(bin, args, {
     ...opts,
-    env: { ...process.env, ...(opts.env || {}) },
+    env: { ...process.env, ...managedEnv, ...(opts.env || {}) },
   });
 }
 
@@ -132,6 +205,9 @@ class CodexBridge extends EventEmitter {
     this.planMode = false;
     this.approvals = new Map();
     this._poll = null;
+    this._contextPoll = null;
+    this._rolloutWatchers = new Map();
+    this._rolloutWatchTimers = new Map();
   }
 
   getState() {
@@ -224,13 +300,13 @@ class CodexBridge extends EventEmitter {
       if (forkedId && shellQuoteId(forkedId)) {
         threadId = forkedId;
         // Resume the already-forked thread in the new pane
-        launchCmd = this._codexSubcommand(`resume ${shellQuoteId(forkedId)}`);
+        launchCmd = this._codexSubcommand(`resume ${shellQuoteId(forkedId)}`, target);
       } else {
         // CLI reads ~/.codex/sessions rollouts directly (reliable path)
         const quoted = shellQuoteId(sourceId);
         launchCmd = quoted
-          ? this._codexSubcommand(`fork ${quoted}`)
-          : this._codexSubcommand('fork --last');
+          ? this._codexSubcommand(`fork ${quoted}`, target)
+          : this._codexSubcommand('fork --last', target);
         threadId = quoted || `fork-pending-${Date.now()}`;
       }
     }
@@ -239,7 +315,7 @@ class CodexBridge extends EventEmitter {
     this.agents[target] = {
       name,
       status,
-      cwd: src.cwd || this._configuredWorkingDirectory(),
+      cwd: this._configuredWorkingDirectory(target),
       threadId,
       turnId: null,
       approvalId: null,
@@ -360,6 +436,16 @@ class CodexBridge extends EventEmitter {
       return { ok: true, servers: Array.isArray(servers) ? servers : [] };
     } catch (error) {
       return { ok: false, error: error.message, servers: [] };
+    }
+  }
+
+  async readRateLimits() {
+    if (!this.proc) return null;
+    try {
+      const result = await this.request('account/rateLimits/read');
+      return result?.rateLimits || result?.rate_limits || result || null;
+    } catch {
+      return null;
     }
   }
 
@@ -527,9 +613,17 @@ class CodexBridge extends EventEmitter {
     }
     await this.refreshThreads().catch((e) => this.emit('log', e.message));
     this.emitState(lt('bridge.connected'));
+    // App-server notifications are the primary path; this reconciles external
+    // terminal window lifecycle and historical thread state as a fallback.
     this._poll = setInterval(() => {
       this.refreshThreads().catch(() => {});
-    }, 4000);
+    }, 1000);
+    // The visible CLI can change model/effort without producing an app-server
+    // notification. Rollout files are the authoritative per-agent source for
+    // those settings, so watch them frequently for external `/fast` changes.
+    this._contextPoll = setInterval(() => {
+      this.refreshAgentContexts().catch(() => {});
+    }, 1000);
     return true;
   }
 
@@ -569,6 +663,16 @@ class CodexBridge extends EventEmitter {
       clearInterval(this._poll);
       this._poll = null;
     }
+    if (this._contextPoll) {
+      clearInterval(this._contextPoll);
+      this._contextPoll = null;
+    }
+    for (const watcher of this._rolloutWatchers.values()) {
+      try { watcher.close(); } catch {}
+    }
+    this._rolloutWatchers.clear();
+    for (const timer of this._rolloutWatchTimers.values()) clearTimeout(timer);
+    this._rolloutWatchTimers.clear();
     if (this.rl) {
       try {
         this.rl.close();
@@ -658,6 +762,32 @@ class CodexBridge extends EventEmitter {
       return;
     }
 
+    if (method === 'thread/settings/updated') {
+      const idx = this._indexForThread(params.threadId);
+      if (idx >= 0 && params.threadSettings) {
+        const settings = params.threadSettings;
+        const agent = this.agents[idx];
+        if (settings.model) {
+          agent.model = settings.model;
+          agent.modelSource = 'app-server';
+        }
+        const effort = settings.reasoningEffort || settings.reasoning_effort;
+        if (effort) {
+          const i = REASONING.indexOf(effort);
+          if (i >= 0) {
+            agent.reasoningIndex = i;
+            agent.reasoning = effort;
+            agent.fastMode = effort === 'minimal';
+          }
+        }
+        const fastMode = typeof settings.fastMode === 'boolean' ? settings.fastMode : settings.fast_mode;
+        if (typeof fastMode === 'boolean') agent.fastMode = fastMode;
+        if (idx === this.selected && typeof agent.fastMode === 'boolean') this.fastMode = agent.fastMode;
+        this.emitState(null);
+      }
+      return;
+    }
+
     if (method === 'error' || method === 'turn/failed') {
       const idx = this._indexForThread(params.threadId);
       if (idx >= 0) {
@@ -728,14 +858,25 @@ class CodexBridge extends EventEmitter {
 
     const threads = normalizeThreads(result);
     const byId = new Map(threads.map((t) => [t.id, t]));
+    // thread/list includes historical threads. Reconcile our CLI-backed slots
+    // against the actual terminal windows so a closed Agent pane does not stay
+    // visibly active forever.
+    let openCliSlots = null;
+    if (process.platform === 'darwin') {
+      try { openCliSlots = await mac.listOpenCodexCliSlots?.(); } catch { openCliSlots = null; }
+    }
 
     // Only sync slots we already own (CLI / fork / select).
     // Never pack global history into empty keys — that made fork look "full" at 6/6
     // even when only 1–5 Codex · Agent panes were open.
     for (let i = 0; i < 6; i++) {
       const prev = this.agents[i];
-      if (prev.status === 'thinking' || prev.status === 'input') continue;
       if (!prev.threadId || String(prev.threadId).startsWith('demo')) continue;
+      if (Array.isArray(openCliSlots) && prev.rolloutPath && !openCliSlots.includes(i)) {
+        this.agents[i] = emptyAgent();
+        continue;
+      }
+      if (prev.status === 'thinking' || prev.status === 'input') continue;
 
       const t = byId.get(prev.threadId);
       if (!t) continue;
@@ -753,6 +894,11 @@ class CodexBridge extends EventEmitter {
         threadId: t.id,
         turnId: prev.turnId,
         approvalId: prev.approvalId,
+        model: prev.model,
+        reasoning: prev.reasoning,
+        reasoningIndex: prev.reasoningIndex,
+        fastMode: prev.fastMode,
+        preFastReasoningIndex: prev.preFastReasoningIndex,
       };
     }
     const liveSlots = this.agents
@@ -765,6 +911,7 @@ class CodexBridge extends EventEmitter {
       const rollout = await mac.getCliSlotRolloutPath?.(slot);
       this._updateProjectContext(agent, liveCwd, rollout);
     }));
+    this._syncRolloutWatchers();
     this.emitState(null);
   }
 
@@ -799,7 +946,7 @@ class CodexBridge extends EventEmitter {
       // Phantom app-server ids without rollouts break later thread/fork.
       if (a.status === 'off') {
         a.status = 'idle';
-        if (!a.name || a.name === '—') a.name = `Agent ${slot + 1}`;
+        if (!a.name || a.name === '—') a.name = this._slotName(slot);
         a.cwd = this._configuredWorkingDirectory();
         a.projectName = this._projectName(a.cwd);
       }
@@ -827,14 +974,14 @@ class CodexBridge extends EventEmitter {
   }
 
   /** Shell command to launch interactive Codex CLI in Terminal. */
-  _codexCliCommand() {
-    return this._codexSubcommand('');
+  _codexCliCommand(slot = this.selected) {
+    return this._codexSubcommand('', slot);
   }
 
-  _configuredWorkingDirectory() {
+  _configuredWorkingDirectory(slot = this.selected) {
     try {
-      const configured = require('../codex-settings').load().working_directory;
-      if (configured && fs.existsSync(configured) && fs.statSync(configured).isDirectory()) return configured;
+      const settings = require('../codex-settings').load();
+      return require('../agent-rules').effectiveWorkingDirectory(settings, slot);
     } catch {}
     return process.env.HOME || process.cwd();
   }
@@ -852,13 +999,110 @@ class CodexBridge extends EventEmitter {
     return path.basename(folder) || folder;
   }
 
+  _slotName(slot) {
+    try {
+      const settings = require('../codex-settings').load();
+      return require('../agent-rules').resolve(settings, slot).profile.name || `Agent ${slot + 1}`;
+    } catch { return `Agent ${slot + 1}`; }
+  }
+
   _updateProjectContext(agent, liveCwd, rolloutPath = null) {
     const projectRoot = (rolloutPath && detectProjectFromRollout(rolloutPath, liveCwd))
       || detectActiveProject(liveCwd)
       || liveCwd;
     agent.rolloutPath = rolloutPath || agent.rolloutPath || null;
+    const rolloutModel = readRolloutModel(agent.rolloutPath);
+    if (rolloutModel.changed && rolloutModel.model) {
+      agent.model = rolloutModel.model;
+      agent.modelSource = 'rollout';
+    }
+    if (rolloutModel.changed && rolloutModel.reasoning) {
+      const index = REASONING.indexOf(rolloutModel.reasoning);
+      if (index >= 0) {
+        agent.reasoning = rolloutModel.reasoning;
+        agent.reasoningIndex = index;
+        agent.fastMode = rolloutModel.reasoning === 'minimal';
+        if (agent === this.agents[this.selected]) this.fastMode = agent.fastMode;
+      }
+    }
     agent.projectRoot = projectRoot;
     agent.projectName = this._projectName(projectRoot);
+    const id = String(rolloutPath || '').match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i)?.[1];
+    if (id && !agent.threadId) agent.threadId = id;
+  }
+
+  _syncRolloutWatchers() {
+    const wanted = new Map();
+    this.agents.forEach((agent, slot) => {
+      const file = String(agent?.rolloutPath || '').trim();
+      if (agent?.status !== 'off' && file && fs.existsSync(file)) wanted.set(file, slot);
+    });
+    for (const [file, watcher] of this._rolloutWatchers) {
+      if (wanted.has(file)) continue;
+      try { watcher.close(); } catch {}
+      this._rolloutWatchers.delete(file);
+    }
+    for (const [file, slot] of wanted) {
+      if (this._rolloutWatchers.has(file)) continue;
+      try {
+        const watcher = fs.watch(file, { persistent: false }, () => {
+          const oldTimer = this._rolloutWatchTimers.get(file);
+          if (oldTimer) clearTimeout(oldTimer);
+          const timer = setTimeout(() => {
+            this._rolloutWatchTimers.delete(file);
+            const agent = this.agents[slot];
+            if (!agent || agent.status === 'off' || agent.rolloutPath !== file) return;
+            const before = `${agent.model || ''}|${agent.reasoning || ''}|${agent.fastMode}`;
+            this._updateProjectContext(agent, agent.cwd, file);
+            const after = `${agent.model || ''}|${agent.reasoning || ''}|${agent.fastMode}`;
+            if (before !== after) this.emitState(null);
+          }, 40);
+          this._rolloutWatchTimers.set(file, timer);
+        });
+        this._rolloutWatchers.set(file, watcher);
+      } catch (error) {
+        this.emit('log', `rollout watch: ${error.message}`);
+      }
+    }
+  }
+
+  /** Sync model/reasoning/Fast for already-associated CLI rollouts. */
+  async refreshAgentContexts() {
+    if (!this.connected) return;
+    let changed = false;
+    for (const agent of this.agents) {
+      if (!agent || agent.status === 'off' || !agent.rolloutPath) continue;
+      const before = `${agent.model || ''}|${agent.reasoning || ''}|${agent.fastMode}`;
+      this._updateProjectContext(agent, agent.cwd, agent.rolloutPath);
+      const after = `${agent.model || ''}|${agent.reasoning || ''}|${agent.fastMode}`;
+      if (before !== after) changed = true;
+    }
+    this._syncRolloutWatchers();
+    if (changed) this.emitState(null);
+  }
+
+  async _updateSelectedThreadSettings(settings = {}) {
+    const agent = this.agents[this.selected];
+    const threadId = String(agent?.threadId || '').trim();
+    if (!this.connected || !threadId || threadId.startsWith('demo')) {
+      return { ok: false, error: 'Selected agent is not linked to a Codex thread', slot: this.selected };
+    }
+    try {
+      const result = await this.request('thread/settings/update', { threadId, ...settings });
+      if (settings.model) agent.model = settings.model;
+      if (settings.model) agent.modelSource = 'app-server';
+      if (settings.effort) {
+        const index = REASONING.indexOf(settings.effort);
+        if (index >= 0) {
+          agent.reasoningIndex = index;
+          agent.reasoning = settings.effort;
+        }
+      }
+      this.emitState(null);
+      return { ok: true, slot: this.selected, threadId, settings, result };
+    } catch (error) {
+      return { ok: false, error: error.message, slot: this.selected, threadId };
+    }
   }
 
   /**
@@ -866,7 +1110,7 @@ class CodexBridge extends EventEmitter {
    * Subcommands are appended after global flags so ids are not eaten as PROMPT.
    * @param {string} sub e.g. '' | 'fork --last' | 'resume <uuid>'
    */
-  _codexSubcommand(sub) {
+  _codexSubcommand(sub, slot = this.selected) {
     const bin = findCodexNative();
     let base = 'codex';
     if (!bin) {
@@ -881,12 +1125,21 @@ class CodexBridge extends EventEmitter {
     let cmd = base;
     let workingDirectory = '';
     try {
-      const { withCliFlags, load } = require('../codex-settings');
-      cmd = withCliFlags(base);
-      const configured = load().working_directory;
-      if (configured && fs.existsSync(configured) && fs.statSync(configured).isDirectory()) {
-        workingDirectory = configured;
-      }
+      const { withCliFlags, load, tomlString } = require('../codex-settings');
+      const settings = load();
+      const launch = require('../agent-rules').resolve(settings, slot);
+      const merged = {
+        ...settings,
+        model: launch.model,
+        model_reasoning_effort: launch.reasoning,
+        sandbox_mode: launch.sandbox,
+        approval_policy: launch.approval,
+      };
+      const extra = launch.instructions
+        ? [`developer_instructions=${tomlString(launch.instructions)}`]
+        : [];
+      cmd = withCliFlags(base, merged, extra);
+      workingDirectory = launch.cwd;
     } catch {
       /* keep base */
     }
@@ -909,22 +1162,18 @@ class CodexBridge extends EventEmitter {
     }
     return mac.ensureCodexCliWindow(slot, {
       focus: opts.focus !== false,
-      command: opts.command || this._codexCliCommand(),
+      command: opts.command || this._codexCliCommand(slot),
     });
   }
 
   async startThread(slot = this.selected) {
     if (!this.connected) return;
-    let cwd = process.env.HOME || process.cwd();
-    try {
-      const configured = require('../codex-settings').load().working_directory;
-      if (configured && fs.existsSync(configured) && fs.statSync(configured).isDirectory()) cwd = configured;
-    } catch {}
+    const cwd = this._configuredWorkingDirectory(slot);
     const result = await this.request('thread/start', { cwd });
     const id = result?.thread?.id || result?.threadId || result?.id;
     if (id) {
       this.agents[slot] = {
-        name: 'New task',
+        name: this._slotName(slot),
         status: 'idle',
         cwd,
         threadId: id,
@@ -1019,22 +1268,43 @@ class CodexBridge extends EventEmitter {
     }
   }
 
-  setReasoning(index) {
-    this.reasoningIndex = Math.max(0, Math.min(REASONING.length - 1, index));
-    const value = REASONING[this.reasoningIndex];
-    if (this.connected) {
-      this.request('config/set', { key: 'model_reasoning_effort', value }).catch(() => {});
+  async setReasoning(index) {
+    const reasoningIndex = Math.max(0, Math.min(REASONING.length - 1, index));
+    const value = REASONING[reasoningIndex];
+    let updated = await this._updateSelectedThreadSettings({ effort: value });
+    // CLI windows may not have a live app-server thread id. In that case,
+    // update the Codex config used by the visible CLI as a fallback.
+    if (!updated.ok && this.connected) {
+      try {
+        await this.request('config/set', { key: 'model_reasoning_effort', value });
+        updated = { ok: true, mode: 'config' };
+      } catch {
+        /* retain the original thread error for the UI */
+      }
     }
+    if (!updated.ok) return { ok: false, value, applied: false, ...updated };
+    this.reasoningIndex = reasoningIndex;
+    if (this.agents[this.selected]) {
+      this.agents[this.selected].reasoningIndex = reasoningIndex;
+      this.agents[this.selected].reasoning = value;
+      this.agents[this.selected].fastMode = value === 'minimal';
+    }
+    this.fastMode = value === 'minimal';
     this.emitState(lt('bridge.reasoning', { value }));
-    return value;
+    return { ok: true, value, applied: true, ...updated };
   }
 
   async toggleFast() {
-    this.fastMode = !this.fastMode;
-    if (this.fastMode) this.setReasoning(0);
-    else if (this.reasoningIndex === 0) this.setReasoning(2);
-    this.emitState(this.fastMode ? lt('bridge.fastOn') : lt('bridge.fastOff'));
-    return this.fastMode;
+    const agent = this.agents[this.selected];
+    const nextFastMode = !this.fastMode;
+    // Fast is a CLI slash command. Keep the pad and the visible CLI on the
+    // same path so pressing “Fast Off” really executes `/fast` there.
+    const updated = await this.send('/fast');
+    if (!updated?.ok) return { ok: false, fastMode: this.fastMode, applied: false, ...updated };
+    this.fastMode = nextFastMode;
+    if (agent) agent.fastMode = nextFastMode;
+    this.emitState(nextFastMode ? lt('bridge.fastOn') : lt('bridge.fastOff'));
+    return { ok: true, fastMode: nextFastMode, applied: true };
   }
 
   async togglePlan() {
@@ -1084,17 +1354,15 @@ class CodexBridge extends EventEmitter {
     if (agent?.status === 'thinking' || agent?.status === 'working') {
       return { ok: false, busy: true, error: 'Wait for the current response to finish before changing models' };
     }
-    try {
-      const focus = await this.ensureAgentCliWindow(slot, { focus: true });
-      if (!focus?.ok) return { ok: false, error: focus?.error || focus?.reason || 'Codex CLI unavailable', slot };
-      await mac.submitToCli(slot, `/model ${model}`);
-      if (agent) agent.model = model;
+    const updated = await this._updateSelectedThreadSettings({ model });
+    if (updated.ok) {
       this.emitState(`Codex · ${model}`);
-      return { ok: true, slot, model, mode: 'cli' };
-    } catch (error) {
-      this.emit('log', `model switch cli: ${error.message}`);
-      return { ok: false, error: error.message, slot };
+      return { ok: true, slot, model, mode: 'app-server', applied: true };
     }
+    const picker = await this.openModelPicker();
+    return picker?.ok
+      ? { ...picker, modelPicker: true, slot, error: 'Codex requires the model picker for this unlinked conversation' }
+      : { ok: false, error: updated.error || picker?.error || 'Codex model unavailable', slot };
   }
 
   async skill(name) {
@@ -1113,7 +1381,7 @@ class CodexBridge extends EventEmitter {
       // The visible CLI owns the session. Starting a hidden app-server thread here
       // creates a phantom id with no rollout, so later resume/fork operations fail.
       this.agents[slot] = {
-        name: 'New task', status: 'idle', cwd: this._configuredWorkingDirectory(), threadId: null, turnId: null, approvalId: null,
+        name: this._slotName(slot), status: 'idle', cwd: this._configuredWorkingDirectory(slot), threadId: null, turnId: null, approvalId: null,
       };
     }
     // Always open/focus the visible CLI for that slot

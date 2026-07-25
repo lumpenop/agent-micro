@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, globalShortcut, shell, Menu, dialog, net } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, globalShortcut, shell, Menu, dialog, net, Tray, nativeImage } = require('electron');
 const fs = require('fs');
 const os = require('os');
 const { execFile, spawn } = require('child_process');
@@ -7,17 +7,245 @@ const { createBridge, focusCodexDesktop } = require('./providers/create-bridge')
 const codexSettings = require('./codex-settings');
 const codexUsage = require('./codex-usage');
 const padPrefs = require('./pad-prefs');
-const trial = require('./trial');
 const i18n = require('./i18n');
 const mac = require('./platform/mac');
 const skillManager = require('./skill-manager');
+const whisperModel = require('./whisper-model');
+const toolInstaller = require('./tool-installer');
+const agentRules = require('./agent-rules');
 const { detectDevCommand } = require('./dev-runner');
 const { findCodexNative } = require('./providers/codex-bridge');
 
 let mainWindow = null;
 let bridge = null;
 let activeProvider = 'codex';
+let statusTray = null;
+let statusTrayTimer = null;
+let statusTrayRefreshing = false;
+let statusTrayUsage = null;
 const devServers = new Map();
+
+function trayResetText(epochSeconds) {
+  if (!epochSeconds) return 'reset time unavailable';
+  const seconds = Math.max(0, Number(epochSeconds) - Math.floor(Date.now() / 1000));
+  if (seconds <= 0) return 'reset due now';
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours >= 24) return `reset in ${Math.floor(hours / 24)}d ${hours % 24}h`;
+  return `reset in ${hours}h ${minutes}m`;
+}
+
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.show();
+  mainWindow.focus();
+  syncPadHotkeyContext();
+}
+
+function openTrayPanel(panel) {
+  showMainWindow();
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('app:openPanel', panel);
+}
+
+function trayDurationLabel(seconds) {
+  const value = Math.max(0, Number(seconds) || 0);
+  if (value % 3600 === 0) return `${value / 3600}h`;
+  if (value % 60 === 0) return `${value / 60}m`;
+  return `${value}s`;
+}
+
+function trayTokenLabel(tokens) {
+  const value = Number(tokens) || 0;
+  if (value === 0) return 'Auto';
+  if (value % 1000 === 0) return `${Math.round(value / 1000)}k`;
+  return `${value}`;
+}
+
+function traySettingItems({ values, current, onSelect, format = (value) => String(value) }) {
+  const options = [...new Set([...values, current])].sort((a, b) => a - b);
+  return options.map((value) => ({
+    label: format(value),
+    type: 'radio',
+    checked: Number(current) === Number(value),
+    click: () => onSelect(value),
+  }));
+}
+
+function trayToggleItem(label, checked, onToggle) {
+  return {
+    label: `${label} · ${checked ? 'On' : 'Off'}`,
+    type: 'checkbox',
+    checked: !!checked,
+    click: (item) => onToggle(item.checked),
+  };
+}
+
+function updateStatusTrayMenu(usage = null) {
+  if (!statusTray) return;
+  const settings = codexSettings.load();
+  const rate = usage?.rateLimit;
+  const used = rate?.usedPercent != null ? `${rate.usedPercent}% used` : 'Usage unavailable';
+  const weekly = rate?.secondary?.usedPercent != null ? `${rate.secondary.usedPercent}% used` : 'unavailable';
+  const reset = trayResetText(rate?.resetsAt);
+  const credits = rate?.resetCredits?.availableCount;
+  const saveTraySetting = (partial) => {
+    try {
+      codexSettings.save(partial);
+      updateStatusTrayMenu(usage);
+    } catch {
+      // The full settings window can show validation errors; keep the tray usable.
+    }
+  };
+  const ramItems = traySettingItems({
+    values: [1024, 2048, 4096, 8192, 16384],
+    current: settings.ram_warning_mb,
+    format: (value) => `${value >= 1024 ? `${value / 1024} GB` : `${value} MB`}`,
+    onSelect: (value) => saveTraySetting({ ram_warning_mb: value }),
+  });
+  const runtimeItems = traySettingItems({
+    values: [1800, 3600, 7200, 14400, 28800, 43200, 86400],
+    current: settings.job_max_runtime_seconds,
+    format: trayDurationLabel,
+    onSelect: (value) => saveTraySetting({ job_max_runtime_seconds: value }),
+  });
+  const toolTimeoutItems = traySettingItems({
+    values: [60, 300, 900, 1800, 3600],
+    current: settings.tool_timeout_sec,
+    format: trayDurationLabel,
+    onSelect: (value) => saveTraySetting({ tool_timeout_sec: value }),
+  });
+  const startupTimeoutItems = traySettingItems({
+    values: [10, 30, 60, 120, 300],
+    current: settings.startup_timeout_sec,
+    format: trayDurationLabel,
+    onSelect: (value) => saveTraySetting({ startup_timeout_sec: value }),
+  });
+  const presetItems = ['saver', 'balanced', 'performance', 'custom'].map((value) => ({
+    label: value[0].toUpperCase() + value.slice(1),
+    type: 'radio',
+    checked: settings.resource_preset === value,
+    click: () => saveTraySetting({ resource_preset: value }),
+  }));
+  const threadItems = traySettingItems({
+    values: [1, 2, 4, 6, 8, 12],
+    current: settings.max_threads,
+    format: (value) => `${value} agents`,
+    onSelect: (value) => saveTraySetting({ max_threads: value }),
+  });
+  const depthItems = traySettingItems({
+    values: [0, 1, 2, 3, 4],
+    current: settings.max_depth,
+    format: (value) => `${value} level${value === 1 ? '' : 's'}`,
+    onSelect: (value) => saveTraySetting({ max_depth: value }),
+  });
+  const compactItems = traySettingItems({
+    values: [0, 32000, 64000, 128000, 256000, 512000],
+    current: settings.model_auto_compact_token_limit,
+    format: trayTokenLabel,
+    onSelect: (value) => saveTraySetting({ model_auto_compact_token_limit: value }),
+  });
+  const outputItems = traySettingItems({
+    values: [0, 16000, 32000, 64000, 128000, 256000],
+    current: settings.tool_output_token_limit,
+    format: trayTokenLabel,
+    onSelect: (value) => saveTraySetting({ tool_output_token_limit: value }),
+  });
+  const webSearchItems = ['', 'cached', 'indexed', 'live', 'disabled'].map((value) => ({
+    label: value ? value[0].toUpperCase() + value.slice(1) : 'Auto',
+    type: 'radio',
+    checked: settings.web_search === value,
+    click: () => saveTraySetting({ web_search: value }),
+  }));
+  statusTray.setToolTip(`Codex · 5h ${used} · 7d ${weekly} · ${reset}`);
+  statusTray.setContextMenu(Menu.buildFromTemplate([
+    { label: `Codex · ${used}`, enabled: false },
+    { label: `Weekly quota · ${weekly}`, enabled: false },
+    { label: reset, enabled: false },
+    { label: credits == null ? 'Reset credits unavailable' : `${credits} reset credit(s) available`, enabled: false },
+    { type: 'separator' },
+    { label: 'Open Agent Micro', click: showMainWindow },
+    { label: 'Refresh usage', click: () => refreshStatusTray() },
+    { type: 'separator' },
+    { label: 'Settings', click: () => openTrayPanel('settings') },
+    { label: 'Git', click: () => openTrayPanel('git') },
+    { label: 'MCP', click: () => openTrayPanel('mcp') },
+    { label: 'Skills & Plugins', click: () => openTrayPanel('skills') },
+    { label: 'User Guide', click: () => openTrayPanel('guide') },
+    { label: 'Key Map', click: () => openTrayPanel('keymap') },
+    { label: 'Global Rules', click: () => openTrayPanel('rules') },
+    { type: 'separator' },
+    {
+      label: 'Quick settings',
+      submenu: [
+        {
+          label: 'Runtime & limits',
+          submenu: [
+            { label: 'Startup timeout', submenu: startupTimeoutItems },
+            { label: 'Tool timeout', submenu: toolTimeoutItems },
+            { label: 'Max job runtime', submenu: runtimeItems },
+            { type: 'separator' },
+            { label: 'Max parallel agents', submenu: threadItems },
+            { label: 'Agent nesting depth', submenu: depthItems },
+          ],
+        },
+        {
+          label: 'Resources & context',
+          submenu: [
+            { label: `RAM warning · ${settings.ram_warning_mb} MB`, submenu: ramItems },
+            { label: 'Resource preset', submenu: presetItems },
+            { label: 'Auto-compact context', submenu: compactItems },
+            { label: 'Tool output limit', submenu: outputItems },
+            { label: `Token rollout budget · ${settings.rollout_budget_enabled ? 'On' : 'Off'}`, type: 'checkbox', checked: !!settings.rollout_budget_enabled, click: (item) => saveTraySetting({ rollout_budget_enabled: item.checked }) },
+          ],
+        },
+        {
+          label: 'Behavior',
+          submenu: [
+            trayToggleItem('Interrupt message', settings.interrupt_message, (value) => saveTraySetting({ interrupt_message: value })),
+            trayToggleItem('Prevent idle sleep', settings.prevent_idle_sleep, (value) => saveTraySetting({ prevent_idle_sleep: value })),
+            { label: 'Web search', submenu: webSearchItems },
+          ],
+        },
+        { type: 'separator' },
+        { label: 'Open full settings', click: showMainWindow },
+      ],
+    },
+    { type: 'separator' },
+    { label: 'Quit Agent Micro', click: () => app.quit() },
+  ]));
+}
+
+async function refreshStatusTray() {
+  if (!statusTray || statusTrayRefreshing || trialLocked()) return;
+  statusTrayRefreshing = true;
+  try {
+    const rateLimitSnapshot = await bridge?.readRateLimits?.();
+    const usage = codexUsage.getUsage({ rateLimitSnapshot });
+    statusTrayUsage = usage;
+    const used = usage.rateLimit?.usedPercent;
+    const weekly = usage.rateLimit?.secondary?.usedPercent;
+    statusTray.setTitle(`5h ${used != null ? `${used}%` : '—'} · 7d ${weekly != null ? `${weekly}%` : '—'}`);
+    updateStatusTrayMenu(usage);
+  } catch {
+    statusTrayUsage = null;
+    statusTray.setTitle('—');
+    updateStatusTrayMenu(null);
+  } finally {
+    statusTrayRefreshing = false;
+  }
+}
+
+function createStatusTray() {
+  if (process.platform !== 'darwin' || statusTray) return;
+  // A title-only status item keeps the menu bar legible at small sizes.
+  statusTray = new Tray(nativeImage.createEmpty());
+  statusTray.setTitle('—');
+  statusTray.on('click', showMainWindow);
+  updateStatusTrayMenu();
+  refreshStatusTray();
+  statusTrayTimer = setInterval(refreshStatusTray, 10000);
+}
 
 function selectedWorkspace() {
   const agent = bridge?.agents?.[bridge?.selected || 0];
@@ -36,11 +264,11 @@ function stopDevServer(cwd) {
 }
 
 function trialLocked() {
-  return trial.isLocked();
+  return false;
 }
 
 function trialDenied() {
-  return { ok: false, error: 'trial expired', trialExpired: true };
+  return { ok: false, error: 'unavailable' };
 }
 /** Global pad shortcuts armed while Codex CLI terminal is frontmost */
 let cliPadGlobalsArmed = false;
@@ -52,7 +280,7 @@ const PAD_HOTKEY_DEFS = [
   { key: 'W', cmd: 'approve' },
   { key: 'E', cmd: 'decline' },
   { key: 'R', cmd: 'fork' },
-  { key: 'D', cmd: 'mic', phase: 'toggle' },
+  { key: 'D', cmd: 'review' },
   { key: 'F', cmd: 'send' },
   { key: 'Tab', cmd: 'touch' },
   { key: 'Up', cmd: 'joy', dir: 'up' },
@@ -306,7 +534,7 @@ function attachPadHotkeys(win) {
       return;
     }
 
-    // Typing in settings / license / voice sink — allow normal keys + ⌘C/V/…
+    // Typing in settings / voice sink — allow normal keys + ⌘C/V/…
     if (win.__padHotkeysSuspended) return;
 
     // Pad focused: swallow other modifier shortcuts so they can't steal focus
@@ -345,7 +573,7 @@ function matchPadChord(mod, flags, key, code) {
     w: { cmd: 'approve' },
     e: { cmd: 'decline' },
     r: { cmd: 'fork' },
-    d: { cmd: 'mic', phase: 'toggle' },
+    d: { cmd: 'review' },
     f: { cmd: 'send' },
   };
   if (cmdKeys[lower]) return cmdKeys[lower];
@@ -386,6 +614,9 @@ function installAppMenu() {
   const isMac = process.platform === 'darwin';
   const { t } = require('./i18n');
   const loc = padPrefs.getLocale();
+  const openPanel = (panel) => () => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('app:openPanel', panel);
+  };
   const template = [
     ...(isMac
       ? [
@@ -403,6 +634,15 @@ function installAppMenu() {
           },
         ]
       : []),
+    // These are intentionally top-level macOS menus so they are visible in
+    // the system menu bar instead of being hidden inside one submenu.
+    { label: 'Git', click: openPanel('git') },
+    { label: 'MCP', click: openPanel('mcp') },
+    { label: 'Skills & Plugins', click: openPanel('skills') },
+    { label: 'User Guide', click: openPanel('guide') },
+    { label: 'Key Map', click: openPanel('keymap') },
+    { label: 'Settings', click: openPanel('settings') },
+    { label: 'Global Rules', click: openPanel('rules') },
     {
       label: t(loc, 'menu.edit'),
       submenu: [
@@ -467,6 +707,9 @@ function createWindow() {
 
   mainWindow.setAlwaysOnTop(true, 'floating');
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  // Re-apply after the window exists as well. This keeps the macOS menu
+  // available when dev mode reloads/recreates the BrowserWindow.
+  installAppMenu();
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
   mainWindow.webContents.on('did-finish-load', () => {
@@ -544,7 +787,7 @@ function ensureBridge({ autoStart = true, provider } = {}) {
 
 /** Switch the active provider at runtime. */
 async function switchProvider(provider) {
-  if (provider !== 'codex' && provider !== 'claude') {
+  if (!['codex', 'api'].includes(provider)) {
     return { ok: false, error: `Unknown provider: ${provider}` };
   }
   if (provider === activeProvider) return { ok: true, provider };
@@ -564,10 +807,12 @@ app.whenReady().then(async () => {
   const userData = app.getPath('userData');
   codexSettings.setUserDataPath(userData);
   padPrefs.setUserDataPath(userData);
-  trial.setUserDataPath(userData);
+  whisperModel.setUserDataPath(userData);
+  toolInstaller.setUserDataPath(userData);
 
   installAppMenu();
   createWindow();
+  createStatusTray();
 
   const locked = trialLocked();
   if (!locked) {
@@ -592,6 +837,12 @@ app.whenReady().then(async () => {
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+  app.on('before-quit', () => {
+    if (statusTrayTimer) clearInterval(statusTrayTimer);
+    statusTrayTimer = null;
+    statusTray?.destroy();
+    statusTray = null;
   });
 });
 
@@ -794,20 +1045,6 @@ ipcMain.handle('window:suspendPadHotkeys', (_e, suspended) => {
   return true;
 });
 
-ipcMain.handle('trial:get', () => trial.getStatus());
-ipcMain.handle('trial:openSponsor', () => {
-  const url = trial.getSponsorUrl();
-  if (!url) return { ok: false, error: 'no sponsor url' };
-  shell.openExternal(url);
-  return { ok: true };
-});
-ipcMain.handle('trial:activate', (_e, key) => {
-  const r = trial.activateLicense(key);
-  if (!r?.ok) return r;
-  ensureUnlockedRuntime();
-  return { ...r, trial: trial.getStatus() };
-});
-
 ipcMain.handle('codexSettings:get', () => {
   if (trialLocked()) return { settings: null, meta: null, trialExpired: true };
   return {
@@ -821,6 +1058,7 @@ ipcMain.handle('codexSettings:save', async (_e, partial) => {
   try {
     merged = { ...codexSettings.load(), ...(partial || {}) };
     codexSettings.validateWritableRoots(codexSettings.normalize(merged).writable_roots);
+    codexSettings.validateAgentSlots(codexSettings.normalize(merged).agent_slots);
   } catch (error) {
     return { ok: false, error: error.message };
   }
@@ -837,7 +1075,9 @@ ipcMain.handle('codexSettings:save', async (_e, partial) => {
     });
     if (response !== 1) return { ok: false, canceled: true, reason: 'risk-canceled' };
   }
-  return codexSettings.save(partial || {});
+  const result = codexSettings.save(partial || {});
+  if (result?.ok) updateStatusTrayMenu(statusTrayUsage);
+  return result;
 });
 ipcMain.handle('codexSettings:chooseWorkingDirectory', async () => {
   if (trialLocked()) return trialDenied();
@@ -847,14 +1087,40 @@ ipcMain.handle('codexSettings:chooseWorkingDirectory', async () => {
   });
   return r.canceled ? { ok: false, canceled: true } : { ok: true, path: r.filePaths?.[0] || '' };
 });
+function rulesWorkingDirectory(cwd) {
+  const candidates = [
+    cwd,
+    bridge?.agents?.[bridge?.selected || 0]?.projectRoot,
+    bridge?.agents?.[bridge?.selected || 0]?.cwd,
+    codexSettings.load().working_directory,
+  ];
+  for (const candidate of candidates) {
+    const value = String(candidate || '').trim();
+    try { if (path.isAbsolute(value) && fs.statSync(value).isDirectory()) return value; } catch {}
+  }
+  return '';
+}
+ipcMain.handle('agentRules:getProject', (_event, cwd) => {
+  if (trialLocked()) return trialDenied();
+  return agentRules.loadProject(rulesWorkingDirectory(cwd));
+});
+ipcMain.handle('agentRules:saveProject', (_event, cwd, rules) => {
+  if (trialLocked()) return trialDenied();
+  try {
+    return agentRules.saveProject(rulesWorkingDirectory(cwd), rules);
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
 ipcMain.handle('resources:getUsage', () => {
   const metrics = app.getAppMetrics();
   const totalKb = metrics.reduce((sum, metric) => sum + Number(metric.memory?.workingSetSize || 0), 0);
   return { ok: true, ramMb: Math.round(totalKb / 1024), processCount: metrics.length };
 });
-ipcMain.handle('codex:usage', () => {
+ipcMain.handle('codex:usage', async () => {
   const current = bridge?.agents?.[bridge?.selected]?.rolloutPath || null;
-  return codexUsage.getUsage({ currentRolloutPath: current });
+  const rateLimitSnapshot = await bridge?.readRateLimits?.();
+  return codexUsage.getUsage({ currentRolloutPath: current, rateLimitSnapshot });
 });
 ipcMain.handle('mcp:list', async () => {
   if (trialLocked()) return trialDenied();
@@ -1040,6 +1306,32 @@ ipcMain.handle('voice:prepareCapture', async () => {
   if (trialLocked()) return trialDenied();
   return (await bridge?.prepareVoiceDictation?.()) || { ok: false, error: 'voice unavailable' };
 });
+ipcMain.handle('voice:ensureModel', async () => {
+  if (trialLocked()) return trialDenied();
+  try {
+    return await whisperModel.ensureModel((progress) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('voice:modelProgress', progress);
+      }
+    });
+  } catch (error) {
+    return { ok: false, code: 'MODEL_DOWNLOAD', error: error.message };
+  }
+});
+ipcMain.handle('tools:ensure', async (_event, provider) => {
+  if (trialLocked()) return trialDenied();
+  if (provider === 'api') return { ok: true, downloaded: false };
+  if (provider !== 'codex') return { ok: false, error: 'Only Codex CLI is supported' };
+  try {
+    return await toolInstaller.install(provider, (progress) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('tools:progress', { provider, ...progress });
+      }
+    });
+  } catch (error) {
+    return { ok: false, code: 'TOOL_DOWNLOAD', error: error.message };
+  }
+});
 ipcMain.handle('voice:transcribeAudio', async (_e, bytes, mimeType) => {
   if (trialLocked()) return trialDenied();
   const data = Buffer.from(bytes || []);
@@ -1049,10 +1341,10 @@ ipcMain.handle('voice:transcribeAudio', async (_e, bytes, mimeType) => {
   const resourceRoot = app.isPackaged ? process.resourcesPath : path.join(__dirname, '..', 'assets');
   const arch = process.arch === 'x64' ? 'darwin-x64' : 'darwin-arm64';
   const whisper = path.join(resourceRoot, 'bin', arch, 'whisper-cli');
-  const model = path.join(resourceRoot, 'models', 'ggml-base.bin');
+  const model = whisperModel.findModel();
   try {
     if (!fs.existsSync(whisper)) return { ok: false, code: 'WHISPER_MISSING', error: `Whisper 없음: ${arch}` };
-    if (!fs.existsSync(model)) return { ok: false, code: 'MODEL_MISSING', error: 'Whisper 모델 없음' };
+    if (!model || !fs.existsSync(model)) return { ok: false, code: 'MODEL_MISSING', error: 'Whisper 모델을 먼저 설치하세요' };
     fs.writeFileSync(wav, data);
     let text = await new Promise((resolve, reject) => {
       execFile(whisper, ['-ng', '-m', model, '-f', wav, '-l', 'ko', '-nt', '-np', '-nf', '-sns'],
@@ -1220,9 +1512,7 @@ ipcMain.handle('codex:linkInfo', () => {
 ipcMain.handle('codex:loginStatus', async () => {
   if (trialLocked()) return { ok: false, trialExpired: true };
 
-  // Check both Codex and Claude login status independently
   let codexStatus = { hasCodex: false, loggedIn: false };
-  let claudeStatus = { hasBinary: false, loggedIn: false };
 
   try {
     const { CodexBridge, findCodexNative } = require('./providers/codex-bridge');
@@ -1234,23 +1524,11 @@ ipcMain.handle('codex:loginStatus', async () => {
     }
   } catch { /* ignore */ }
 
-  try {
-    const { whichSync } = require('./providers/base-bridge');
-    if (whichSync('claude')) {
-      const { ClaudeBridge } = require('./providers/claude-bridge');
-      const tempBridge = new ClaudeBridge();
-      claudeStatus = await tempBridge.checkLogin();
-    } else {
-      claudeStatus = { hasBinary: false, loggedIn: false };
-    }
-  } catch { /* ignore */ }
-
   return {
     hasCodex: codexStatus.hasCodex,
-    hasBinary: claudeStatus.hasBinary,
-    loggedIn: activeProvider === 'claude' ? claudeStatus.loggedIn : codexStatus.loggedIn,
+    hasBinary: false,
+    loggedIn: codexStatus.loggedIn,
     codex: codexStatus,
-    claude: claudeStatus,
     currentProvider: activeProvider,
   };
 });

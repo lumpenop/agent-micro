@@ -2,12 +2,10 @@ packages:
   - 'apps/*'
 
 allowBuilds:
-  '@anthropic-ai/claude-code': true
   electron: true
   electron-winstaller: false
 onlyBuiltDependencies:
   - electron
-  - '@anthropic-ai/claude-code'
 minimumReleaseAgeExclude:
   - '@openai/codex'
   - '@openai/codex-darwin-arm64'
@@ -16,12 +14,3 @@ minimumReleaseAgeExclude:
   - '@openai/codex-linux-x64'
   - '@openai/codex-win32-arm64'
   - '@openai/codex-win32-x64'
-  - '@anthropic-ai/claude-code'
-  - '@anthropic-ai/claude-code-darwin-arm64'
-  - '@anthropic-ai/claude-code-darwin-x64'
-  - '@anthropic-ai/claude-code-linux-arm64'
-  - '@anthropic-ai/claude-code-linux-x64'
-  - '@anthropic-ai/claude-code-linux-x64-musl'
-  - '@anthropic-ai/claude-code-linux-arm64-musl'
-  - '@anthropic-ai/claude-code-win32-x64'
-  - '@anthropic-ai/claude-code-win32-arm64'

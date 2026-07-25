@@ -18,7 +18,7 @@ export const DEFAULT_KEY_ICONS = {
   approve: 'check',
   decline: 'times',
   fork: 'fork',
-  mic: 'mic',
+  review: 'bot',
   send: 'terminal',
 };
 

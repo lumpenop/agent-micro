@@ -21,6 +21,12 @@ const { t: tRaw, normalizeLocale } = window.agentI18n || {
 const REASONING = ['minimal', 'low', 'medium', 'high', 'xhigh'];
 const QUICK_MODEL = 'gpt-5.6-terra';
 const DEEP_MODEL = 'gpt-5.6-sol';
+const MODEL_LABELS = {
+  'gpt-5.6-terra': 'Terra',
+  'gpt-5.6-sol': 'Sol',
+  'gpt-5.6-luna': 'Luna',
+};
+const TOKEN_SAVER_LABELS = ['Sleep', 'Saver', 'Balanced', 'Deep', 'Max'];
 const api = window.codexDesktop;
 const STORAGE_KEY = 'agent-micro-key-icons-v1';
 const CUSTOM_ICONS_KEY = 'agent-micro-custom-icons-v1';
@@ -94,8 +100,11 @@ function loadKeyIcons() {
   } catch {
     stored = {};
   }
-  // Migrate old Codex brand mark → Lucide send
+  // Migrate old key names/icons
   if (stored.send === 'codex' || stored.send === 'send') stored.send = 'terminal';
+  if (!stored.review && stored.mic) stored.review = stored.mic;
+  if (stored.review === 'mic' || stored.review === 'microphone' || stored.review === 'spark' || stored.review === 'review') stored.review = 'bot';
+  delete stored.mic;
   const merged = { ...DEFAULT_KEY_ICONS, ...stored };
   for (const [cmd, id] of Object.entries(merged)) {
     if (!isPickerIcon(id)) merged[cmd] = DEFAULT_KEY_ICONS[cmd];
@@ -162,6 +171,7 @@ const state = {
   autoContinueEnabled: false,
   autoContinueDelaySec: 30,
   autoContinueMaxRuns: 1,
+  agentSlots: [],
   autoContinueCounts: Array.from({ length: 6 }, () => 0),
   autoContinueIssued: Array.from({ length: 6 }, () => false),
   autoContinueTimers: Array.from({ length: 6 }, () => null),
@@ -214,12 +224,6 @@ function applyStaticI18n() {
   if (kBody && kPanel && !kPanel.hidden) {
     kBody.innerHTML = renderGuideList(buildKeymapItems());
   }
-  if (state.trialExpired) {
-    const sponsor = document.getElementById('trial-sponsor');
-    const hint = document.getElementById('trial-lock-hint');
-    const hasUrl = !!sponsor && !sponsor.disabled;
-    if (hint) hint.textContent = hasUrl ? t('trial.hint.url') : t('trial.hint.noUrl');
-  }
 }
 
 function applyLocale(locale) {
@@ -263,31 +267,34 @@ const gitClose = document.getElementById('git-side-close');
 const gitRefresh = document.getElementById('git-refresh');
 let gitRefreshTimer = null;
 let gitStatusSnapshot = null;
-shellEl?.classList.add('git-host');
-const trialLockEl = document.getElementById('trial-lock');
-const trialSponsorBtn = document.getElementById('trial-sponsor');
-const trialCloseBtn = document.getElementById('trial-close');
-const trialHintEl = document.getElementById('trial-lock-hint');
-const trialKeyInput = document.getElementById('trial-license-key');
-const trialActivateBtn = document.getElementById('trial-activate');
 const hud = {
   link: document.getElementById('hud-link'),
   task: document.getElementById('hud-task'),
   folder: document.getElementById('hud-folder'),
   status: document.getElementById('hud-status'),
-  reason: document.getElementById('hud-reason'),
+  fast: document.getElementById('hud-fast'),
+  tokenSaver: document.getElementById('hud-token-saver'),
+  tokenMeter: document.getElementById('hud-token-meter'),
   action: document.getElementById('hud-action'),
   model: document.getElementById('hud-model'),
+  modelLabel: document.getElementById('hud-model-label'),
   modelChange: document.getElementById('hud-model-change'),
   continueStatus: document.getElementById('hud-continue-status'),
   continueButton: document.getElementById('hud-continue'),
   usage: document.getElementById('hud-usage'),
+  badges: document.getElementById('hud-badges'),
+  autoBadge: document.getElementById('hud-auto-badge'),
+  devBadge: document.getElementById('hud-dev-badge'),
 };
 
 async function setGitPanelOpen(open) {
   const next = !!open;
   if (gitPanel) gitPanel.hidden = !next;
-  shellEl?.classList.toggle('git-open', next);
+  // The Git rail must not reserve/reposition space while hidden. Only move
+  // the keyboard aside when the actual panel is visible.
+  // The Git rail is fixed-position UI. Never re-align or resize the pad when
+  // it opens; the main body must remain perfectly still.
+  shellEl?.classList.remove('git-host', 'git-open');
   gitButton?.classList.toggle('is-active', next);
   gitButton?.setAttribute('aria-expanded', String(next));
   await api?.setGitPanel?.(next);
@@ -435,39 +442,14 @@ function flashAction(text) {
   if (text && hud.action) hud.action.textContent = text;
 }
 
-function applyTrialLock(status) {
-  const locked = !!(status?.locked ?? status?.expired);
-  state.trialExpired = locked;
-  shellEl?.classList.toggle('trial-expired', locked);
-  if (!locked) {
-    trialLockEl?.setAttribute('hidden', '');
-    return;
-  }
-  hideLoginGate();
-  closeGuide();
-  closeKeymap();
-  closeSettings();
-  closeIconPicker();
-  trialLockEl?.removeAttribute('hidden');
-  const hasUrl = !!status?.sponsorUrl;
-  if (trialSponsorBtn) {
-    trialSponsorBtn.disabled = !hasUrl;
-  }
-  if (trialHintEl) {
-    trialHintEl.textContent = hasUrl ? t('trial.hint.url') : t('trial.hint.noUrl');
-  }
-  flashAction(t('trial.flash'));
-}
-
 function trialBlocks() {
-  return !!state.trialExpired;
 }
 
 function loginBlocks() {
   return !!state.needsCodexLogin;
 }
 
-/** Pad / hotkeys blocked while trial expired or Codex login gate is up */
+/** Pad / hotkeys blocked while the Codex login gate is up */
 function padBlocks() {
   return trialBlocks() || loginBlocks();
 }
@@ -490,38 +472,37 @@ function updateLoginGateUI() {
     tile.classList.toggle('active', tile.dataset.provider === provider);
   });
 
-  if (provider === 'claude') {
-    if (btn) btn.textContent = t('loginGate.claudeBtn');
-    if (lead) lead.textContent = t('loginGate.claudeLead');
-    if (hint) hint.textContent = t('loginGate.claudeHint');
-  } else {
-    if (btn) btn.textContent = t('loginGate.btn');
-    if (lead) lead.textContent = t('loginGate.codexLead');
-    if (hint) hint.textContent = t('loginGate.hint');
-  }
+  if (btn) btn.textContent = t('loginGate.btn');
+  if (lead) lead.textContent = t('loginGate.codexLead');
+  if (hint) hint.textContent = t('loginGate.hint');
 
   // Check which binaries are available, auto-select the one that's installed
   api?.loginStatus?.().then((login) => {
     const codexTile = document.getElementById('login-pick-codex');
-    const claudeTile = document.getElementById('login-pick-claude');
     const codexInstalled = !!login?.hasCodex;
-    const claudeInstalled = !!login?.hasBinary;
 
     if (codexTile) codexTile.classList.toggle('busy', !codexInstalled);
-    if (claudeTile) claudeTile.classList.toggle('busy', !claudeInstalled);
-
-    // Auto-select the installed CLI over the one that's missing
-    if (!codexInstalled && claudeInstalled && provider === 'codex') {
-      _pendingLoginProvider = 'claude';
-      updateLoginGateUI();
-    } else if (!claudeInstalled && codexInstalled && provider === 'claude') {
-      _pendingLoginProvider = 'codex';
-      updateLoginGateUI();
+    const selectedMissing = !codexInstalled;
+    if (selectedMissing) {
+      if (btn) btn.textContent = t('loginGate.installCodex');
+      if (hint) hint.textContent = t('loginGate.installHint');
     }
   }).catch(() => {});
 }
 
-function showLoginGate({ missingCodex = false, missingClaude = false } = {}) {
+async function ensureProviderTool(provider) {
+  const login = await api?.loginStatus?.();
+  const installed = !!login?.hasCodex;
+  if (installed) return { ok: true, downloaded: false };
+  const name = 'Codex CLI';
+  flashAction(t('flash.toolDownload', { name }));
+  const result = await api?.ensureProviderTool?.(provider);
+  if (!result?.ok) flashAction(result?.error || t('flash.toolFail'));
+  else flashAction(t('flash.toolReady', { name }));
+  return result || { ok: false };
+}
+
+function showLoginGate({ missingCodex = false } = {}) {
   state.needsCodexLogin = true;
   shellEl?.classList.add('login-required');
   closeGuide();
@@ -531,11 +512,6 @@ function showLoginGate({ missingCodex = false, missingClaude = false } = {}) {
   loginGateEl?.removeAttribute('hidden');
   updateLoginGateUI();
 
-  // If both are missing, show appropriate messaging
-  if (missingCodex && missingClaude) {
-    const hint = loginGateHintEl;
-    if (hint) hint.textContent = t('loginGate.bothMissing');
-  }
   flashAction(t('loginGate.flash'));
 }
 
@@ -552,8 +528,6 @@ async function ensureCodexLoginOnEntry() {
     const loginStatus = await api?.loginStatus?.();
     const codexInstalled = !!loginStatus?.hasCodex;
     const codexLoggedIn = codexInstalled && !!loginStatus?.codex?.loggedIn;
-    const claudeInstalled = !!loginStatus?.hasBinary;
-    const claudeLoggedIn = claudeInstalled && !!loginStatus?.claude?.loggedIn;
 
     // Prefer whichever is already logged in
     if (codexLoggedIn) {
@@ -562,25 +536,10 @@ async function ensureCodexLoginOnEntry() {
       await connectAgent({ forceLogin: false });
       return;
     }
-    if (claudeLoggedIn) {
-      state.provider = 'claude';
-      hideLoginGate();
-      await connectAgent({ forceLogin: false });
-      return;
-    }
-
-    // Neither logged in — pick the one that's installed
-    if (claudeInstalled && !codexInstalled) {
-      _pendingLoginProvider = 'claude';
-    } else if (codexInstalled) {
-      _pendingLoginProvider = 'codex';
-    }
-    // If both missing, keep the default (codex) — user can pick in the gate
-
-    state.provider = _pendingLoginProvider;
+    _pendingLoginProvider = 'codex';
+    state.provider = 'codex';
     showLoginGate({
       missingCodex: !codexInstalled,
-      missingClaude: !claudeInstalled,
     });
   } catch {
     showLoginGate();
@@ -676,6 +635,19 @@ async function startRecording({ latched = false } = {}) {
   micStarting = true;
   micCancelStart = false;
   pendingMicLatch = latched;
+  flashAction(t('flash.voiceModelCheck'));
+  const model = await api?.ensureVoiceModel?.();
+  if (!model?.ok) {
+    micStarting = false;
+    flashAction(model?.error || t('flash.voiceModelFail'));
+    return;
+  }
+  if (model.downloaded) {
+    micStarting = false;
+    micCancelStart = false;
+    flashAction(t('flash.voiceModelReady'));
+    return;
+  }
   flashAction(t('flash.codexJump'));
   const prep = await api?.prepareVoiceCapture?.();
   if (!prep?.ok) {
@@ -770,7 +742,7 @@ const iconOnlineForm = document.getElementById('icon-online-search');
 const iconOnlineQuery = document.getElementById('icon-online-query');
 const iconOnlineStatus = document.getElementById('icon-online-status');
 const iconOnlineGrid = document.getElementById('icon-online-grid');
-const RECOMMENDED_AGENT_ICONS = ['simple-icons:openai', 'simple-icons:claude', 'simple-icons:anthropic', 'simple-icons:googlegemini', 'simple-icons:cursor', 'simple-icons:githubcopilot', 'simple-icons:windsurf', 'simple-icons:perplexity', 'simple-icons:mistralai'];
+const RECOMMENDED_AGENT_ICONS = ['simple-icons:openai', 'simple-icons:googlegemini', 'simple-icons:cursor', 'simple-icons:githubcopilot', 'simple-icons:windsurf', 'simple-icons:perplexity', 'simple-icons:mistralai'];
 
 function showIconGrid() {
   if (pickerGrid) pickerGrid.hidden = false;
@@ -878,6 +850,16 @@ function closeIconPicker() {
   pendingCustomIcon = null;
   showIconGrid();
   picker.hidden = true;
+}
+
+function closeAllOverlays() {
+  closeGuide();
+  closeKeymap();
+  closeSettings();
+  closeIconPicker();
+  closeMcp();
+  closeSkills();
+  if (gitPanel && !gitPanel.hidden) setGitPanelOpen(false);
 }
 
 function commitPendingCustomIcon() {
@@ -1006,9 +988,9 @@ function getGuideItems() {
       text: t('guide.connect.text'),
     },
     {
-      icons: ['mic'],
-      title: t('guide.mic.title'),
-      text: t('guide.mic.text'),
+      icons: ['review'],
+      title: t('guide.review.title'),
+      text: t('guide.review.text'),
     },
     { section: t('guide.sec.pad') },
     {
@@ -1032,11 +1014,6 @@ function getGuideItems() {
       text: t('guide.joy.text'),
     },
     { section: t('guide.sec.tips') },
-    {
-      icons: ['mic'],
-      title: t('guide.voice.title'),
-      text: t('guide.voice.text'),
-    },
     {
       key: t('guide.icon.key'),
       title: t('guide.icon.title'),
@@ -1092,9 +1069,9 @@ function buildKeymapItems(g = modGlyph()) {
       text: t('map.fork.text'),
     },
     {
-      icons: ['mic'],
-      title: `${g}D · Mic`,
-      text: t('map.mic.text'),
+      icons: ['review'],
+      title: `${g}D · Review`,
+      text: t('map.review.text'),
     },
     {
       icons: ['terminal'],
@@ -1374,6 +1351,30 @@ const usageMonthEl = document.getElementById('usage-month');
 const usageContextEl = document.getElementById('usage-context');
 const usageRateEl = document.getElementById('usage-rate');
 const usageMetaEl = document.getElementById('usage-meta');
+const usagePlanEl = document.getElementById('usage-plan');
+const usageShortLimitEl = document.getElementById('usage-short-limit');
+const usageLongLimitEl = document.getElementById('usage-long-limit');
+const usageShortResetEl = document.getElementById('usage-short-reset');
+const usageLongResetEl = document.getElementById('usage-long-reset');
+const usageCreditsEl = document.getElementById('usage-credits');
+const setGlobalAgentRules = document.getElementById('set-global-agent-rules');
+const setProjectAgentRules = document.getElementById('set-project-agent-rules');
+const setProjectRulesPath = document.getElementById('set-project-rules-path');
+const setAgentSlot = document.getElementById('set-agent-slot');
+const setSlotEnabled = document.getElementById('set-slot-enabled');
+const setSlotName = document.getElementById('set-slot-name');
+const setSlotRole = document.getElementById('set-slot-role');
+const setSlotRules = document.getElementById('set-slot-rules');
+const setSlotSkills = document.getElementById('set-slot-skills');
+const setSlotTools = document.getElementById('set-slot-tools');
+const setSlotModel = document.getElementById('set-slot-model');
+const setSlotReasoning = document.getElementById('set-slot-reasoning');
+const setSlotWorkingDirectory = document.getElementById('set-slot-working-directory');
+const setSlotSandbox = document.getElementById('set-slot-sandbox');
+const setSlotApproval = document.getElementById('set-slot-approval');
+const setSlotAutoContinue = document.getElementById('set-slot-auto-continue');
+const setSlotAutoDelay = document.getElementById('set-slot-auto-delay');
+const setSlotAutoMax = document.getElementById('set-slot-auto-max');
 const setAgentRole = document.getElementById('set-agent-role');
 const setAgentEditor = document.getElementById('set-agent-editor');
 const setAgentEnabled = document.getElementById('set-agent-enabled');
@@ -1388,6 +1389,9 @@ const setVerbosity = document.getElementById('set-verbosity');
 const setHooksEnabled = document.getElementById('set-hooks-enabled');
 const setPreventSleep = document.getElementById('set-prevent-sleep');
 let agentRoles = [];
+let agentSlots = [];
+let editingAgentSlotIndex = 0;
+let projectRulesState = { root: null, path: null, rules: '' };
 const setModel = document.getElementById('set-model');
 const setReasoning = document.getElementById('set-reasoning');
 const setPersonality = document.getElementById('set-personality');
@@ -1398,15 +1402,14 @@ const setStartup = document.getElementById('set-startup');
 const setTool = document.getElementById('set-tool');
 const setJob = document.getElementById('set-job');
 const setProxy = document.getElementById('set-proxy');
+const setApiBaseUrl = document.getElementById('set-api-base-url');
+const setApiKeyEnv = document.getElementById('set-api-key-env');
+const setApiModel = document.getElementById('set-api-model');
 const settingsHint = document.getElementById('settings-hint');
 const settingsSearch = document.getElementById('settings-search');
 const settingsBackupSelect = document.getElementById('settings-backup-select');
 const setCodexStatusEl = document.getElementById('set-codex-status');
-const setLicenseStatusEl = document.getElementById('set-license-status');
-const settingsLicenseKeyEl = document.getElementById('settings-license-key');
 const settingsCodexLoginBtn = document.getElementById('settings-codex-login');
-const settingsLicenseActivateBtn = document.getElementById('settings-license-activate');
-const settingsLicenseBuyBtn = document.getElementById('settings-license-buy');
 const setAutoContinue = document.getElementById('set-auto-continue');
 const setAutoContinueDelay = document.getElementById('set-auto-continue-delay');
 const setAutoContinueMax = document.getElementById('set-auto-continue-max');
@@ -1428,6 +1431,7 @@ function readAutoContinuePrefs() {
 
 function readSettingsForm() {
   commitAgentEditor();
+  commitAgentSlotEditor();
   return {
     working_directory: setWorkingDirectory?.value?.trim() || '',
     writable_roots: String(setWritableRoots?.value || '').split(/\r?\n/).map((v) => v.trim()).filter(Boolean),
@@ -1442,6 +1446,8 @@ function readSettingsForm() {
     model_auto_compact_token_limit: Number(setCompactLimit?.value) || 0,
     tool_output_token_limit: Number(setToolOutputLimit?.value) || 0,
     ram_warning_mb: Number(setRamWarning?.value) || 2048,
+    global_agent_rules: String(setGlobalAgentRules?.value || '').trim(),
+    agent_slots: agentSlots,
     agent_roles: agentRoles,
     plan_mode_reasoning_effort: setPlanReasoning?.value || '',
     model_reasoning_summary: setReasoningSummary?.value || '',
@@ -1458,6 +1464,9 @@ function readSettingsForm() {
     tool_timeout_sec: Number(setTool?.value) || 60,
     job_max_runtime_seconds: Number(setJob?.value) || 1800,
     network_proxy: !!setProxy?.checked,
+    api_base_url: setApiBaseUrl?.value?.trim() || '',
+    api_key_env: setApiKeyEnv?.value?.trim() || 'OPENAI_API_KEY',
+    api_model: setApiModel?.value?.trim() || '',
   };
 }
 
@@ -1482,7 +1491,17 @@ function fillSettingsForm(s = {}) {
   if (setToolOutputLimit) setToolOutputLimit.value = String(s.tool_output_token_limit ?? 0);
   if (setRamWarning) setRamWarning.value = String(s.ram_warning_mb ?? 2048);
   agentRoles = Array.isArray(s.agent_roles) ? s.agent_roles.map((role) => ({ ...role })) : [];
+  agentSlots = Array.from({ length: 6 }, (_, index) => ({
+    enabled: true, name: `Agent ${index + 1}`, role_id: '', rules: '', preferred_skills: [], allowed_tools: [],
+    model: '', model_reasoning_effort: '', working_directory: '', sandbox_mode: '', approval_policy: '',
+    auto_continue: 'inherit', auto_continue_delay_sec: 30, auto_continue_max_runs: 1,
+    ...(s.agent_slots?.[index] || {}),
+  }));
+  state.agentSlots = agentSlots.map((slot) => ({ ...slot }));
+  editingAgentSlotIndex = Math.max(0, Math.min(5, Number(setAgentSlot?.value) || 0));
+  if (setGlobalAgentRules) setGlobalAgentRules.value = s.global_agent_rules || '';
   renderAgentRoleList();
+  renderAgentSlotEditor();
   if (setPlanReasoning) setPlanReasoning.value = s.plan_mode_reasoning_effort || '';
   if (setReasoningSummary) setReasoningSummary.value = s.model_reasoning_summary || '';
   if (setVerbosity) setVerbosity.value = s.model_verbosity || '';
@@ -1501,6 +1520,82 @@ function fillSettingsForm(s = {}) {
   if (setTool) setTool.value = String(s.tool_timeout_sec ?? 60);
   if (setJob) setJob.value = String(s.job_max_runtime_seconds ?? 1800);
   if (setProxy) setProxy.checked = !!s.network_proxy;
+  if (setApiBaseUrl) setApiBaseUrl.value = s.api_base_url || '';
+  if (setApiKeyEnv) setApiKeyEnv.value = s.api_key_env || 'OPENAI_API_KEY';
+  if (setApiModel) setApiModel.value = s.api_model || '';
+}
+
+function selectedAgentSlotIndex() {
+  return Math.max(0, Math.min(5, Number(setAgentSlot?.value) || 0));
+}
+
+function selectedAgentSlotProfile() {
+  return agentSlots[editingAgentSlotIndex] || null;
+}
+
+function commaList(value) {
+  return [...new Set(String(value || '').split(',').map((item) => item.trim()).filter(Boolean))];
+}
+
+function commitAgentSlotEditor() {
+  const slot = selectedAgentSlotProfile();
+  if (!slot) return;
+  slot.enabled = !!setSlotEnabled?.checked;
+  slot.name = String(setSlotName?.value || '').trim().slice(0, 64) || `Agent ${editingAgentSlotIndex + 1}`;
+  slot.role_id = setSlotRole?.value || '';
+  slot.rules = String(setSlotRules?.value || '').trim();
+  slot.preferred_skills = commaList(setSlotSkills?.value);
+  slot.allowed_tools = commaList(setSlotTools?.value);
+  slot.model = String(setSlotModel?.value || '').trim();
+  slot.model_reasoning_effort = setSlotReasoning?.value || '';
+  slot.working_directory = String(setSlotWorkingDirectory?.value || '').trim();
+  slot.sandbox_mode = setSlotSandbox?.value || '';
+  slot.approval_policy = setSlotApproval?.value || '';
+  slot.auto_continue = setSlotAutoContinue?.value || 'inherit';
+  slot.auto_continue_delay_sec = Number(setSlotAutoDelay?.value) || 30;
+  slot.auto_continue_max_runs = Number(setSlotAutoMax?.value) || 1;
+}
+
+function renderSlotRoleOptions(selectedId = selectedAgentSlotProfile()?.role_id || '') {
+  if (!setSlotRole) return;
+  setSlotRole.replaceChildren();
+  const none = document.createElement('option');
+  none.value = ''; none.textContent = t('settings.agentSlotRole.none');
+  setSlotRole.append(none);
+  for (const role of agentRoles) {
+    const option = document.createElement('option');
+    option.value = role.id; option.textContent = role.name || role.id;
+    setSlotRole.append(option);
+  }
+  setSlotRole.value = agentRoles.some((role) => role.id === selectedId) ? selectedId : '';
+}
+
+function renderAgentSlotEditor() {
+  editingAgentSlotIndex = selectedAgentSlotIndex();
+  const slot = selectedAgentSlotProfile();
+  if (!slot) return;
+  renderSlotRoleOptions(slot.role_id);
+  if (setSlotEnabled) setSlotEnabled.checked = slot.enabled !== false;
+  if (setSlotName) setSlotName.value = slot.name || `Agent ${editingAgentSlotIndex + 1}`;
+  if (setSlotRules) setSlotRules.value = slot.rules || '';
+  if (setSlotSkills) setSlotSkills.value = (slot.preferred_skills || []).join(', ');
+  if (setSlotTools) setSlotTools.value = (slot.allowed_tools || []).join(', ');
+  if (setSlotModel) setSlotModel.value = slot.model || '';
+  if (setSlotReasoning) setSlotReasoning.value = slot.model_reasoning_effort || '';
+  if (setSlotWorkingDirectory) setSlotWorkingDirectory.value = slot.working_directory || '';
+  if (setSlotSandbox) setSlotSandbox.value = slot.sandbox_mode || '';
+  if (setSlotApproval) setSlotApproval.value = slot.approval_policy || '';
+  if (setSlotAutoContinue) setSlotAutoContinue.value = slot.auto_continue || 'inherit';
+  if (setSlotAutoDelay) setSlotAutoDelay.value = String(slot.auto_continue_delay_sec ?? 30);
+  if (setSlotAutoMax) setSlotAutoMax.value = String(slot.auto_continue_max_runs ?? 1);
+}
+
+async function loadProjectRules(cwd = setWorkingDirectory?.value || '') {
+  const result = await api?.getProjectAgentRules?.(cwd);
+  projectRulesState = result?.ok ? result : { root: null, path: null, rules: '', error: result?.error };
+  if (setProjectAgentRules) setProjectAgentRules.value = projectRulesState.rules || '';
+  if (setProjectRulesPath) setProjectRulesPath.textContent = projectRulesState.path || t('settings.projectRules.chooseFolder');
+  return projectRulesState;
 }
 
 function selectedAgentRole() {
@@ -1604,55 +1699,80 @@ function formatUsageDate(epochSeconds) {
   return new Date(Number(epochSeconds) * 1000).toLocaleString(state.locale === 'ko' ? 'ko-KR' : undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
+function formatResetCountdown(epochSeconds) {
+  if (!epochSeconds) return '—';
+  const seconds = Math.max(0, Number(epochSeconds) - Math.floor(Date.now() / 1000));
+  if (seconds <= 0) return t('settings.usage.resetNow');
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours >= 24) return t('settings.usage.resetInDays', { n: Math.floor(hours / 24), h: hours % 24 });
+  return t('settings.usage.resetInHours', { h: hours, m: minutes });
+}
+
+function formatLimitWindow(limit) {
+  if (!limit || limit.usedPercent == null) return '—';
+  return `${limit.usedPercent}%`;
+}
+
+function renderResetTracker(rate) {
+  const short = rate?.windowMinutes === 300 ? rate : rate?.secondary?.windowMinutes === 300 ? rate.secondary : null;
+  const long = rate?.windowMinutes >= 10000 ? rate : rate?.secondary?.windowMinutes >= 10000 ? rate.secondary : null;
+  if (usagePlanEl) usagePlanEl.textContent = rate?.planType || '—';
+  if (usageShortLimitEl) usageShortLimitEl.textContent = formatLimitWindow(short);
+  if (usageLongLimitEl) usageLongLimitEl.textContent = formatLimitWindow(long);
+  if (usageShortResetEl) usageShortResetEl.textContent = short?.resetsAt ? `${formatResetCountdown(short.resetsAt)} · ${formatUsageDate(short.resetsAt)}` : '—';
+  if (usageLongResetEl) usageLongResetEl.textContent = long?.resetsAt ? `${formatResetCountdown(long.resetsAt)} · ${formatUsageDate(long.resetsAt)}` : '—';
+  if (usageCreditsEl) {
+    const credits = rate?.credits;
+    const resetCredits = rate?.resetCredits;
+    usageCreditsEl.textContent = credits?.unlimited
+      ? t('settings.usage.unlimited')
+      : Number.isFinite(Number(resetCredits?.availableCount))
+        ? String(resetCredits.availableCount)
+        : credits?.balance ?? (credits?.hasCredits ? t('settings.usage.available') : t('settings.usage.none'));
+  }
+}
+
+function formatRateLimitSummary(rate) {
+  if (!rate || rate.usedPercent == null) return t('settings.usage.noRate');
+  const credits = rate.resetCredits?.availableCount ?? null;
+  return t('settings.usage.summary', {
+    used: rate.usedPercent,
+    reset: formatResetCountdown(rate.resetsAt),
+    credits: credits == null ? '—' : credits,
+  });
+}
+
 async function refreshCodexUsage() {
   const result = await api?.getCodexUsage?.();
   if (!result?.ok) return;
   const current = result.current || {};
+  const rate = result.rateLimit;
   if (hud.usage) {
-    const session = formatTokens(current.totalTokens);
-    const limit = result.rateLimit?.usedPercent != null ? ` · ${result.rateLimit.usedPercent}%` : '';
-    hud.usage.textContent = session === t('settings.usage.none') ? '—' : `${session}${limit}`;
-    hud.usage.title = result.rateLimit?.resetsAt ? `Resets ${formatUsageDate(result.rateLimit.resetsAt)}` : 'Codex rollout usage';
+    const usedTokens = Number(current.lastTokens) || 0;
+    const contextWindow = Number(current.contextWindow) || 0;
+    if (usedTokens && contextWindow) {
+      const usedPercent = Math.min(100, Math.round((usedTokens / contextWindow) * 100));
+      hud.usage.textContent = state.locale === 'ko' ? `${usedPercent}% 사용` : `${usedPercent}% used`;
+      hud.usage.title = state.locale === 'ko'
+        ? `${formatTokens(usedTokens)} / ${formatTokens(contextWindow)} 토큰 사용${rate?.resetsAt ? ` · ${formatRateLimitSummary(rate)}` : ''}`
+        : `${formatTokens(usedTokens)} / ${formatTokens(contextWindow)} tokens used${rate?.resetsAt ? ` · ${formatRateLimitSummary(rate)}` : ''}`;
+    } else {
+      hud.usage.textContent = '—';
+      hud.usage.title = rate?.resetsAt ? formatRateLimitSummary(rate) : 'Context usage unavailable';
+    }
   }
   if (usageSessionEl) usageSessionEl.textContent = formatTokens(current.totalTokens);
   if (usageTodayEl) usageTodayEl.textContent = formatTokens(result.todayTokens);
   if (usageMonthEl) usageMonthEl.textContent = formatTokens(result.monthTokens);
   if (usageContextEl) usageContextEl.textContent = current.contextWindow ? formatTokens(current.contextWindow) : '—';
-  const rate = result.rateLimit;
-  if (usageRateEl) usageRateEl.textContent = rate?.usedPercent != null
-    ? t('settings.usage.rate', { used: rate.usedPercent, date: formatUsageDate(rate.resetsAt) })
-    : t('settings.usage.noRate');
+  renderResetTracker(rate);
+  if (usageRateEl) usageRateEl.textContent = formatRateLimitSummary(rate);
   if (usageMetaEl) usageMetaEl.textContent = t('settings.usage.checked', { date: new Date(result.checkedAt || Date.now()).toLocaleTimeString(state.locale === 'ko' ? 'ko-KR' : undefined), sessions: result.sessions || 0 });
-}
-
-function renderLicenseStatus(status) {
-  if (!setLicenseStatusEl) return;
-  if (!status) {
-    setLicenseStatusEl.textContent = t('settings.license.unknown');
-    setStatusTone(setLicenseStatusEl, 'muted');
-    return;
-  }
-  if (status.licensed) {
-    setLicenseStatusEl.textContent = t('settings.license.licensed');
-    setStatusTone(setLicenseStatusEl, 'ok');
-  } else if (status.locked || status.expired) {
-    setLicenseStatusEl.textContent = t('settings.license.expired');
-    setStatusTone(setLicenseStatusEl, 'bad');
-  } else {
-    setLicenseStatusEl.textContent = t('settings.license.trial', {
-      n: Math.max(0, Number(status.daysLeft) || 0),
-    });
-    // Trial active but no license key yet
-    setStatusTone(setLicenseStatusEl, 'warn');
-  }
-  if (settingsLicenseBuyBtn) {
-    settingsLicenseBuyBtn.disabled = !status.sponsorUrl;
-  }
 }
 
 function updateSettingsProviderUI() {
   const provider = state.provider || 'codex';
-  const isClaude = provider === 'claude';
 
   // Update kicker and lead text
   const kicker = document.getElementById('settings-kicker');
@@ -1660,20 +1780,14 @@ function updateSettingsProviderUI() {
   const loginLabel = document.getElementById('set-codex-login-label');
   const loginDesc = document.getElementById('set-codex-login-desc');
   const loginBtn = document.getElementById('settings-codex-login');
+  const apiFields = document.getElementById('api-provider-fields');
 
-  if (kicker) kicker.textContent = isClaude ? 'Claude Code' : 'Codex CLI';
-  if (lead) lead.textContent = isClaude
-    ? t('settings.leadClaude')
-    : t('settings.lead');
-  if (loginLabel) loginLabel.textContent = isClaude
-    ? t('settings.claudeLogin')
-    : t('settings.codexLogin');
-  if (loginDesc) loginDesc.textContent = isClaude
-    ? t('settings.claudeLogin.desc')
-    : t('settings.codexLogin.desc');
-  if (loginBtn) loginBtn.textContent = isClaude
-    ? t('settings.claudeLogin.btn')
-    : t('settings.codexLogin.btn');
+  if (kicker) kicker.textContent = 'Codex CLI';
+  if (lead) lead.textContent = t('settings.lead');
+  if (loginLabel) loginLabel.textContent = t('settings.codexLogin');
+  if (loginDesc) loginDesc.textContent = t('settings.codexLogin.desc');
+  if (loginBtn) loginBtn.textContent = t('settings.codexLogin.btn');
+  if (apiFields) apiFields.hidden = provider !== 'api';
 
   // Update provider button active state
   document.querySelectorAll('.settings-provider-btn').forEach((btn) => {
@@ -1686,35 +1800,32 @@ async function refreshAccountStatus() {
     setCodexStatusEl.textContent = t('settings.codexLogin.unknown');
     setStatusTone(setCodexStatusEl, 'muted');
   }
-  if (setLicenseStatusEl) {
-    setLicenseStatusEl.textContent = t('settings.license.unknown');
-    setStatusTone(setLicenseStatusEl, 'muted');
-  }
-
   updateSettingsProviderUI();
 
   try {
     const login = await api?.loginStatus?.();
-    const isClaude = state.provider === 'claude';
-
-    if (!setCodexStatusEl) {
+    if (state.provider === 'api') {
+      if (setCodexStatusEl) {
+        setCodexStatusEl.textContent = login?.loggedIn ? 'API configured' : 'API configuration required';
+        setStatusTone(setCodexStatusEl, login?.loggedIn ? 'ok' : 'bad');
+      }
+      if (settingsCodexLoginBtn) settingsCodexLoginBtn.textContent = 'Connect API';
+    } else if (!setCodexStatusEl) {
       /* skip */
-    } else if (!login?.hasCodex && !login?.hasBinary && isClaude) {
-      setCodexStatusEl.textContent = t('settings.claudeLogin.missing');
-      setStatusTone(setCodexStatusEl, 'bad');
-    } else if (!login?.hasCodex && !isClaude) {
+    } else if (!login?.hasCodex) {
       setCodexStatusEl.textContent = t('settings.codexLogin.missing');
       setStatusTone(setCodexStatusEl, 'bad');
-    } else if ((login?.hasCodex || login?.hasBinary) && login.loggedIn) {
-      setCodexStatusEl.textContent = isClaude
-        ? t('settings.claudeLogin.ok')
-        : t('settings.codexLogin.ok');
+    } else if (login.loggedIn) {
+      setCodexStatusEl.textContent = t('settings.codexLogin.ok');
       setStatusTone(setCodexStatusEl, 'ok');
     } else {
-      setCodexStatusEl.textContent = isClaude
-        ? t('settings.claudeLogin.no')
-        : t('settings.codexLogin.no');
+      setCodexStatusEl.textContent = t('settings.codexLogin.no');
       setStatusTone(setCodexStatusEl, 'bad');
+    }
+    if (settingsCodexLoginBtn) {
+      settingsCodexLoginBtn.textContent = login?.hasCodex
+        ? t('settings.codexLogin.btn')
+        : t('loginGate.installCodex');
     }
   } catch {
     if (setCodexStatusEl) {
@@ -1723,32 +1834,6 @@ async function refreshAccountStatus() {
     }
   }
 
-  try {
-    const trial = await api?.getTrialStatus?.();
-    renderLicenseStatus(trial);
-  } catch {
-    renderLicenseStatus(null);
-  }
-}
-
-async function activateLicenseFromInput(inputEl, buttonEl) {
-  const key = inputEl?.value || '';
-  if (buttonEl) buttonEl.disabled = true;
-  try {
-    const r = await api?.activateLicense?.(key);
-    if (!r?.ok) {
-      flashAction(r?.errorKey ? t(r.errorKey) : (r?.error || t('trial.activate.fail')));
-      return false;
-    }
-    applyTrialLock(r.trial || { locked: false, expired: false, licensed: true });
-    if (inputEl) inputEl.value = '';
-    renderLicenseStatus(r.trial || { licensed: true, locked: false });
-    flashAction(t('trial.activate.ok'));
-    api?.getState?.().then(applyBridgeState);
-    return true;
-  } finally {
-    if (buttonEl) buttonEl.disabled = false;
-  }
 }
 
 async function openSettings() {
@@ -1762,6 +1847,7 @@ async function openSettings() {
     const [r, prefs] = await Promise.all([api?.getCodexSettings?.(), api?.getPadPrefs?.()]);
     fillSettingsForm(r?.settings || {});
     fillAutoContinuePrefs(prefs || {});
+    await loadProjectRules(r?.settings?.working_directory || '');
     const setLocaleEl = document.getElementById('set-locale');
     if (setLocaleEl) setLocaleEl.value = state.locale;
     if (settingsHint) {
@@ -1772,6 +1858,8 @@ async function openSettings() {
   } catch {
     fillSettingsForm({});
     fillAutoContinuePrefs({});
+    if (setProjectAgentRules) setProjectAgentRules.value = '';
+    if (setProjectRulesPath) setProjectRulesPath.textContent = t('settings.projectRules.chooseFolder');
   }
   settingsPanel.hidden = false;
   refreshCodexUsage();
@@ -1964,6 +2052,34 @@ document.getElementById('mod-picker')?.addEventListener('click', async (e) => {
   flashAction(t(`flash.mod.${mod}`));
 });
 document.getElementById('btn-settings')?.addEventListener('click', openSettings);
+document.querySelectorAll('[data-settings-tool]').forEach((button) => {
+  button.addEventListener('click', async () => {
+    const tool = button.dataset.settingsTool;
+    closeSettings();
+    if (tool === 'git') return setGitPanelOpen(true);
+    if (tool === 'mcp') return openMcp();
+    if (tool === 'skills') return openSkills();
+    if (tool === 'guide') return openGuide();
+    if (tool === 'keymap') return openKeymap();
+    if (tool === 'rules') {
+      await openSettings();
+      setGlobalAgentRules?.focus();
+    }
+  });
+});
+document.getElementById('btn-rules')?.addEventListener('click', async () => {
+  closeMcp();
+  closeSkills();
+  await openSettings();
+  setGlobalAgentRules?.focus();
+});
+document.getElementById('agent-rules-edit')?.addEventListener('click', () => {
+  if (setAgentSlot) {
+    setAgentSlot.value = String(state.selected);
+    setAgentSlot.dispatchEvent(new Event('change'));
+  }
+  setSlotRules?.focus();
+});
 document.getElementById('settings-usage-refresh')?.addEventListener('click', refreshCodexUsage);
 document.getElementById('btn-mcp')?.addEventListener('click', openMcp);
 document.getElementById('btn-skills')?.addEventListener('click', openSkills);
@@ -2014,18 +2130,27 @@ skillsPanel?.addEventListener('click', (e) => { if (e.target === skillsPanel) cl
 document.getElementById('settings-save')?.addEventListener('click', async () => {
   const r = await api?.saveCodexSettings?.(readSettingsForm());
   if (r?.ok) {
+    const projectText = String(setProjectAgentRules?.value || '').trim();
+    let projectResult = { ok: true };
+    if (projectText || projectRulesState.path) {
+      projectResult = await api?.saveProjectAgentRules?.(setWorkingDirectory?.value || '', projectText) || { ok: false };
+      if (projectResult.ok) projectRulesState = projectResult;
+    }
     const prefs = await api?.setPadPrefs?.(readAutoContinuePrefs());
     fillAutoContinuePrefs(prefs || readAutoContinuePrefs());
     fillSettingsForm(r.settings);
-    flashAction(t('flash.settingsSaved'));
+    flashAction(projectResult?.ok ? t('flash.settingsSaved') : projectResult?.error || t('settings.projectRules.saveFail'));
     if (settingsHint) {
-      settingsHint.textContent = r.warning
+      settingsHint.textContent = !projectResult?.ok
+        ? projectResult?.error || t('settings.projectRules.saveFail')
+        : r.warning
         ? t('flash.savedWarn', { warn: r.warning })
         : t('flash.savedApply', { path: r.profile || 'agent-micro' });
     }
     refreshBackups();
   } else if (!r?.canceled) {
-    flashAction(t('flash.settingsFail'));
+    flashAction(r?.error || t('flash.settingsFail'));
+    if (settingsHint) settingsHint.textContent = r?.error || t('flash.settingsFail');
   }
 });
 document.getElementById('settings-restore')?.addEventListener('click', async () => {
@@ -2036,13 +2161,26 @@ document.getElementById('settings-restore')?.addEventListener('click', async () 
 });
 document.getElementById('settings-choose-directory')?.addEventListener('click', async () => {
   const r = await api?.chooseCodexWorkingDirectory?.();
-  if (r?.ok && setWorkingDirectory) setWorkingDirectory.value = r.path || '';
+  if (r?.ok && setWorkingDirectory) {
+    setWorkingDirectory.value = r.path || '';
+    await loadProjectRules(r.path || '');
+  }
 });
 document.getElementById('settings-clear-directory')?.addEventListener('click', () => {
   if (setWorkingDirectory) setWorkingDirectory.value = '';
+  loadProjectRules('');
 });
 setResourcePreset?.addEventListener('change', () => applyResourcePreset(setResourcePreset.value));
 setAgentRole?.addEventListener('change', renderAgentEditor);
+setAgentSlot?.addEventListener('change', () => {
+  commitAgentSlotEditor();
+  renderAgentSlotEditor();
+});
+[
+  setSlotEnabled, setSlotName, setSlotRole, setSlotRules, setSlotSkills, setSlotTools,
+  setSlotModel, setSlotReasoning, setSlotWorkingDirectory, setSlotSandbox, setSlotApproval,
+  setSlotAutoContinue, setSlotAutoDelay, setSlotAutoMax,
+].forEach((el) => el?.addEventListener('input', commitAgentSlotEditor));
 [
   setAgentEnabled, setAgentName, setAgentDescription, setAgentInstructions, setAgentModel, setAgentReasoning,
 ].forEach((el) => el?.addEventListener('input', () => {
@@ -2057,12 +2195,14 @@ document.getElementById('settings-agent-add')?.addEventListener('click', () => {
   const id = `role-${Date.now().toString(36)}`;
   agentRoles.push({ id, name: `agent-${agentRoles.length + 1}`, description: '', developer_instructions: '', model: '', model_reasoning_effort: '', enabled: true });
   renderAgentRoleList(id);
+  renderSlotRoleOptions();
 });
 document.getElementById('settings-agent-delete')?.addEventListener('click', () => {
   const id = setAgentRole?.value;
   if (!id) return;
   agentRoles = agentRoles.filter((role) => role.id !== id);
   renderAgentRoleList();
+  renderSlotRoleOptions();
 });
 setRamWarning?.addEventListener('input', refreshRamUsage);
 [
@@ -2097,15 +2237,41 @@ document.getElementById('settings-open-config')?.addEventListener('click', () =>
   api?.openCodexConfig?.();
   flashAction(t('flash.configToml'));
 });
-hud.modelChange?.addEventListener('click', toggleQuickDeepModel);
+async function openModelPickerFromHud() {
+  if (!state.connected) {
+    const linked = await connectAgent({ forceLogin: false });
+    if (!linked?.ok) return;
+  }
+  const currentModel = String(state.agents[state.selected]?.model || '').trim();
+  const nextModel = currentModel === 'gpt-5.6-luna' ? 'gpt-5.6-sol' : currentModel === 'gpt-5.6-sol' ? 'gpt-5.6-luna' : '';
+  const result = nextModel
+    ? await api?.switchActiveModel?.(nextModel)
+    : await api?.openModelPicker?.();
+  if (!result?.ok) flashAction(result?.error || t('flash.modelFail'));
+  else if (result.modelPicker) flashAction(t('flash.modelPicker'));
+  else {
+    if (state.agents[state.selected]) state.agents[state.selected].model = result.model || nextModel;
+    flashAction(`Agent ${state.selected + 1} · ${result.model || nextModel}`);
+  }
+  const next = await api?.getState?.();
+  if (next) applyBridgeState(next);
+}
+hud.modelChange?.addEventListener('click', openModelPickerFromHud);
+hud.fast?.addEventListener('click', async () => {
+  hud.fast.disabled = true;
+  if (!state.connected) await connectAgent({ forceLogin: false });
+  const changed = await api?.toggleFast?.();
+  if (!changed?.ok) flashAction(changed?.error || t('flash.controlNeedsThread'));
+  const next = await api?.getState?.();
+  if (next) applyBridgeState(next);
+  hud.fast.disabled = false;
+});
 hud.continueButton?.addEventListener('click', sendManualContinue);
 setInterval(refreshDevServerStatus, 3000);
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
-    closeGuide();
-    closeKeymap();
-    closeSettings();
-    closeIconPicker();
+    e.preventDefault();
+    closeAllOverlays();
   }
 });
 
@@ -2115,40 +2281,80 @@ function render() {
     pad3d.setAgent(i, { status: a.status, selected: i === state.selected });
   });
   const current = state.agents[state.selected] || {};
-  hud.task.textContent = current.name || '—';
+  if (hud.modelLabel) hud.modelLabel.textContent = `Agent ${state.selected + 1} · Model`;
+  if (hud.task) hud.task.textContent = `#${state.selected + 1} · ${current.name || '—'}`;
   const folder = current.projectRoot || current.cwd || '—';
   const projectName = current.projectName || (folder === '—' ? '—' : folder.replace(/[\\/]+$/, '').split(/[\\/]/).pop()) || folder;
-  hud.folder.textContent = projectName;
-  hud.folder.title = folder === '—' ? '' : folder;
+  if (hud.folder) {
+    hud.folder.textContent = projectName;
+    hud.folder.title = folder === '—' ? '' : folder;
+  }
   const gitRepoName = document.getElementById('git-repo-name');
   if (gitRepoName) { gitRepoName.textContent = projectName; gitRepoName.title = folder === '—' ? '' : folder; }
   hud.status.textContent = statusLabel(current.status || 'off');
-  hud.reason.textContent = REASONING[state.reasoningIndex];
+  hud.status.dataset.status = current.status || 'off';
+  const agentFastMode = typeof current.fastMode === 'boolean' ? current.fastMode : state.fastMode;
+  const agentReasoningIndex = Number.isInteger(current.reasoningIndex) ? current.reasoningIndex : state.reasoningIndex;
+  if (hud.tokenSaver) {
+    const tokenIndex = Math.max(0, Math.min(TOKEN_SAVER_LABELS.length - 1, agentReasoningIndex));
+    hud.tokenSaver.textContent = TOKEN_SAVER_LABELS[tokenIndex] || 'Balanced';
+    hud.tokenSaver.title = `Agent ${state.selected + 1} · Token Saver · turn the dial to adjust`;
+    hud.tokenMeter?.setAttribute('title', `Dial Token Saver · ${tokenIndex + 1}/${TOKEN_SAVER_LABELS.length}`);
+    hud.tokenMeter?.querySelectorAll('i').forEach((dot, index) => dot.classList.toggle('is-active', index <= tokenIndex));
+  }
+  hud.fast.textContent = agentFastMode ? t('hud.fastOn') : t('hud.fastOff');
+  hud.fast.classList.toggle('is-active', agentFastMode);
+  hud.fast.setAttribute('aria-pressed', String(agentFastMode));
   const agentBusy = current.status === 'thinking' || current.status === 'working';
-  const modelMode = state.agentModelModes[state.selected] || 'deep';
+  const actualModel = String(current.model || '').trim();
+  const modelMode = actualModel === QUICK_MODEL
+    ? 'light'
+    : actualModel === DEEP_MODEL || actualModel === 'gpt-5.6-luna'
+      ? 'deep'
+      : (state.agentModelModes[state.selected] || 'deep');
+  state.agentModelModes[state.selected] = modelMode;
   if (hud.model) {
-    hud.model.textContent = modelMode === 'light' ? t('hud.modelLight') : t('hud.modelDeep');
-    hud.model.title = modelMode === 'light' ? QUICK_MODEL : DEEP_MODEL;
+    // Never show a guessed Light/Deep model as if it were the active model.
+    const modelAlias = MODEL_LABELS[actualModel];
+    const displayedModel = actualModel
+      ? (modelAlias && modelAlias !== actualModel ? `${modelAlias} · ${actualModel}` : actualModel)
+      : '—';
+    hud.model.textContent = displayedModel;
+    hud.model.title = actualModel
+      ? `Agent ${state.selected + 1} · current model: ${actualModel}`
+      : `Agent ${state.selected + 1} · Model not detected`;
   }
   if (hud.modelChange) {
-    hud.modelChange.disabled = agentBusy || !state.connected;
-    hud.modelChange.textContent = modelMode === 'light' ? t('hud.toDeep') : t('hud.toLight');
-    hud.modelChange.title = modelMode === 'light' ? DEEP_MODEL : QUICK_MODEL;
+    hud.modelChange.disabled = agentBusy;
+    hud.modelChange.textContent = t('hud.changeModel');
+    hud.modelChange.title = `Change Agent ${state.selected + 1} model`;
   }
-  if (hud.continueStatus) hud.continueStatus.textContent = state.autoContinueEnabled
-    ? t('hud.continueAuto', { sec: state.autoContinueDelaySec, max: state.autoContinueMaxRuns })
+  const selectedContinue = effectiveAutoContinue(state.selected);
+  if (hud.continueStatus) hud.continueStatus.textContent = selectedContinue.enabled
+    ? t('hud.continueAuto', { sec: selectedContinue.delay, max: selectedContinue.max })
     : t('hud.continueManual');
   if (hud.continueButton) hud.continueButton.disabled = agentBusy || !state.connected;
-  const layerName = layerDisplayName(state.layer);
-  const providerLabel = state.provider === 'claude' ? 'Claude Code' : 'Codex CLI';
+  const providerLabel = 'Codex CLI';
   if (hud.link) hud.link.textContent = state.connected
-    ? `${providerLabel} · ${state.mode} · ${layerName}`
+    ? `${providerLabel} · Connected`
     : state.mode === 'offline'
-      ? `demo · ${providerLabel} · ${layerName}`
-      : `${providerLabel} · ${state.mode} · ${layerName}`;
-  linkDot.classList.toggle('on', state.connected);
-  linkDot.classList.toggle('demo', !state.connected);
-  pad3d.setCmdActive('fast', state.fastMode);
+      ? `${providerLabel} · Demo`
+      : `${providerLabel} · ${state.mode}`;
+  if (hud.link) hud.link.dataset.connected = String(state.connected);
+  const showAutoBadge = selectedContinue.enabled;
+  if (hud.autoBadge) {
+    hud.autoBadge.hidden = !showAutoBadge;
+    hud.autoBadge.textContent = `Auto Continue · ${selectedContinue.delay}s`;
+  }
+  if (hud.devBadge) {
+    hud.devBadge.hidden = !state.devServerRunning;
+    hud.devBadge.textContent = state.devServerKind ? `DEV · ${state.devServerKind}` : 'DEV running';
+    hud.devBadge.title = state.devServerCommand || '';
+  }
+  if (hud.badges) hud.badges.hidden = !showAutoBadge && !state.devServerRunning;
+  linkDot?.classList.toggle('on', state.connected);
+  linkDot?.classList.toggle('demo', !state.connected);
+  pad3d.setCmdActive('fast', agentFastMode);
   pad3d.setCmdActive('send', state.devServerRunning, 0x167a45, 0.32);
   const forkOk =
     typeof state.canFork === 'boolean' ? state.canFork : canForkFromAgents(state.agents);
@@ -2165,17 +2371,23 @@ async function refreshDevServerStatus() {
 }
 
 async function toggleQuickDeepModel() {
-  const current = state.agentModelModes[state.selected] || 'deep';
-  const next = current === 'light' ? 'deep' : 'light';
+  const current = state.agents[state.selected] || {};
+  if (current.status === 'thinking' || current.status === 'working') {
+    flashAction(t('flash.modelBusy'));
+    return;
+  }
+  const currentMode = state.agentModelModes[state.selected] || 'deep';
+  const next = currentMode === 'light' ? 'deep' : 'light';
   const model = next === 'light' ? QUICK_MODEL : DEEP_MODEL;
-  if (hud.modelChange) hud.modelChange.disabled = true;
   const result = await api?.switchActiveModel?.(model);
-  if (!result?.ok) flashAction(result?.busy ? t('flash.modelBusy') : result?.error || t('flash.modelFail'));
+  if (result?.modelPicker) flashAction(t('flash.modelPicker'));
+  else if (!result?.ok) flashAction(result?.busy ? t('flash.modelBusy') : result?.error || t('flash.modelFail'));
   else {
     state.agentModelModes[state.selected] = next;
+    if (state.agents[state.selected]) state.agents[state.selected].model = model;
     flashAction(next === 'light' ? t('flash.modelLight') : t('flash.modelDeep'));
+    render();
   }
-  render();
 }
 
 async function toggleCurrentDevServer() {
@@ -2214,18 +2426,30 @@ async function sendManualContinue() {
 
 function scheduleAutoContinue(index) {
   cancelAutoContinue(index);
-  if (!state.autoContinueEnabled || index !== state.selected || state.autoContinueCounts[index] >= state.autoContinueMaxRuns) return;
+  const profile = effectiveAutoContinue(index);
+  if (!profile.enabled || index !== state.selected || state.autoContinueCounts[index] >= profile.max) return;
   state.autoContinueTimers[index] = setTimeout(async () => {
     state.autoContinueTimers[index] = null;
     const agent = state.agents[index];
-    if (!state.autoContinueEnabled || index !== state.selected || !['idle', 'complete'].includes(agent?.status)) return;
+    const current = effectiveAutoContinue(index);
+    if (!current.enabled || index !== state.selected || !['idle', 'complete'].includes(agent?.status)) return;
     state.autoContinueCounts[index] += 1;
     state.autoContinueIssued[index] = true;
     const result = await api?.send?.('Continue.');
     flashAction(result?.ok
-      ? t('flash.autoContinue', { count: state.autoContinueCounts[index], max: state.autoContinueMaxRuns })
+      ? t('flash.autoContinue', { count: state.autoContinueCounts[index], max: current.max })
       : result?.error || t('flash.continueFail'));
-  }, state.autoContinueDelaySec * 1000);
+  }, profile.delay * 1000);
+}
+
+function effectiveAutoContinue(index) {
+  const slot = state.agentSlots?.[index] || {};
+  const mode = slot.enabled === false ? 'inherit' : slot.auto_continue || 'inherit';
+  return {
+    enabled: mode === 'on' || (mode === 'inherit' && state.autoContinueEnabled),
+    delay: Math.max(5, Math.min(3600, slot.enabled === false ? state.autoContinueDelaySec : Number(slot.auto_continue_delay_sec) || state.autoContinueDelaySec)),
+    max: Math.max(1, Math.min(10, slot.enabled === false ? state.autoContinueMaxRuns : Number(slot.auto_continue_max_runs) || state.autoContinueMaxRuns)),
+  };
 }
 
 function applyAutoContinuePrefs(prefs = {}) {
@@ -2317,19 +2541,16 @@ function onMicRelease() {
 
 async function onCmd(cmd) {
   if (padBlocks()) return;
-  if (cmd === 'mic') {
-    // fallback if press/release not wired
-    onMicPress();
-    return;
-  }
-
   if (cmd === 'send') {
     await toggleCurrentDevServer();
     return;
   }
 
   // Icons are display-only — cmd binding never changes
-  if (cmd === 'fast') await api?.toggleFast();
+  if (cmd === 'fast') {
+    if (!state.connected) await connectAgent({ forceLogin: false });
+    await api?.toggleFast();
+  }
   else if (cmd === 'approve') await api?.approve();
   else if (cmd === 'decline') await api?.decline();
   else if (cmd === 'fork') {
@@ -2339,25 +2560,56 @@ async function onCmd(cmd) {
     }
     await api?.fork();
   }
+  else if (cmd === 'review') {
+    if (!state.connected) {
+      const linked = await connectAgent({ forceLogin: false });
+      if (!linked?.ok) return;
+    }
+    await api?.skill('review');
+    flashAction(t('flash.reviewSent'));
+  }
 }
 
 let dialAcc = 0;
+let tokenSaverQueue = Promise.resolve();
+const DIAL_STEP_DEGREES = 12;
+async function changeTokenSaver(step) {
+  if (padBlocks()) return;
+  const current = state.agents[state.selected] || {};
+  const currentIndex = Number.isInteger(current.reasoningIndex) ? current.reasoningIndex : state.reasoningIndex;
+  const next = Math.max(0, Math.min(REASONING.length - 1, currentIndex + step));
+  if (next !== currentIndex) {
+    if (!state.connected) {
+      const linked = await connectAgent({ forceLogin: false });
+      if (!linked?.ok) {
+        flashAction(t('flash.controlNeedsThread'));
+        return;
+      }
+    }
+    const changed = await api?.setReasoning?.(next);
+    if (!changed?.ok || !changed.applied) {
+      flashAction(changed?.error || t('flash.controlNeedsThread'));
+      return;
+    }
+    state.reasoningIndex = next;
+    current.reasoningIndex = next;
+    current.reasoning = REASONING[next];
+    if (current.fastMode && next !== 0) current.fastMode = false;
+    render();
+    flashAction(`Agent ${state.selected + 1} · ${t('flash.tokenSaver', { name: TOKEN_SAVER_LABELS[next] })}`);
+  }
+}
+
 function onDialDelta(d) {
   if (padBlocks()) return;
   dialAcc += d;
-  if (Math.abs(dialAcc) < 28) return;
-  const step = dialAcc > 0 ? 1 : -1;
-  dialAcc = 0;
-  const next = Math.max(0, Math.min(REASONING.length - 1, state.reasoningIndex + step));
-  if (next !== state.reasoningIndex) {
-    state.reasoningIndex = next;
-    if (state.fastMode && next !== 0) {
-      state.fastMode = false;
-    }
-    api?.setReasoning(next);
-    hud.reason.textContent = REASONING[next];
-    flashAction(t('flash.reasoning', { name: REASONING[next] }));
-  }
+  const steps = Math.trunc(dialAcc / DIAL_STEP_DEGREES);
+  if (!steps) return;
+  dialAcc -= steps * DIAL_STEP_DEGREES;
+  const direction = steps > 0 ? 1 : -1;
+  tokenSaverQueue = tokenSaverQueue.then(async () => {
+    for (let i = 0; i < Math.abs(steps); i += 1) await changeTokenSaver(direction);
+  }).catch(() => {});
 }
 
 function onJoy(dir) {
@@ -2377,15 +2629,10 @@ try {
   pad3d = createPad3D(canvasHost, {
     onAgent,
     onCmd,
-    onCmdPress: (cmd) => {
-      if (cmd === 'mic') onMicPress();
-    },
-    onCmdRelease: (cmd) => {
-      if (cmd === 'mic') onMicRelease();
-    },
+    onCmdPress: () => {},
+    onCmdRelease: () => {},
     onIconPick: openIconPicker,
     onDialDelta,
-    onDialStart: () => flashAction(t('flash.reasoningCtrl')),
     onJoy,
     onTouch: () => {
       if (padBlocks()) return;
@@ -2407,8 +2654,7 @@ try {
 
 async function connectAgent({ forceLogin = false } = {}) {
   if (trialBlocks()) {
-    flashAction(t('trial.flash'));
-    return { ok: false, reason: 'trial' };
+    return { ok: false, reason: 'unavailable' };
   }
   linkDot?.classList.add('busy');
   flashAction(forceLogin ? t('flash.login') : t('flash.connecting'));
@@ -2455,6 +2701,18 @@ api?.onState?.(applyBridgeState);
 api?.onLog?.((m) => {
   if (m) console.log('[agent]', m);
 });
+api?.onProviderToolProgress?.((progress) => {
+  const name = 'Codex CLI';
+  if (progress?.phase === 'download' && progress?.percent != null) {
+    flashAction(t('flash.toolProgress', { name, n: progress.percent }));
+  } else if (progress?.phase === 'install') {
+    flashAction(t('flash.toolInstalling', { name }));
+  }
+});
+api?.onVoiceModelProgress?.((progress) => {
+  if (progress?.percent != null) flashAction(t('flash.voiceModelProgress', { n: progress.percent }));
+  else if (progress?.received) flashAction(t('flash.voiceModelDownloading'));
+});
 /** Mod+QWERDF / Tab / arrows / 1–6 — pad or our CLI context */
 api?.onHotkey?.(({ cmd, phase, dir, index } = {}) => {
   if (padBlocks()) return;
@@ -2486,27 +2744,22 @@ api?.onHotkey?.(({ cmd, phase, dir, index } = {}) => {
     return;
   }
 
-  if (cmd === 'mic') {
-    if (phase === 'toggle') {
-      if (state.recording) {
-        pad3d?.simulatePress?.('mic', { phase: 'up' });
-        stopRecording({ process: true });
-        flashAction(`${g}D · mic off`);
-      } else {
-        pad3d?.simulatePress?.('mic', { phase: 'down', sticky: true });
-        startRecording({ latched: true });
-        flashAction(`${g}D · mic on`);
-      }
-      return;
-    }
-    pad3d?.simulatePress?.('mic');
-    onMicPress();
-    return;
-  }
-
   pad3d?.simulatePress?.(cmd);
   flashAction(`${g} · ${cmd}`);
   onCmd(cmd);
+});
+
+api?.onOpenPanel?.(async (panel) => {
+  if (panel === 'git') return setGitPanelOpen(true);
+  if (panel === 'mcp') return openMcp();
+  if (panel === 'skills') return openSkills();
+  if (panel === 'guide') return openGuide();
+  if (panel === 'keymap') return openKeymap();
+  if (panel === 'settings') return openSettings();
+  if (panel === 'rules') {
+    await openSettings();
+    setGlobalAgentRules?.focus();
+  }
 });
 
 api?.onPadPrefs?.((prefs) => {
@@ -2521,6 +2774,12 @@ api?.getPadPrefs?.().then((prefs) => {
   if (prefs?.hotkeyModifier) applyHotkeyModifier(prefs.hotkeyModifier);
   applyAutoContinuePrefs(prefs || {});
 });
+api?.getCodexSettings?.().then((result) => {
+  state.agentSlots = Array.isArray(result?.settings?.agent_slots)
+    ? result.settings.agent_slots.map((slot) => ({ ...slot }))
+    : [];
+  render();
+});
 
 
 document.getElementById('set-locale')?.addEventListener('change', async (e) => {
@@ -2528,19 +2787,6 @@ document.getElementById('set-locale')?.addEventListener('change', async (e) => {
   const r = await api?.setPadPrefs?.({ locale });
   applyLocale(r?.locale || locale);
   flashAction(locale === 'ko' ? t('flash.langKo') : t('flash.langEn'));
-});
-
-trialSponsorBtn?.addEventListener('click', async () => {
-  const r = await api?.openSponsor?.();
-  if (!r?.ok) flashAction(r?.error || t('trial.buy.none'));
-  else flashAction(t('trial.buy.opened'));
-});
-trialCloseBtn?.addEventListener('click', () => api?.close());
-trialActivateBtn?.addEventListener('click', () => {
-  activateLicenseFromInput(trialKeyInput, trialActivateBtn);
-});
-trialKeyInput?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') trialActivateBtn?.click();
 });
 
 // Settings provider switching
@@ -2551,12 +2797,14 @@ document.querySelectorAll('.settings-provider-btn').forEach((btn) => {
     if (provider === state.provider) return;
     btn.disabled = true;
     try {
+      const installed = await ensureProviderTool(provider);
+      if (!installed?.ok) return;
       const r = await api?.switchProvider?.(provider);
       if (r?.ok) {
         state.provider = provider;
         updateSettingsProviderUI();
         await refreshAccountStatus();
-        flashAction(provider === 'claude' ? 'Claude Code' : 'Codex CLI');
+        flashAction('Codex CLI');
         // Reconnect with new provider
         await connectAgent({ forceLogin: false });
       } else {
@@ -2568,11 +2816,23 @@ document.querySelectorAll('.settings-provider-btn').forEach((btn) => {
   });
 });
 
+document.getElementById('settings-api-configure')?.addEventListener('click', () => {
+  const apiButton = document.getElementById('settings-provider-api');
+  const apiFields = document.getElementById('api-provider-fields');
+  if (apiButton && state.provider !== 'api') apiButton.click();
+  if (apiFields) {
+    apiFields.hidden = false;
+    apiFields.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+});
+
 settingsCodexLoginBtn?.addEventListener('click', async () => {
   if (trialBlocks()) return;
   settingsCodexLoginBtn.disabled = true;
   flashAction(t('flash.login'));
   try {
+    const installed = await ensureProviderTool(state.provider || 'codex');
+    if (!installed?.ok) return;
     await connectAgent({ forceLogin: true });
     await refreshAccountStatus();
   } finally {
@@ -2584,10 +2844,6 @@ settingsCodexLoginBtn?.addEventListener('click', async () => {
 loginProviderGrid?.addEventListener('click', (e) => {
   const tile = e.target.closest('.provider-tile');
   if (!tile) return;
-  if (tile.classList.contains('busy')) {
-    flashAction(t('loginGate.missing'));
-    return;
-  }
   if (tile.dataset.provider === _pendingLoginProvider) return;
   setSelectedProvider(tile.dataset.provider);
 });
@@ -2600,14 +2856,11 @@ loginGateBtn?.addEventListener('click', async () => {
 
     // Check if the selected provider's CLI is actually installed
     const loginStatus = await api?.loginStatus?.();
-    const cliMissing = _pendingLoginProvider === 'claude'
-      ? !loginStatus?.hasBinary
-      : !loginStatus?.hasCodex;
+    const cliMissing = !loginStatus?.hasCodex;
 
     if (cliMissing) {
-      flashAction(t('flash.missing'));
-      loginGateBtn.disabled = false;
-      return;
+      const installed = await ensureProviderTool(_pendingLoginProvider);
+      if (!installed?.ok) return;
     }
 
     const r = await connectAgent({ forceLogin: true });
@@ -2615,7 +2868,7 @@ loginGateBtn?.addEventListener('click', async () => {
       hideLoginGate();
       await refreshAccountStatus();
     } else if (r?.reason === 'missing') {
-      showLoginGate({ missingCodex: true, missingClaude: true });
+      showLoginGate({ missingCodex: true });
     } else {
       showLoginGate();
     }
@@ -2623,31 +2876,10 @@ loginGateBtn?.addEventListener('click', async () => {
     loginGateBtn.disabled = false;
   }
 });
-settingsLicenseActivateBtn?.addEventListener('click', () => {
-  activateLicenseFromInput(settingsLicenseKeyEl, settingsLicenseActivateBtn);
-});
-settingsLicenseKeyEl?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') settingsLicenseActivateBtn?.click();
-});
-settingsLicenseBuyBtn?.addEventListener('click', async () => {
-  const r = await api?.openSponsor?.();
-  if (!r?.ok) flashAction(r?.error || t('trial.buy.none'));
-  else flashAction(t('trial.buy.opened'));
-});
-
-api?.getTrialStatus?.().then(async (status) => {
-  applyTrialLock(status);
-  state.provider = 'codex';
-  state.linkMode = 'cli';
-  if (status?.locked ?? status?.expired) return;
-  api?.getState?.().then(applyBridgeState);
-  await ensureCodexLoginOnEntry();
-}).catch(async () => {
-  state.provider = 'codex';
-  state.linkMode = 'cli';
-  api?.getState?.().then(applyBridgeState);
-  await ensureCodexLoginOnEntry();
-});
+state.provider = 'codex';
+state.linkMode = 'cli';
+api?.getState?.().then(applyBridgeState);
+ensureCodexLoginOnEntry();
 
 state.provider = 'codex';
 state.linkMode = 'cli';

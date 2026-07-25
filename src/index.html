@@ -13,23 +13,14 @@
   <body>
     <div class="shell" id="shell">
       <div class="chrome drag">
-        <span class="chrome-title">
-          <span class="chrome-brand-label">AM</span>
-          <button type="button" class="link-dot no-drag" id="link-dot" title="Connect / Reconnect" aria-label="Connect"></button>
-        </span>
+        <button type="button" class="chrome-btn close no-drag" id="btn-close" title="Close" data-i18n-title="chrome.close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
         <div class="chrome-actions no-drag">
           <button type="button" class="chrome-btn" id="btn-git" title="Git" aria-label="Git">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M6 9v1a8 8 0 0 0 8 8"/><path d="M18 9v1a8 8 0 0 1-8 8"/></svg>
           </button>
-          <button type="button" class="chrome-btn chrome-tab" id="btn-mcp" title="MCP servers" data-i18n-title="chrome.mcp">MCP</button>
-          <button type="button" class="chrome-btn chrome-tab" id="btn-skills" title="Skills & Plugins" data-i18n-title="chrome.skills">SK</button>
-          <button type="button" class="chrome-btn" id="btn-help" title="User guide" data-i18n-title="chrome.help">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
-          </button>
-          <button type="button" class="chrome-btn" id="btn-keymap" title="Key map" data-i18n-title="chrome.keymap">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.01"/><path d="M10 8h.01"/><path d="M14 8h.01"/><path d="M18 8h.01"/><path d="M6 12h.01"/><path d="M10 12h.01"/><path d="M14 12h.01"/><path d="M18 12h.01"/><path d="M7 16h10"/></svg>
-          </button>
-          <button type="button" class="chrome-btn" id="btn-settings" title="Settings" data-i18n-title="chrome.settings">
+          <button type="button" class="chrome-btn" id="btn-settings" title="Settings" data-i18n-title="chrome.settings" aria-label="Settings">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
           <button type="button" class="chrome-btn" id="btn-reconnect" title="Codex CLI Connect" data-i18n-title="chrome.reconnect">
@@ -37,9 +28,6 @@
           </button>
           <button type="button" class="chrome-btn" id="btn-min" title="Minimize" data-i18n-title="chrome.min">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>
-          </button>
-          <button type="button" class="chrome-btn close" id="btn-close" title="Close" data-i18n-title="chrome.close">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
         </div>
       </div>
@@ -81,7 +69,7 @@
           </div>
           <div class="modal-scroll" id="icon-picker-scroll">
             <form class="icon-online-search" id="icon-online-search">
-              <input id="icon-online-query" type="search" maxlength="60" autocomplete="off" spellcheck="false" data-i18n-placeholder="picker.onlinePlaceholder" placeholder="Search Codex, Claude, Gemini…" />
+              <input id="icon-online-query" type="search" maxlength="60" autocomplete="off" spellcheck="false" data-i18n-placeholder="picker.onlinePlaceholder" placeholder="Search Codex, Gemini…" />
               <button type="submit" data-i18n="picker.onlineSearch">Web search</button>
             </form>
             <p class="icon-online-status" id="icon-online-status" data-i18n="picker.onlineHint">Search the Iconify catalog for agent and service icons.</p>
@@ -171,6 +159,18 @@
           </div>
           <div class="modal-scroll settings-scroll">
           <p class="provider-lead" id="settings-lead" data-i18n="settings.lead">Codex CLI options · saved to ~/.codex · applies to new CLI windows.</p>
+          <div class="settings-section settings-tools-section">
+            <p class="settings-section-title">Agent Micro tools</p>
+            <p class="settings-desc">앱 헤더의 기능을 여기서 열고 관리할 수 있어요.</p>
+            <div class="settings-tools-grid">
+              <button type="button" class="voice-btn settings-tool-btn" data-settings-tool="git">Git</button>
+              <button type="button" class="voice-btn settings-tool-btn" data-settings-tool="mcp">MCP</button>
+              <button type="button" class="voice-btn settings-tool-btn" data-settings-tool="skills">Skills &amp; Plugins</button>
+              <button type="button" class="voice-btn settings-tool-btn" data-settings-tool="guide">User Guide</button>
+              <button type="button" class="voice-btn settings-tool-btn" data-settings-tool="keymap">Key Map</button>
+              <button type="button" class="voice-btn settings-tool-btn" data-settings-tool="rules">Global Rules</button>
+            </div>
+          </div>
           <input id="settings-search" class="voice-input settings-search" type="search" data-i18n-placeholder="settings.search" placeholder="Search settings…" />
           <div class="settings-body" id="settings-body">
             <div class="settings-field">
@@ -187,9 +187,19 @@
                 <label class="voice-label" data-i18n="settings.provider">Provider</label>
                 <div class="settings-row">
                   <button type="button" class="voice-btn settings-provider-btn" id="settings-provider-codex" data-provider="codex">Codex CLI</button>
-                  <button type="button" class="voice-btn settings-provider-btn" id="settings-provider-claude" data-provider="claude">Claude Code</button>
+                  <button type="button" class="voice-btn settings-provider-btn" id="settings-provider-api" data-provider="api">Custom API</button>
+                  <button type="button" class="voice-btn" id="settings-api-configure">Configure API</button>
                 </div>
-                <p class="settings-desc" data-i18n="settings.provider.desc">Switch between Codex CLI and Claude Code. Restarts the connection.</p>
+                <p class="settings-desc" data-i18n="settings.provider.desc">Codex CLI connection. Restarts the connection.</p>
+              </div>
+              <div class="settings-field" id="api-provider-fields">
+                <label class="voice-label" for="set-api-base-url">API Base URL</label>
+                <input id="set-api-base-url" class="voice-input" type="url" placeholder="https://api.openai.com/v1" />
+                <label class="voice-label" for="set-api-key-env">API key environment variable</label>
+                <input id="set-api-key-env" class="voice-input" type="text" placeholder="OPENAI_API_KEY" />
+                <label class="voice-label" for="set-api-model">API model</label>
+                <input id="set-api-model" class="voice-input" type="text" placeholder="gpt-4o-mini" />
+                <p class="settings-desc">OpenAI-compatible Chat Completions endpoint. API keys stay in your environment.</p>
               </div>
               <div class="settings-field">
                 <label class="voice-label" id="set-codex-login-label" data-i18n="settings.codexLogin">Codex login</label>
@@ -201,27 +211,6 @@
                   <button type="button" class="voice-btn primary" id="settings-codex-login" data-i18n="settings.codexLogin.btn">
                     Log in / Re-login
                   </button>
-                </div>
-              </div>
-              <div class="settings-field">
-                <label class="voice-label" for="settings-license-key" data-i18n="trial.keyLabel">License key</label>
-                <p class="settings-status" id="set-license-status" data-i18n="settings.license.unknown">Checking…</p>
-                <input
-                  id="settings-license-key"
-                  class="voice-input"
-                  type="text"
-                  autocomplete="off"
-                  spellcheck="false"
-                  placeholder="AM-····-····-····-····"
-                />
-                <p class="settings-desc" data-i18n="settings.license.desc">
-                  Enter anytime during trial or after purchase. You can replace the key later.
-                </p>
-                <div class="voice-actions settings-inline-actions">
-                  <button type="button" class="voice-btn primary" id="settings-license-activate" data-i18n="trial.activate">
-                    Activate key
-                  </button>
-                  <button type="button" class="voice-btn" id="settings-license-buy" data-i18n="trial.buy">Buy</button>
                 </div>
               </div>
             </div>
@@ -239,6 +228,14 @@
                 <div class="usage-card"><span data-i18n="settings.usage.context">Context window</span><strong id="usage-context">—</strong></div>
               </div>
               <div class="usage-rate" id="usage-rate">—</div>
+              <div class="reset-tracker" aria-live="polite">
+                <div class="reset-tracker-head"><span data-i18n="settings.usage.limits">Rate-limit reset tracker</span><span id="usage-plan">—</span></div>
+                <div class="reset-grid">
+                  <div class="reset-card"><span data-i18n="settings.usage.shortWindow">5-hour window</span><strong id="usage-short-limit">—</strong><small id="usage-short-reset">—</small></div>
+                  <div class="reset-card"><span data-i18n="settings.usage.longWindow">Weekly window</span><strong id="usage-long-limit">—</strong><small id="usage-long-reset">—</small></div>
+                </div>
+                <div class="reset-credits"><span data-i18n="settings.usage.banked">Banked resets</span><strong id="usage-credits">—</strong></div>
+              </div>
               <p class="settings-desc usage-meta" id="usage-meta">—</p>
             </div>
 
@@ -378,6 +375,60 @@
                   <span data-i18n="settings.interruptMessage">Record interruption messages</span>
                 </label>
                 <p class="settings-desc" data-i18n="settings.interruptMessage.desc">Keeps an interruption note in the agent context when a turn is stopped.</p>
+              </div>
+            </div>
+
+            <div class="settings-section agent-rules-section">
+              <p class="settings-section-title" data-i18n="settings.agentRules">Agent rules &amp; slot profiles</p>
+              <div class="settings-field">
+                <label class="voice-label" for="set-global-agent-rules" data-i18n="settings.globalRules">Global rules</label>
+                <textarea id="set-global-agent-rules" class="voice-input" rows="4" maxlength="20000" data-i18n-placeholder="settings.globalRules.placeholder" placeholder="Rules applied to every Agent Micro session"></textarea>
+              </div>
+              <div class="settings-field">
+                <label class="voice-label" for="set-project-agent-rules" data-i18n="settings.projectRules">Project rules</label>
+                <textarea id="set-project-agent-rules" class="voice-input" rows="4" maxlength="20000" data-i18n-placeholder="settings.projectRules.placeholder" placeholder="Rules for the selected working folder"></textarea>
+                <p class="settings-desc rules-path" id="set-project-rules-path">—</p>
+              </div>
+              <div class="settings-field">
+                <label class="voice-label" for="set-agent-slot" data-i18n="settings.agentSlot">Pad agent slot</label>
+                <select id="set-agent-slot" class="voice-input settings-select">
+                  <option value="0">Agent 1</option><option value="1">Agent 2</option><option value="2">Agent 3</option>
+                  <option value="3">Agent 4</option><option value="4">Agent 5</option><option value="5">Agent 6</option>
+                </select>
+              </div>
+              <div id="set-agent-slot-editor">
+                <div class="settings-row">
+                  <div class="settings-field"><label class="settings-check" for="set-slot-enabled"><input id="set-slot-enabled" type="checkbox" /><span data-i18n="settings.agentSlotEnabled">Use slot profile</span></label></div>
+                  <div class="settings-field"><label class="voice-label" for="set-slot-name" data-i18n="settings.agentSlotName">Display name</label><input id="set-slot-name" class="voice-input" type="text" maxlength="64" /></div>
+                </div>
+                <div class="settings-field">
+                  <label class="voice-label" for="set-slot-role" data-i18n="settings.agentSlotRole">Role template</label>
+                  <select id="set-slot-role" class="voice-input settings-select"><option value="" data-i18n="settings.agentSlotRole.none">None</option></select>
+                </div>
+                <div class="settings-field">
+                  <label class="voice-label" for="set-slot-rules" data-i18n="settings.agentSlotRules">Slot rules</label>
+                  <textarea id="set-slot-rules" class="voice-input" rows="5" maxlength="20000"></textarea>
+                  <button type="button" class="voice-btn rules-edit-button" id="agent-rules-edit" data-i18n="settings.agentRules.edit">Edit Agent rules</button>
+                </div>
+                <div class="settings-row">
+                  <div class="settings-field"><label class="voice-label" for="set-slot-skills" data-i18n="settings.agentSlotSkills">Preferred skills</label><input id="set-slot-skills" class="voice-input" type="text" data-i18n-placeholder="settings.agentSlotSkills.placeholder" placeholder="review, docs, debug" /></div>
+                  <div class="settings-field"><label class="voice-label" for="set-slot-tools" data-i18n="settings.agentSlotTools">Allowed tools</label><input id="set-slot-tools" class="voice-input" type="text" data-i18n-placeholder="settings.agentSlotTools.placeholder" placeholder="Bash(git *), Edit, Read" /></div>
+                </div>
+                <div class="settings-row">
+                  <div class="settings-field"><label class="voice-label" for="set-slot-model" data-i18n="settings.agentModel">Model override</label><input id="set-slot-model" class="voice-input" type="text" placeholder="Automatic" /></div>
+                  <div class="settings-field"><label class="voice-label" for="set-slot-reasoning" data-i18n="settings.reasoning">Reasoning effort</label><select id="set-slot-reasoning" class="voice-input settings-select"><option value="" data-i18n="settings.auto">Automatic</option><option value="minimal">minimal</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option><option value="xhigh">xhigh</option></select></div>
+                </div>
+                <div class="settings-field"><label class="voice-label" for="set-slot-working-directory" data-i18n="settings.agentSlotWorkingDirectory">Working folder override</label><input id="set-slot-working-directory" class="voice-input" type="text" placeholder="Use project default" /></div>
+                <div class="settings-row">
+                  <div class="settings-field"><label class="voice-label" for="set-slot-sandbox" data-i18n="settings.sandbox">Sandbox</label><select id="set-slot-sandbox" class="voice-input settings-select"><option value="" data-i18n="settings.inherit">Inherit</option><option value="read-only">read-only</option><option value="workspace-write">workspace-write</option><option value="danger-full-access">danger-full-access</option></select></div>
+                  <div class="settings-field"><label class="voice-label" for="set-slot-approval" data-i18n="settings.approval">Approval policy</label><select id="set-slot-approval" class="voice-input settings-select"><option value="" data-i18n="settings.inherit">Inherit</option><option value="untrusted">untrusted</option><option value="on-request">on-request</option><option value="never">never</option></select></div>
+                </div>
+                <div class="settings-row">
+                  <div class="settings-field"><label class="voice-label" for="set-slot-auto-continue" data-i18n="settings.agentSlotAutoContinue">Auto Continue</label><select id="set-slot-auto-continue" class="voice-input settings-select"><option value="inherit" data-i18n="settings.inherit">Inherit</option><option value="on" data-i18n="settings.on">On</option><option value="off" data-i18n="settings.off">Off</option></select></div>
+                  <div class="settings-field"><label class="voice-label" for="set-slot-auto-delay" data-i18n="settings.autoContinueDelay">Delay (seconds)</label><input id="set-slot-auto-delay" class="voice-input" type="number" min="5" max="3600" /></div>
+                  <div class="settings-field"><label class="voice-label" for="set-slot-auto-max" data-i18n="settings.autoContinueMax">Maximum repeats</label><input id="set-slot-auto-max" class="voice-input" type="number" min="1" max="10" /></div>
+                </div>
+                <p class="settings-desc" data-i18n="settings.agentRules.desc">Rules are layered global → project → role → slot when a new CLI session starts.</p>
               </div>
             </div>
 
@@ -553,8 +604,8 @@
         </div>
       </div>
 
-      <div class="icon-picker trial-lock" id="codex-login-gate" hidden>
-        <div class="icon-picker-card guide-card trial-lock-card provider-pick-card">
+      <div class="icon-picker gate-modal" id="codex-login-gate" hidden>
+        <div class="icon-picker-card guide-card gate-modal-card provider-pick-card">
           <div class="guide-head">
             <div class="guide-head-copy">
               <span class="guide-kicker">Agent Micro</span>
@@ -569,15 +620,11 @@
               <strong>Codex CLI</strong>
               <span data-i18n="loginGate.codexDesc">OpenAI · ChatGPT login · app-server</span>
             </button>
-            <button type="button" class="provider-tile" id="login-pick-claude" data-provider="claude">
-              <strong>Claude Code</strong>
-              <span data-i18n="loginGate.claudeDesc">Anthropic · Claude login · CLI</span>
-            </button>
           </div>
           <p class="provider-lead" id="login-gate-lead" data-i18n="loginGate.codexLead">
             Sign in with ChatGPT to use Codex CLI.
           </p>
-          <div class="voice-actions trial-lock-actions">
+          <div class="voice-actions gate-modal-actions">
             <button type="button" class="voice-btn primary" id="login-gate-btn" data-i18n="loginGate.btn">
               Log in
             </button>
@@ -588,59 +635,46 @@
         </div>
       </div>
 
-      <div class="icon-picker trial-lock" id="trial-lock" hidden>
-        <div class="icon-picker-card guide-card trial-lock-card">
-          <div class="guide-head">
-            <div class="guide-head-copy">
-              <span class="guide-kicker">Agent Micro</span>
-              <span class="guide-title" data-i18n="trial.title">Trial ended</span>
-            </div>
-          </div>
-          <p class="provider-lead" id="trial-lock-lead" data-i18n="trial.lead">
-            Your 7-day free trial has ended. Buy on Gumroad, then enter your license key.
-          </p>
-          <label class="voice-label" for="trial-license-key" data-i18n="trial.keyLabel">License key</label>
-          <input
-            id="trial-license-key"
-            class="voice-input"
-            type="text"
-            autocomplete="off"
-            spellcheck="false"
-            placeholder="AM-····-····-····-····"
-          />
-          <div class="voice-actions trial-lock-actions">
-            <button type="button" class="voice-btn primary" id="trial-activate" data-i18n="trial.activate">Activate key</button>
-            <button type="button" class="voice-btn" id="trial-sponsor" disabled data-i18n="trial.buy">Buy</button>
-            <button type="button" class="voice-btn" id="trial-close" data-i18n="trial.close">Close window</button>
-          </div>
-          <p class="icon-picker-hint" id="trial-lock-hint" data-i18n="trial.hint">Paste the key from your purchase email · buy link may be pending</p>
-        </div>
-      </div>
-
       <div class="hud">
-        <div class="hud-row">
-          <span class="hud-label">Task</span>
-          <span class="hud-value" id="hud-task">—</span>
-        </div>
-        <div class="hud-row">
-          <span class="hud-label">Project</span>
-          <span class="hud-value hud-folder" id="hud-folder" title="">—</span>
+        <div class="hud-head">
+          <span class="hud-kicker">AGENT TELEMETRY</span>
+          <span class="hud-live"><i></i> LIVE</span>
         </div>
         <div class="hud-row">
           <span class="hud-label">Status</span>
           <span class="hud-value" id="hud-status">idle</span>
         </div>
         <div class="hud-row">
-          <span class="hud-label">Model</span>
-          <span class="hud-value" id="hud-model">Deep</span>
+          <span class="hud-label">Connection</span>
+          <span class="hud-value hud-connection" id="hud-link">Codex CLI · Offline</span>
         </div>
         <div class="hud-row">
-          <span class="hud-label">Reasoning</span>
-          <span class="hud-value" id="hud-reason">medium</span>
+          <span class="hud-label" id="hud-model-label">Agent 1 · Model</span>
+          <span class="hud-model-control">
+            <span class="hud-value hud-model-button" id="hud-model" title="Current model">—</span>
+            <button type="button" class="hud-value hud-toggle-button" id="hud-model-change" data-i18n="hud.changeModel" title="Change the selected agent's model">Change</button>
+          </span>
         </div>
         <div class="hud-row">
-          <span class="hud-label">Usage</span>
+          <span class="hud-label">Mode</span>
+          <button type="button" class="hud-value hud-toggle-button" id="hud-fast" title="Toggle fast mode" aria-label="Toggle fast mode">Fast Off</button>
+        </div>
+        <div class="hud-row">
+          <span class="hud-label">Tokens</span>
+          <span class="hud-token-control">
+            <span class="hud-value" id="hud-token-saver">Balanced</span>
+            <span class="hud-token-meter" id="hud-token-meter" aria-label="Token Saver level" title="Dial Token Saver level">
+              <i></i><i></i><i></i><i></i><i></i>
+            </span>
+          </span>
+        </div>
+        <div class="hud-row">
+          <span class="hud-label">Context</span>
           <span class="hud-value" id="hud-usage">—</span>
+        </div>
+        <div class="hud-badges" id="hud-badges" hidden>
+          <span class="hud-badge hud-badge-auto" id="hud-auto-badge" hidden>Auto Continue</span>
+          <span class="hud-badge hud-badge-dev" id="hud-dev-badge" hidden>DEV running</span>
         </div>
       </div>
     </div>

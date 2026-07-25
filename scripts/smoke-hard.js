@@ -36,15 +36,13 @@ async function main() {
   const prefs = require('../src/pad-prefs');
   const i18n = require('../src/i18n');
   const mac = require('../src/platform/mac');
-  const trial = require('../src/trial');
   const { CodexBridge, findCodexNative } = require('../src/providers/codex-bridge');
 
   settings.setUserDataPath(USER);
   prefs.setUserDataPath(USER);
-  trial.setUserDataPath(USER);
 
-  // ── settings / prefs / trial / i18n ──
-  console.log('\n--- settings / trial ---');
+  // ── settings / prefs / i18n ──
+  console.log('\n--- settings / prefs ---');
   try {
     const s = settings.load();
     if (s?.sandbox_mode) pass('settings.load', s.sandbox_mode);
@@ -57,18 +55,6 @@ async function main() {
     pass('prefs.load', `mod=${p.hotkeyModifier} locale=${p.locale || 'en'}`);
   } catch (e) {
     fail('prefs.load', e.message);
-  }
-  try {
-    const st = trial.getStatus();
-    pass(
-      'trial.status',
-      `locked=${st.locked} licensed=${st.licensed} daysLeft=${st.daysLeft}`
-    );
-    const bad = trial.activateLicense('INVALID-SMOKE-KEY');
-    if (bad && bad.ok === false) pass('trial.badKey.rejected', bad.errorKey || bad.error);
-    else fail('trial.badKey.rejected', JSON.stringify(bad));
-  } catch (e) {
-    fail('trial.status', e.message);
   }
   try {
     if (i18n.t('ko', 'chrome.help') && i18n.t('en', 'chrome.help') !== 'chrome.help') {

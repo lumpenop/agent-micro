@@ -32,7 +32,7 @@ async function main() {
   console.log('=== Agent Micro feature smoke ===\n');
   const liveActions = process.env.SMOKE_LIVE_ACTIONS === '1';
 
-  ok('voice.mode', 'bundled local Whisper (WAV capture, no API key)');
+  ok('voice.mode', 'on-demand local Whisper model (WAV capture, no API key)');
 
   // ── settings / prefs ──
   const settings = require('../src/codex-settings');

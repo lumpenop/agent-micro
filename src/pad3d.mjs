@@ -4,15 +4,17 @@ import { RoomEnvironment } from './vendor/RoomEnvironment.mjs';
 import { iconImageUrl } from './icons.mjs';
 import { playKeyDown, playKeyUp, playDialTick, playJoyTick } from './key-sounds.mjs';
 
-/** Match HUD legend (--thinking/complete/input/error); idle stays neutral gray for frost */
+/** Match HUD legend (--thinking/complete/input/error); slightly brighter for readability */
 const STATUS_COLOR = {
-  idle: 0x8fa5b4,
-  thinking: 0x4aa3ff,
-  complete: 0x3ecf7a,
-  input: 0xf0c24b,
-  error: 0xef4d4d,
+  idle: 0x6faeca,
+  thinking: 0x35a9ff,
+  complete: 0x2be783,
+  input: 0xffc83d,
+  error: 0xff4f55,
   off: 0x000000,
 };
+// Resting/clear key glow: cool gray-blue so active states remain distinct.
+const IDLE_KEY_COLOR = 0x7f9099;
 
 /**
  * Flat rounded slab — plan-view radius is NOT clamped by thickness
@@ -49,20 +51,20 @@ const LAYOUT = [
   ['touch', 'agent:0', 'agent:1', 'dial'],
   ['agent:2', 'agent:3', 'agent:4', 'agent:5'],
   ['cmd:fast', 'cmd:approve', 'cmd:decline', 'cmd:fork'],
-  ['joy', 'cmd:mic', null, 'cmd:send'], // mic spans 2 via special case
+  ['joy', 'cmd:review', null, 'cmd:send'],
 ];
 
-/** Per-icon face size — send/mic settled halfway from last tweak */
+/** Per-icon face size — send/review settled halfway from last tweak */
 function iconPlaneSize(iconId, wide = false) {
   if (iconId === 'send') return wide ? 0.56 : 0.46;
-  if (iconId === 'mic') return wide ? 0.49 : 0.42;
+  if (iconId === 'review') return wide ? 0.52 : 0.44;
   if (String(iconId || '').startsWith('custom_')) return wide ? 0.56 : 0.46;
   return wide ? 0.54 : 0.44;
 }
 
 function iconTexFill(iconId) {
   if (iconId === 'send') return 0.68;
-  if (iconId === 'mic') return 0.61;
+  if (iconId === 'review') return 0.64;
   if (String(iconId || '').startsWith('custom_')) return 0.7;
   return 0.64;
 }
@@ -74,8 +76,8 @@ function iconTexNudge(iconId) {
       return { x: 0.018, y: -0.012 };
     case 'send':
       return { x: -0.022, y: 0.018 };
-    case 'mic':
-      return { x: 0, y: -0.02 };
+    case 'review':
+      return { x: 0, y: -0.01 };
     case 'fork':
       return { x: 0, y: -0.012 };
     default:
@@ -347,13 +349,14 @@ function keycapMesh({ wide = false, frost = false, iconId = null } = {}) {
     );
     core.position.y = -h * 0.04;
     mesh.add(core);
+    mesh.userData.frostMaterials = { shell: mat, skirt: skirt.material, core: core.material };
 
     // Center disc — fixed radius; world offset applied after key is placed
     const glow = new THREE.Mesh(
       new THREE.CircleGeometry(CAP.glowR, 48),
       new THREE.MeshBasicMaterial({
         map: glowTexture(),
-        color: STATUS_COLOR.idle,
+        color: IDLE_KEY_COLOR,
         transparent: true,
         opacity: 0.82,
         toneMapped: false,
@@ -369,7 +372,7 @@ function keycapMesh({ wide = false, frost = false, iconId = null } = {}) {
     mesh.add(glow);
     mesh.userData.glow = glow;
 
-    const light = new THREE.PointLight(STATUS_COLOR.idle, 0.55, 1.85);
+    const light = new THREE.PointLight(IDLE_KEY_COLOR, 0.48, 1.85);
     light.position.y = 0.05;
     mesh.add(light);
     mesh.userData.light = light;
@@ -502,7 +505,7 @@ export function createPad3D(container, handlers = {}) {
   renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = 1.12;
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   container.appendChild(renderer.domElement);
@@ -512,9 +515,9 @@ export function createPad3D(container, handlers = {}) {
   renderer.domElement.style.borderRadius = '34px';
 
   // lights — soft matte key (volume without gloss)
-  const amb = new THREE.AmbientLight(0xffffff, 0.38);
+  const amb = new THREE.AmbientLight(0xffffff, 0.46);
   scene.add(amb);
-  const key = new THREE.DirectionalLight(0xfff2e4, 1.15);
+  const key = new THREE.DirectionalLight(0xfff2e4, 1.24);
   key.position.set(-2.8, 9.8, 4.2);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
@@ -528,17 +531,17 @@ export function createPad3D(container, handlers = {}) {
   key.shadow.normalBias = 0.03;
   key.shadow.radius = 3.5;
   scene.add(key);
-  const fill = new THREE.DirectionalLight(0xc8d6ea, 0.32);
+  const fill = new THREE.DirectionalLight(0xc8d6ea, 0.38);
   fill.position.set(5, 4, -3);
   scene.add(fill);
   const rim = new THREE.DirectionalLight(0xffffff, 0.18);
   rim.position.set(-1, 5, 5);
   scene.add(rim);
-  const hemi = new THREE.HemisphereLight(0xf5f7fa, 0x6a7380, 0.42);
+  const hemi = new THREE.HemisphereLight(0xf5f7fa, 0x778895, 0.48);
   scene.add(hemi);
 
   // Outer bezel — modest rim; corner radius eased so perspective doesn't oval the front edge
-  const CHASSIS_BASE = 0xb8c4d0;
+  const CHASSIS_BASE = 0xcbd7e2;
   const chassis = new THREE.Mesh(
     roundedSlabGeometry(5.28, 5.28, 0.4, 0.52, 20),
     new THREE.MeshPhysicalMaterial({
@@ -589,7 +592,7 @@ export function createPad3D(container, handlers = {}) {
   const plate = new THREE.Mesh(
     roundedSlabGeometry(4.45, 4.45, 0.14, 0.28, 16),
     new THREE.MeshStandardMaterial({
-      color: 0x5a6570,
+      color: 0x718391,
       roughness: 0.72,
       metalness: 0.18,
     })
@@ -601,7 +604,7 @@ export function createPad3D(container, handlers = {}) {
   const wellRim = new THREE.Mesh(
     roundedSlabGeometry(4.52, 4.52, 0.08, 0.32, 16),
     new THREE.MeshStandardMaterial({
-      color: 0x3e4750,
+      color: 0x566875,
       roughness: 0.8,
       metalness: 0.1,
     })
@@ -619,6 +622,7 @@ export function createPad3D(container, handlers = {}) {
 
   // dial — outer Ø ≈ 0.90 (keycap 0.92)
   const dialGroup = new THREE.Group();
+  let dialRotation = 0;
   const dialBase = new THREE.Mesh(
     new THREE.CylinderGeometry(0.42, 0.44, 0.1, 48),
     new THREE.MeshStandardMaterial({ color: 0x2e353c, roughness: 0.6, metalness: 0.3 })
@@ -733,9 +737,15 @@ export function createPad3D(container, handlers = {}) {
   joyGate.rotation.x = Math.PI / 2;
   joyGate.position.y = 0.06;
   const joyMarks = new THREE.Group();
-  const joyMarkMaterial = new THREE.MeshStandardMaterial({ color: 0x78828b, roughness: 0.58, metalness: 0.1 });
+  const joyMarkMaterial = new THREE.MeshStandardMaterial({
+    color: 0xb9d9e8,
+    emissive: 0x2e6078,
+    emissiveIntensity: 0.45,
+    roughness: 0.48,
+    metalness: 0.1,
+  });
   for (let i = 0; i < 4; i++) {
-    const mark = new THREE.Mesh(new RoundedBoxGeometry(0.04, 0.018, 0.075, 2, 0.009), joyMarkMaterial);
+    const mark = new THREE.Mesh(new RoundedBoxGeometry(0.055, 0.022, 0.105, 2, 0.012), joyMarkMaterial);
     const angle = (Math.PI / 2) * i;
     mark.position.set(Math.sin(angle) * 0.37, 0.108, Math.cos(angle) * 0.37);
     mark.rotation.y = angle;
@@ -888,12 +898,13 @@ export function createPad3D(container, handlers = {}) {
     ['approve', 1, 2, false],
     ['decline', 2, 2, false],
     ['fork', 3, 2, false],
-    ['mic', 1, 3, true],
+    ['review', 1, 3, true],
     ['send', 3, 3, false],
   ];
-  // mic centered between col 1-2
+  // review centered between col 1-2
   cmdSlots.forEach(([name, col, row, wide]) => {
-    const m = keycapMesh({ wide, frost: false, iconId: name === 'send' ? 'send' : name === 'mic' ? 'mic' : name === 'fast' ? 'lightning' : name === 'approve' ? 'check' : name === 'decline' ? 'times' : 'fork' });
+    const iconId = name === 'send' ? 'send' : name === 'review' ? 'spark' : name === 'fast' ? 'lightning' : name === 'approve' ? 'check' : name === 'decline' ? 'times' : 'fork';
+    const m = keycapMesh({ wide, frost: false, iconId });
     const x = wide ? originX + gap * 1.5 : originX + gap * col;
     m.position.set(x, 0.42, originZ + gap * row);
     m.userData = { ...m.userData, type: 'cmd', cmd: name, baseY: 0.42 };
@@ -991,9 +1002,6 @@ export function createPad3D(container, handlers = {}) {
     }
     joyDragging = false;
     dialDragging = false;
-    if (pressed?.userData?.type === 'cmd' && pressed.userData.cmd === 'mic') {
-      handlers.onCmdRelease?.('mic');
-    }
     if (pressed) {
       pressVisual(pressed, false);
       pressed = null;
@@ -1063,9 +1071,9 @@ export function createPad3D(container, handlers = {}) {
   function setTouchLayer(layer) {
     touchLeds.forEach((led, i) => {
       const on = i === layer;
-      led.material.emissive.setHex(on ? 0x5a9cff : 0x000000);
-      led.material.emissiveIntensity = on ? 1.4 : 0;
-      led.material.color.setHex(on ? 0xa8d0ff : 0x8a929a);
+      led.material.emissive.setHex(on ? 0x2d9dff : 0x101a24);
+      led.material.emissiveIntensity = on ? 1.2 : 0.12;
+      led.material.color.setHex(on ? 0x5cb8ff : 0x465767);
       if (ledLights[i]) ledLights[i].intensity = on ? 0.7 : 0;
     });
   }
@@ -1111,10 +1119,6 @@ export function createPad3D(container, handlers = {}) {
     }
     pressVisual(obj, true);
     playKeyDown(soundKindFor(obj), soundIdFor(obj));
-    // Mic: press-to-talk starts on down
-    if (obj.userData.type === 'cmd' && obj.userData.cmd === 'mic') {
-      handlers.onCmdPress?.('mic');
-    }
   });
 
   renderer.domElement.addEventListener('pointermove', (e) => {
@@ -1123,7 +1127,8 @@ export function createPad3D(container, handlers = {}) {
       // cw > 0 = clockwise on screen; rotation.y decreases for clockwise (top-down Y-up)
       const cw = shortestDelta(dialLastAngle, a);
       dialLastAngle = a;
-      dialKnob.rotation.y -= (cw * Math.PI) / 180;
+      dialRotation -= (cw * Math.PI) / 180;
+      dialKnob.rotation.y = dialRotation;
       if (Math.abs(cw) > 2) playDialTick(cw);
       handlers.onDialDelta?.(cw);
       e.preventDefault();
@@ -1182,17 +1187,13 @@ export function createPad3D(container, handlers = {}) {
       const cmd = obj.userData.cmd ?? downObj.userData.cmd;
       if (downObj.userData?.disabled || obj.userData?.disabled) {
         /* ignore disabled keys */
-      } else if (cmd === 'mic') handlers.onCmdRelease?.('mic');
-      else handlers.onCmd?.(cmd);
+      } else handlers.onCmd?.(cmd);
     }
     if (t === 'touch') handlers.onTouch?.();
     pressed = null;
   });
 
   renderer.domElement.addEventListener('pointercancel', () => {
-    if (pressed?.userData?.type === 'cmd' && pressed.userData.cmd === 'mic') {
-      handlers.onCmdRelease?.('mic');
-    }
     if (pressed) pressVisual(pressed, false);
     pressed = null;
     dialDragging = false;
@@ -1213,7 +1214,8 @@ export function createPad3D(container, handlers = {}) {
       e.preventDefault();
       // scroll up → clockwise → higher
       const cw = e.deltaY > 0 ? -12 : 12;
-      dialKnob.rotation.y -= (cw * Math.PI) / 180;
+      dialRotation -= (cw * Math.PI) / 180;
+      dialKnob.rotation.y = dialRotation;
       handlers.onDialDelta?.(cw);
     },
     { passive: false }
@@ -1260,10 +1262,21 @@ export function createPad3D(container, handlers = {}) {
       const off = status === 'off';
       // Disc = status color (default slightly soft; selected = richer)
       // Light bloom = status + white mix
-      const base = new THREE.Color(off ? STATUS_COLOR.idle : color);
+      const base = new THREE.Color(off || status === 'idle' ? IDLE_KEY_COLOR : color);
       const disc = base.clone();
       if (selected && !off) disc.offsetHSL(0, 0.2, -0.06);
       else if (!off) disc.lerp(new THREE.Color(0xffffff), 0.14);
+      const frostMaterials = a.userData.frostMaterials;
+      if (frostMaterials) {
+        const activeClear = !off && status !== 'idle';
+        const clearTint = activeClear ? base.clone().lerp(new THREE.Color(0xffffff), 0.48) : new THREE.Color(0xffffff);
+        const skirtTint = activeClear ? base.clone().lerp(new THREE.Color(0xffffff), 0.22) : new THREE.Color(0x9bb6cc);
+        const coreTint = activeClear ? base.clone().lerp(new THREE.Color(0x263744), 0.42) : new THREE.Color(0x6e7e8c);
+        frostMaterials.shell.color.copy(clearTint);
+        frostMaterials.shell.opacity = activeClear ? (selected ? 0.72 : 0.64) : 0.55;
+        frostMaterials.skirt.color.copy(skirtTint);
+        frostMaterials.core.color.copy(coreTint);
+      }
       if (a.userData.glow) {
         a.userData.glow.material.color.copy(disc);
         a.userData.glow.material.opacity = off ? 0.72 : selected ? 1 : 0.82;
@@ -1370,7 +1383,7 @@ export function createPad3D(container, handlers = {}) {
       }
       return true;
     },
-    /** Silent unpress (e.g. mic recording ended) */
+    /** Silent unpress (e.g. an action ended) */
     releasePress(target) {
       return this.simulatePress(target, { phase: 'up', silent: true });
     },

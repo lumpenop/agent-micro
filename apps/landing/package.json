@@ -4,7 +4,8 @@
   "private": true,
   "description": "Agent Micro product landing page",
   "scripts": {
-    "dev": "python3 -m http.server 4173",
-    "preview": "python3 -m http.server 4173"
+    "build": "node build.js",
+    "dev": "node build.js && python3 -m http.server 4173 --directory dist",
+    "preview": "python3 -m http.server 4173 --directory dist"
   }
 }

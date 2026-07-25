@@ -5,14 +5,18 @@
   "main": "src/main.js",
   "packageManager": "pnpm@11.8.0",
   "scripts": {
-    "start": "ELECTRON_RUN_AS_NODE= electron .",
-    "dev": "ELECTRON_RUN_AS_NODE= electron .",
+    "start": "electron .",
+    "dev": "electron .",
+    "landing:build": "pnpm --filter @agent-micro/landing build",
+    "landing:dev": "pnpm --filter @agent-micro/landing dev",
     "test:safe": "node scripts/smoke-features.js",
     "test:voice": "node scripts/test-local-voice.js",
+    "test:assets": "node scripts/test-on-demand-assets.js",
+    "test:rules": "node scripts/test-agent-rules.js",
     "ensure:whisper": "node scripts/ensure-whisper.js",
-    "dist:mac": "node scripts/ensure-whisper.js && electron-builder --mac dir --arm64",
-    "dist:dmg": "node scripts/ensure-whisper.js && electron-builder --mac dmg --arm64",
-    "postinstall": "node scripts/ensure-electron.js && node scripts/ensure-tools.js && node scripts/ensure-whisper.js"
+    "dist:mac": "electron-builder --mac dir --arm64",
+    "dist:dmg": "electron-builder --mac dmg --arm64",
+    "postinstall": "node scripts/ensure-electron.js && node scripts/ensure-tools.js"
   },
   "keywords": [
     "agent",
@@ -29,11 +33,12 @@
     "asar": true,
     "files": [
       "src/**/*",
-      "package.json"
+      "package.json",
+      "LICENSE",
+      "THIRD_PARTY_NOTICES.md"
     ],
     "extraResources": [
-      { "from": "assets/bin", "to": "bin" },
-      { "from": "assets/models/ggml-base.bin", "to": "models/ggml-base.bin" }
+      { "from": "assets/bin", "to": "bin" }
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
@@ -45,10 +50,8 @@
   },
   "devDependencies": {
     "electron": "^37.2.0",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "@openai/codex": "0.144.5"
   },
-  "dependencies": {
-    "@openai/codex": "^0.144.5",
-    "@anthropic-ai/claude-code": "^2.1"
-  }
+  "dependencies": {}
 }

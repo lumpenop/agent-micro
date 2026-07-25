@@ -1,16 +1,13 @@
-/**
- * Bridge factory — supports Codex CLI and Claude Code CLI.
- * Pick the active provider at runtime via createBridge(provider).
- */
+/** Codex CLI bridge factory. */
 const { CodexBridge, focusChatGPT } = require('./codex-bridge');
-const { ClaudeBridge } = require('./claude-bridge');
+const { OpenAICompatibleBridge } = require('./openai-compatible-bridge');
 
 function createCodexBridge() {
   return new CodexBridge();
 }
 
-function createClaudeBridge() {
-  return new ClaudeBridge();
+function createApiBridge() {
+  return new OpenAICompatibleBridge();
 }
 
 function focusCodexDesktop() {
@@ -19,21 +16,15 @@ function focusCodexDesktop() {
 
 /**
  * Create a bridge for the given provider.
- * @param {'codex' | 'claude'} provider
+ * @param {'codex'|'api'} provider
  */
 function createBridge(provider = 'codex') {
-  switch (provider) {
-    case 'claude':
-      return createClaudeBridge();
-    case 'codex':
-    default:
-      return createCodexBridge();
-  }
+  return provider === 'api' ? createApiBridge() : createCodexBridge();
 }
 
 module.exports = {
   createCodexBridge,
-  createClaudeBridge,
+  createApiBridge,
   createBridge,
   focusCodexDesktop,
   focusProviderApp: focusCodexDesktop,

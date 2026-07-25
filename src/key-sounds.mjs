@@ -232,7 +232,7 @@ function profileFor(kind, id) {
   const i = String(id || '');
   const cmd = i.startsWith('cmd:') ? i.slice(4) : k;
 
-  if (cmd === 'mic' || k === 'mic') return 'wide';
+  if (cmd === 'review' || k === 'review') return 'wide';
   if (k === 'touch' || cmd === 'touch') return 'touch';
   if (k === 'dial' || cmd === 'dial') return 'dial';
   if (k === 'joy' || cmd === 'joy') return 'joy';

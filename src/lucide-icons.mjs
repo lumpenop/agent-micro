@@ -6,6 +6,7 @@ export const LUCIDE_ICONS = {
   times: { label: 'Decline', source: 'lucide/circle-x', svg: `<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle stroke="currentColor" fill="none" cx="12" cy="12" r="10" />
   <path stroke="currentColor" fill="none" d="m15 9-6 6" />
   <path stroke="currentColor" fill="none" d="m9 9 6 6" /></g>` },
+  review: { label: 'Review', source: 'lucide/shield-check', svg: `<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="currentColor" fill="none" d="M12 3 4.5 6v5.5c0 4.7 3.1 8 7.5 9.5 4.4-1.5 7.5-4.8 7.5-9.5V6z" /><path stroke="currentColor" fill="none" d="m8.5 12 2.2 2.2 4.8-4.8" /></g>` },
   fork: { label: 'Fork', source: 'lucide/git-fork', svg: `<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle stroke="currentColor" fill="none" cx="12" cy="18" r="3" />
   <circle stroke="currentColor" fill="none" cx="6" cy="6" r="3" />
   <circle stroke="currentColor" fill="none" cx="18" cy="6" r="3" />
@@ -77,4 +78,3 @@ export const LUCIDE_ICONS = {
   <path stroke="currentColor" fill="none" d="M18 5v13" />
   <path stroke="currentColor" fill="none" d="M22 10v3" /></g>` },
 };
-

@@ -1,5 +1,8 @@
 const EventEmitter = require('events');
-const { execFile } = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { execFile, execFileSync } = require('child_process');
 
 const REASONING = ['minimal', 'low', 'medium', 'high', 'xhigh'];
 
@@ -95,6 +98,7 @@ class BaseBridge extends EventEmitter {
     if (index < 0 || index >= this.agents.length) return;
     this.selected = index;
     const a = this.agents[index];
+    if (typeof a?.fastMode === 'boolean') this.fastMode = a.fastMode;
     if (a.status === 'off' && this.connected) {
       a.status = 'idle';
       a.name = a.name === '—' ? `Agent ${index + 1}` : a.name;
@@ -156,6 +160,10 @@ class BaseBridge extends EventEmitter {
     return { ok: false, reason: 'unsupported' };
   }
 
+  async readRateLimits() {
+    return null;
+  }
+
   async connect(opts = {}) {
     const status = await this.checkLogin();
     if (opts.forceLogin || !status.loggedIn) {
@@ -179,16 +187,37 @@ class BaseBridge extends EventEmitter {
 }
 
 function whichSync(cmd) {
+  if (!/^[A-Za-z0-9._-]+$/.test(String(cmd || ''))) return null;
   try {
-    const { execFileSync } = require('child_process');
     const out = execFileSync(process.platform === 'win32' ? 'where' : 'which', [cmd], {
       encoding: 'utf8',
       timeout: 3000,
     });
     return String(out).split(/\r?\n/).map((s) => s.trim()).find(Boolean) || null;
-  } catch {
-    return null;
+  } catch {}
+  if (process.platform !== 'win32') {
+    const home = os.homedir();
+    const directories = [
+      ...(process.env.PATH || '').split(path.delimiter),
+      '/opt/homebrew/bin', '/usr/local/bin', '/usr/bin',
+      path.join(home, '.local', 'bin'), path.join(home, 'Library', 'pnpm'),
+      path.join(home, '.npm-global', 'bin'), path.join(home, '.bun', 'bin'),
+      path.join(home, '.volta', 'bin'),
+    ];
+    for (const directory of [...new Set(directories.filter(Boolean))]) {
+      const candidate = path.join(directory, cmd);
+      try { fs.accessSync(candidate, fs.constants.X_OK); return candidate; } catch {}
+    }
+    // GUI apps do not inherit shell startup PATH. Ask the user's login shell as
+    // a final fallback so nvm/asdf/custom profile installations are reusable.
+    try {
+      const shell = process.env.SHELL && path.isAbsolute(process.env.SHELL) ? process.env.SHELL : '/bin/zsh';
+      const out = execFileSync(shell, ['-ilc', `command -v ${cmd}`], { encoding: 'utf8', timeout: 5000 });
+      const candidate = String(out).split(/\r?\n/).map((line) => line.trim()).find((line) => path.isAbsolute(line));
+      if (candidate) { fs.accessSync(candidate, fs.constants.X_OK); return candidate; }
+    } catch {}
   }
+  return null;
 }
 
 function openUrl(url) {

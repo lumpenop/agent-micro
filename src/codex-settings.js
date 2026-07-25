@@ -11,6 +11,25 @@ const BEGIN = '# BEGIN agent-micro-managed';
 const END = '# END agent-micro-managed';
 const AGENT_FILE_MARKER = '# Managed by Agent Micro';
 
+function defaultAgentSlots() {
+  return Array.from({ length: 6 }, (_, index) => ({
+    enabled: true,
+    name: `Agent ${index + 1}`,
+    role_id: '',
+    rules: '',
+    preferred_skills: [],
+    allowed_tools: [],
+    model: '',
+    model_reasoning_effort: '',
+    working_directory: '',
+    sandbox_mode: '',
+    approval_policy: '',
+    auto_continue: 'inherit',
+    auto_continue_delay_sec: 30,
+    auto_continue_max_runs: 1,
+  }));
+}
+
 const DEFAULTS = {
   working_directory: '',
   model: '',
@@ -31,6 +50,8 @@ const DEFAULTS = {
   model_auto_compact_token_limit: 0,
   tool_output_token_limit: 0,
   ram_warning_mb: 2048,
+  global_agent_rules: '',
+  agent_slots: defaultAgentSlots(),
   agent_roles: [],
   plan_mode_reasoning_effort: '',
   model_reasoning_summary: '',
@@ -41,6 +62,10 @@ const DEFAULTS = {
   tool_timeout_sec: 60,
   job_max_runtime_seconds: 1800,
   network_proxy: false,
+  api_provider: 'openai-compatible',
+  api_base_url: '',
+  api_key_env: 'OPENAI_API_KEY',
+  api_model: '',
 };
 
 const SANDBOX_MODES = ['read-only', 'workspace-write', 'danger-full-access'];
@@ -85,7 +110,28 @@ function safetyWarnings(settings) {
     warnings.push('workspace-write network access with approval disabled');
   }
   if (cfg.hooks_enabled) warnings.push('lifecycle hooks can run configured commands');
+  cfg.agent_slots.forEach((slot, index) => {
+    if (slot.enabled && slot.sandbox_mode === 'danger-full-access') {
+      warnings.push(`Agent ${index + 1} uses danger-full-access`);
+    }
+    if (slot.enabled && slot.approval_policy === 'never') {
+      warnings.push(`Agent ${index + 1} disables approval prompts`);
+    }
+  });
   return warnings;
+}
+
+function validateAgentSlots(slots) {
+  for (const [index, slot] of normalizeAgentSlots(slots).entries()) {
+    if (!slot.working_directory) continue;
+    if (!path.isAbsolute(slot.working_directory)) throw new Error(`Agent ${index + 1} working folder must be absolute`);
+    try {
+      if (!fs.statSync(slot.working_directory).isDirectory()) throw new Error('not a directory');
+    } catch {
+      throw new Error(`Agent ${index + 1} working folder is unavailable: ${slot.working_directory}`);
+    }
+  }
+  return true;
 }
 
 const CODEXIGNORE_SAMPLE = `# Agent Micro · Codex ignore (context / RAM)
@@ -182,6 +228,8 @@ function normalize(raw = {}) {
     model_auto_compact_token_limit: clampInt(raw.model_auto_compact_token_limit, 0, 2000000, 0),
     tool_output_token_limit: clampInt(raw.tool_output_token_limit, 0, 1000000, 0),
     ram_warning_mb: clampInt(raw.ram_warning_mb, 256, 65536, 2048),
+    global_agent_rules: String(raw.global_agent_rules || '').trim().slice(0, 20000),
+    agent_slots: normalizeAgentSlots(raw.agent_slots),
     agent_roles: normalizeAgentRoles(raw.agent_roles),
     plan_mode_reasoning_effort: ['', 'none', 'minimal', 'low', 'medium', 'high', 'xhigh'].includes(raw.plan_mode_reasoning_effort) ? raw.plan_mode_reasoning_effort : '',
     model_reasoning_summary: ['', 'auto', 'concise', 'detailed', 'none'].includes(raw.model_reasoning_summary) ? raw.model_reasoning_summary : '',
@@ -197,7 +245,39 @@ function normalize(raw = {}) {
       DEFAULTS.job_max_runtime_seconds
     ),
     network_proxy: !!raw.network_proxy,
+    api_provider: typeof raw.api_provider === 'string' ? raw.api_provider.trim().slice(0, 64) : DEFAULTS.api_provider,
+    api_base_url: typeof raw.api_base_url === 'string' ? raw.api_base_url.trim().slice(0, 512) : '',
+    api_key_env: typeof raw.api_key_env === 'string' ? raw.api_key_env.trim().replace(/[^A-Za-z0-9_]/g, '').slice(0, 128) : DEFAULTS.api_key_env,
+    api_model: typeof raw.api_model === 'string' ? raw.api_model.trim().slice(0, 160) : '',
   };
+}
+
+function normalizeAgentSlots(value) {
+  const defaults = defaultAgentSlots();
+  const input = Array.isArray(value) ? value : [];
+  return defaults.map((fallback, index) => {
+    const raw = input[index] || {};
+    return {
+      enabled: raw.enabled !== false,
+      name: String(raw.name || fallback.name).trim().slice(0, 64) || fallback.name,
+      role_id: String(raw.role_id || '').toLowerCase().replace(/[^a-z0-9_-]/g, '-').slice(0, 48),
+      rules: String(raw.rules || '').trim().slice(0, 20000),
+      preferred_skills: Array.isArray(raw.preferred_skills)
+        ? [...new Set(raw.preferred_skills.map((item) => String(item).trim()).filter(Boolean))].slice(0, 32)
+        : [],
+      allowed_tools: Array.isArray(raw.allowed_tools)
+        ? [...new Set(raw.allowed_tools.map((item) => String(item).trim()).filter(Boolean))].slice(0, 32)
+        : [],
+      model: String(raw.model || '').trim().slice(0, 120),
+      model_reasoning_effort: REASONING_EFFORTS.includes(raw.model_reasoning_effort) ? raw.model_reasoning_effort : '',
+      working_directory: String(raw.working_directory || '').trim().slice(0, 2048),
+      sandbox_mode: SANDBOX_MODES.includes(raw.sandbox_mode) ? raw.sandbox_mode : '',
+      approval_policy: APPROVAL_POLICIES.includes(raw.approval_policy) ? raw.approval_policy : '',
+      auto_continue: ['inherit', 'on', 'off'].includes(raw.auto_continue) ? raw.auto_continue : 'inherit',
+      auto_continue_delay_sec: clampInt(raw.auto_continue_delay_sec, 5, 3600, 30),
+      auto_continue_max_runs: clampInt(raw.auto_continue_max_runs, 1, 10, 1),
+    };
+  });
 }
 
 function tomlString(value) {
@@ -359,9 +439,9 @@ function shellQuote(s) {
 }
 
 /** Append --profile + -c flags to a codex binary invocation. */
-function withCliFlags(baseCommand, s = load()) {
+function withCliFlags(baseCommand, s = load(), extraConfig = []) {
   const parts = [baseCommand, '--profile', PROFILE];
-  for (const c of cliConfigArgs(s)) {
+  for (const c of [...cliConfigArgs(s), ...(Array.isArray(extraConfig) ? extraConfig : [])]) {
     parts.push('-c', shellQuote(c));
   }
   return parts.join(' ');
@@ -497,6 +577,7 @@ function removeManagedBlock(toml) {
 function save(partial) {
   const next = normalize({ ...load(), ...partial });
   validateWritableRoots(next.writable_roots);
+  validateAgentSlots(next.agent_slots);
   const warnings = [];
 
   try { createBackup('save'); } catch (e) { warnings.push(`backup: ${e.message}`); }
@@ -570,6 +651,7 @@ module.exports = {
   PERSONALITIES,
   WEB_SEARCH_MODES,
   RESOURCE_PRESETS,
+  defaultAgentSlots,
   PROFILE,
   setUserDataPath,
   load,
@@ -579,6 +661,7 @@ module.exports = {
   cliConfigArgs,
   profileToml,
   agentRoleToml,
+  tomlString,
   withCliFlags,
   writeCodexIgnore,
   setMcpServerOptions,
@@ -587,5 +670,6 @@ module.exports = {
   restoreBackup,
   CODEXIGNORE_SAMPLE,
   validateWritableRoots,
+  validateAgentSlots,
   safetyWarnings,
 };

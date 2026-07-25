@@ -43,15 +43,29 @@ contextBridge.exposeInMainWorld('codexDesktop', {
   loginStatus: () => ipcRenderer.invoke('codex:loginStatus'),
   login: () => ipcRenderer.invoke('codex:login'),
   switchProvider: (provider) => ipcRenderer.invoke('codex:switchProvider', provider),
+  ensureProviderTool: (provider) => ipcRenderer.invoke('tools:ensure', provider),
   beginVoiceDictation: () => ipcRenderer.invoke('voice:beginDictation'),
   endVoiceDictation: () => ipcRenderer.invoke('voice:endDictation'),
   submitVoiceText: (text) => ipcRenderer.invoke('voice:submitText', text),
   prepareVoiceCapture: () => ipcRenderer.invoke('voice:prepareCapture'),
+  ensureVoiceModel: () => ipcRenderer.invoke('voice:ensureModel'),
   transcribeVoiceAudio: (bytes, mimeType) =>
     ipcRenderer.invoke('voice:transcribeAudio', bytes, mimeType),
+  onVoiceModelProgress: (cb) => {
+    const handler = (_e, progress) => cb(progress);
+    ipcRenderer.on('voice:modelProgress', handler);
+    return () => ipcRenderer.removeListener('voice:modelProgress', handler);
+  },
+  onProviderToolProgress: (cb) => {
+    const handler = (_e, progress) => cb(progress);
+    ipcRenderer.on('tools:progress', handler);
+    return () => ipcRenderer.removeListener('tools:progress', handler);
+  },
   getCodexSettings: () => ipcRenderer.invoke('codexSettings:get'),
   saveCodexSettings: (partial) => ipcRenderer.invoke('codexSettings:save', partial),
   chooseCodexWorkingDirectory: () => ipcRenderer.invoke('codexSettings:chooseWorkingDirectory'),
+  getProjectAgentRules: (cwd) => ipcRenderer.invoke('agentRules:getProject', cwd),
+  saveProjectAgentRules: (cwd, rules) => ipcRenderer.invoke('agentRules:saveProject', cwd, rules),
   getResourceUsage: () => ipcRenderer.invoke('resources:getUsage'),
   getCodexUsage: () => ipcRenderer.invoke('codex:usage'),
   listMcpServers: () => ipcRenderer.invoke('mcp:list'),
@@ -70,9 +84,6 @@ contextBridge.exposeInMainWorld('codexDesktop', {
   getPadPrefs: () => ipcRenderer.invoke('padPrefs:get'),
   setPadPrefs: (partial) => ipcRenderer.invoke('padPrefs:set', partial),
 
-  getTrialStatus: () => ipcRenderer.invoke('trial:get'),
-  openSponsor: () => ipcRenderer.invoke('trial:openSponsor'),
-  activateLicense: (key) => ipcRenderer.invoke('trial:activate', key),
 
   onState: (cb) => {
     const handler = (_e, state) => cb(state);
@@ -93,5 +104,10 @@ contextBridge.exposeInMainWorld('codexDesktop', {
     const handler = (_e, prefs) => cb(prefs);
     ipcRenderer.on('padPrefs:changed', handler);
     return () => ipcRenderer.removeListener('padPrefs:changed', handler);
+  },
+  onOpenPanel: (cb) => {
+    const handler = (_e, panel) => cb(panel);
+    ipcRenderer.on('app:openPanel', handler);
+    return () => ipcRenderer.removeListener('app:openPanel', handler);
   },
 });
