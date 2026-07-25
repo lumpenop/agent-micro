@@ -1,99 +1,285 @@
-# Agent Micro (Electron)
+# Agent Micro
 
-**Agent Micro** — Codex CLI용 플로팅 맥로패드.
+Codex CLI를 키보드와 작은 플로팅 맥로패드로 조작하는 macOS 앱입니다.
 
-Connect = `app-server` · 키/조이스틱 액션을 CLI로 전송합니다.
-Codex CLI는 기존 설치를 우선 사용하고, 없으면 앱 전용 폴더로 다운로드합니다.
+이 문서는 처음 설치하는 사람도 앱을 실행하고 기본 기능을 사용할 수 있도록 작성했습니다.
 
-나중에 “어떤 에이전트를 쓸지” 고르는 UI가 필요하면 그린필드로 붙이세요 (`src/providers/create-bridge.js` 주석 참고).
+## Agent Micro가 하는 일
 
-### Review
+Agent Micro는 Codex CLI의 명령을 대신 입력해 주는 리모컨에 가깝습니다.
 
-Review 키캡 또는 `Mod+D` → 선택한 Agent에 현재 변경 사항 리뷰 요청을 전송합니다.
+- 최대 6개의 Codex CLI 세션을 슬롯으로 관리합니다.
+- Approve, Decline, Fork, Review 같은 동작을 버튼과 단축키로 실행합니다.
+- 선택한 프로젝트의 개발 서버를 시작하고 종료합니다.
+- 조이스틱과 Touch 레이어로 Plan, history, sidebar, 새 채팅 등을 실행합니다.
+- Codex의 모델·추론 강도·작업 폴더·권한 관련 설정을 앱 안에서 관리합니다.
+- 로컬 음성 입력과 개인 Skills/MCP 설정을 지원합니다.
 
-## Run (pnpm)
+Agent Micro 자체는 AI 모델을 제공하지 않습니다. 실제 작업과 답변은 연결된 Codex CLI가 처리합니다.
+
+## 빠른 시작
+
+### 1. 준비물
+
+개발 버전을 실행하려면 다음이 필요합니다.
+
+- macOS
+- Node.js
+- pnpm
+- 터미널 앱(Terminal, iTerm2, Ghostty 등)
+- Codex CLI를 사용할 수 있는 ChatGPT 로그인
+
+배포된 `.app`을 사용하는 경우에는 Node.js와 pnpm이 필요하지 않습니다. 소스 코드로 실행할 때만 필요합니다.
+
+### 2. 저장소 받기
+
+터미널을 열고 저장소를 내려받습니다.
 
 ```bash
-pnpm install   # 개발 의존성 설치
+git clone https://github.com/lumpenop/agent-micro.git
+cd agent-micro
+```
+
+이미 저장소를 받은 경우에는 `cd`로 프로젝트 폴더에 들어갑니다. 현재 폴더에 `package.json`과 `src` 폴더가 보여야 합니다.
+
+### 3. 의존성 설치
+
+```bash
+pnpm install
+```
+
+`pnpm` 명령을 찾을 수 없다는 메시지가 나오면 먼저 pnpm을 설치합니다.
+
+```bash
+corepack enable
+corepack prepare pnpm@11.8.0 --activate
+```
+
+### 4. 앱 실행
+
+```bash
 pnpm start
 ```
 
-이 프로젝트는 MIT 라이선스로 공개 배포됩니다. 별도의 체험 기간이나 라이선스 키가 필요하지 않습니다.
+앱 창이 열리면 설치가 완료된 것입니다. 개발 중에는 터미널에 앱 로그가 표시될 수 있습니다.
 
-랜딩 빌드: `AGENT_MICRO_DOWNLOAD_URL=https://... pnpm landing:build`
+### 5. 첫 로그인
 
-로컬 확인: `pnpm landing:dev`
+1. 앱에서 **Connect** 또는 제목 옆의 점/새로고침 아이콘을 누릅니다.
+2. 처음 사용하는 경우 브라우저에서 ChatGPT 로그인을 진행합니다.
+3. 로그인 후 앱으로 돌아와 연결 상태를 확인합니다.
+4. 점이 초록색이면 Codex CLI에 연결된 상태입니다.
 
-단축키: `⌘⇧M` — 창 숨기기/보이기 (전역)  
-패드 단축키(기본 **⌘QWERDF · ⌘1–6 · ⌘화살표 · ⌘Tab**)는 패드 창 또는 이 패드로 연 CLI 터미널에서 동작합니다.  
-수정키는 키 맵핑에서 **⌘ / ⌥ / ⌃ / ⇪** 중 선택 (기본 ⌘).
+같은 Mac에서 Codex CLI에 이미 로그인했다면 로그인 화면이 나타나지 않고 바로 연결될 수 있습니다.
 
-- 초록 점 = Codex 연결됨
-- 노란 점 = demo fallback
+이 프로젝트는 MIT 라이선스로 공개된 오픈소스 소프트웨어입니다. 체험 기간, 구매 절차, 라이선스 키는 없습니다.
 
-## Codex CLI 연결
+## macOS 권한 설정
 
-앱 안 **?** = 사용 설명서 · **키보드** 아이콘 = 키 맵핑.
+일부 기능은 macOS 권한이 필요합니다.
 
-| 조작 | 동작 |
+### 손쉬운 사용 권한
+
+CLI 창에 포커스를 맞추거나 터미널을 분할하고 전역 단축키를 사용하려면 허용해야 합니다.
+
+1. **시스템 설정**을 엽니다.
+2. **개인정보 보호 및 보안 → 손쉬운 사용**으로 이동합니다.
+3. Agent Micro 또는 Electron을 목록에 추가하고 켭니다.
+4. 앱을 완전히 종료한 뒤 다시 실행합니다.
+
+### 마이크 권한
+
+음성 입력을 사용할 때 macOS가 마이크 접근을 요청합니다. 음성 기능을 사용하려면 허용을 선택하세요.
+
+권한을 거부한 뒤 다시 허용하려면 **시스템 설정 → 개인정보 보호 및 보안 → 마이크**에서 Agent Micro 또는 Electron을 켭니다.
+
+## 기본 사용법
+
+### 에이전트 슬롯 열기
+
+앱의 `1`부터 `6`까지 슬롯은 각각 하나의 CLI 세션을 가리킵니다.
+
+| 슬롯 | 동작 |
 |------|------|
-| **↻** / 제목 옆 **점** | CLI Connect / Reconnect (`app-server`) |
-| Shift + 점 | Codex 강제 로그인 (브라우저) |
-| **Mod+Q W E R D F** | Fast · Approve · Decline · Fork · Review · DEV (기본 Mod=⌘) |
-| **Mod+Tab** | Touch · 레이어 전환 |
-| **Mod+↑ ↓ ← →** | 조이스틱 (현재 레이어 액션) |
-| **Mod+1–6** | Agent 1 = 새 창 · 2–6 = 직전 창에서 순서대로 스플릿 (1→2→3…, 앞 번호 없으면 무시) |
+| 1 | 새 터미널 창에서 Codex 시작 |
+| 2–6 | 직전 슬롯의 터미널을 분할해 새 세션 시작 |
+| 이미 열린 슬롯 | 해당 터미널 패인으로 포커스 |
 
-종료: **⌘⇧Q**
+보통은 **1번을 먼저 연 다음 2번, 3번 순서로** 여는 것이 가장 안정적입니다. 1번을 열지 않고 2번을 누르면 동작하지 않습니다.
 
-사용자 설치: Provider 선택 → 필요한 CLI 자동 다운로드 → 브라우저 로그인
+### 하단 버튼
 
-## macOS 권한
+| 버튼 | 기능 |
+|------|------|
+| ⚡ Fast | 현재 에이전트의 추론 강도를 minimal로 변경 |
+| ✓ Approve | Codex가 요청한 작업 승인 |
+| ✕ Decline | Codex가 요청한 작업 거절 |
+| Fork | 현재 세션을 분기해 다음 빈 슬롯에서 실행 |
+| Review | 현재 변경 사항의 코드 리뷰 요청 |
+| DEV | 선택한 프로젝트의 개발 서버 시작/종료 |
 
-조이스틱 데스크톱 단축키·마이크 음성 인식을 쓰려면:
+Fork는 빈 슬롯이 있을 때만 사용할 수 있습니다. 6개 슬롯이 모두 사용 중이면 비활성화됩니다.
 
-1. **손쉬운 사용(Accessibility)** — 시스템 설정 → 개인정보 보호 → 손쉬운 사용 → Electron 허용
+### Dial과 Touch
 
-## Controls
+- **Dial**: 추론 강도를 `minimal → low → medium → high → xhigh` 순서로 변경합니다.
+- **Touch**: 탭할 때마다 `Codex → Prompts → App` 레이어를 전환합니다.
+- **Joystick**: 현재 레이어에 지정된 방향 동작을 실행합니다.
 
-| Control | Behavior |
-|--------|----------|
-| Agent ×6 | 1 = 새 CLI 창 · 2–6 = 직전 에이전트에서 순차 스플릿 (1→2→3…) · 이미 있으면 포커스 |
-| ⚡ Fast | reasoning → minimal |
-| ✓ / ✕ | Approve / Decline |
-| Fork | 소스 세션 fork → 다음 빈 슬롯에 `codex fork`/`resume` CLI 스플릿 (UI는 6/6일 때만 비활성) |
-| Review | 선택한 Agent에 현재 변경 사항 리뷰 요청 |
-| DEV (formerly Send) | 현재 선택 에이전트의 작업 폴더 개발 서버 시작·종료 |
-| Dial | reasoning effort |
-| Joystick | 레이어에 따라 다름 |
-| Touch | Core → Skills → Desktop |
+| 레이어 | 위 | 오른쪽 | 아래 | 왼쪽 |
+|--------|---|--------|------|------|
+| Codex | Plan | history 다음 | 새 채팅 | history 이전 |
+| Prompts | review PR | debug | docs | refactor |
+| App | composer | 새 채팅 | sidebar | history 이전 |
 
-### Layers (Touch)
+키캡을 우클릭하면 아이콘을 바꿀 수 있습니다. 아이콘 선택기의 `+` 버튼으로 개인 SVG/PNG도 추가할 수 있습니다.
 
-| Layer | Joy ↑ | Joy → | Joy ↓ | Joy ← |
-|-------|-------|-------|-------|-------|
-| Core (provider) | Plan | history → | sidebar | history ← |
-| Skills | review PR | debug | docs | refactor |
-| Desktop | composer | new chat | sidebar | history ← |
+## 단축키
 
-## Architecture
+기본 수정키는 `⌘ Command`이며, 앱의 **키보드 아이콘 → 키 맵핑**에서 변경할 수 있습니다. `Mod`는 현재 선택한 수정키를 뜻합니다.
 
-- [`src/providers/`](src/providers/) — Codex bridge
-- 공통 IPC (`codex:*`) → 활성 bridge로 위임
-- 선택값은 Electron `userData/provider.json` 에 저장
+| 단축키 | 동작 |
+|--------|------|
+| `⌘⇧M` | 앱 창 숨기기/보이기 |
+| `⌘⇧Q` | 앱 종료 |
+| `Mod + 1–6` | 에이전트 슬롯 선택/실행 |
+| `Mod + Q` | Fast |
+| `Mod + W` | Approve |
+| `Mod + E` | Decline |
+| `Mod + R` | Fork |
+| `Mod + D` | Review |
+| `Mod + F` | DEV |
+| `Mod + Tab` | Touch 레이어 전환 |
+| `Mod + ↑ ↓ ← →` | 조이스틱 방향 동작 |
 
-## Codex Control Center
+패드 창이나 Agent Micro가 연 CLI 터미널이 앞에 있을 때 패드 단축키가 동작합니다.
 
-- 설정: 모델·추론·성격·검색·권한·작업 폴더·멀티에이전트·역할·리소스·Hooks
-- Agent rules: 전역 → 프로젝트 `.agent-micro/rules.json` → 역할 → Agent 1–6 슬롯 규칙을 합성. 슬롯별 이름·모델·reasoning·작업 폴더·sandbox·승인·자동 Continue·선호 Skills를 재정의
-- 안전: 저장 전 자동 백업, 복원 전 재백업, 위험 권한 조합 경고
-- MCP 탭: 서버 탐색, 활성화, 타임아웃, HTTP/stdio 추가, OAuth, 검사, 삭제
-- Skills 탭: 앱 안에서 개인 스킬 생성·조회·수정·삭제, 시스템·플러그인 스킬 목록과 플러그인 설정 진단
-- 3개 레이어: `Codex → Prompts → Tools` 순환. Tools에서 ↑ `gpt-5.6-terra`(Light) / `gpt-5.6-sol`(Deep) 즉시 전환, ↓ 선택 에이전트 작업 폴더의 `dev` 서버 시작·종료
-- Info Continue: 수동 전송 및 설정 시간 후 자동 Continue. 기본값은 꺼짐·30초·최대 1회이며 승인·입력 대기·오류에서는 자동 실행하지 않음
-- Info Project: 선택한 Agent CLI의 실제 작업 폴더에서 `package.json.name`을 우선 표시하고, 없으면 폴더명을 표시. 전체 경로는 툴팁으로 확인
-- 아이콘 선택기: 로컬 아이콘·사용자 SVG/PNG·Iconify 온라인 AI 에이전트 검색
-- Info: 선택한 에이전트의 실제 작업 폴더 표시
+## 설정 메뉴
 
-Apple Silicon 개발 앱은 `pnpm dist:mac`, 설치용 DMG는 `pnpm dist:dmg`로 빌드합니다.
-Apple Developer 인증서를 설정하지 않은 로컬 산출물은 서명·공증되지 않습니다.
+앱의 톱니바퀴 아이콘에서 다음을 설정할 수 있습니다.
+
+- Codex 로그인 및 연결 상태
+- Provider와 API 설정
+- 모델과 추론 강도
+- 작업 폴더
+- sandbox, 승인, 타임아웃 등 Codex 설정
+- 에이전트별 이름·역할·모델·작업 폴더
+- 자동 Continue
+- MCP 서버
+- 개인 Skills
+- 언어와 수정키
+
+설정은 macOS의 Electron 사용자 데이터 폴더와 `~/.codex`에 저장됩니다. 일부 설정은 새로 여는 CLI 창부터 적용됩니다.
+
+## 랜딩 페이지 개발
+
+랜딩 페이지는 `apps/landing`에 있습니다.
+
+개발 서버 실행:
+
+```bash
+pnpm landing:dev
+```
+
+정적 파일 빌드:
+
+```bash
+pnpm landing:build
+```
+
+다운로드 버튼에 표시할 앱 주소를 지정하려면:
+
+```bash
+AGENT_MICRO_DOWNLOAD_URL=https://example.com/Agent-Micro.dmg pnpm landing:build
+```
+
+빌드 결과는 `apps/landing/dist`에 생성됩니다. Vercel에서는 이 폴더를 출력 디렉터리로 사용합니다.
+
+## macOS 앱 빌드
+
+Apple Silicon용 개발 산출물을 만들려면:
+
+```bash
+pnpm dist:mac
+```
+
+설치용 DMG를 만들려면:
+
+```bash
+pnpm dist:dmg
+```
+
+로컬에서 만든 앱은 Apple Developer 인증서가 없으면 서명·공증되지 않습니다. macOS에서 처음 열 때 보안 경고가 나타날 수 있습니다.
+
+## 테스트
+
+안전한 기능 테스트는 다음 명령으로 실행합니다.
+
+```bash
+pnpm test:safe
+```
+
+실제 터미널에 입력하거나 창을 여는 테스트는 부작용이 있으므로 별도 환경 변수 없이는 실행되지 않습니다.
+
+## 문제 해결
+
+### 앱 창은 열리지만 Codex가 연결되지 않음
+
+1. Codex CLI가 설치되어 있는지 확인합니다.
+2. 앱의 `↻` 버튼으로 다시 연결합니다.
+3. Shift를 누른 채 제목 옆 점을 눌러 강제 로그인을 실행합니다.
+4. 손쉬운 사용 권한을 확인하고 앱을 다시 시작합니다.
+
+### 터미널 분할이 동작하지 않음
+
+손쉬운 사용 권한이 필요합니다. 권한을 켠 뒤 Agent Micro와 터미널 앱을 모두 종료하고 다시 실행하세요.
+
+### 음성 입력이 동작하지 않음
+
+마이크 권한을 확인하고, 로컬 음성 모델이 준비될 때까지 잠시 기다립니다. 음성 모델 다운로드가 필요한 경우 첫 실행이 평소보다 오래 걸릴 수 있습니다.
+
+### `pnpm install` 중 Electron 관련 메시지가 나옴
+
+의존성 설치가 끝난 뒤 아래 명령을 한 번 실행해 보세요.
+
+```bash
+pnpm rebuild electron
+```
+
+### 로그 확인
+
+앱을 터미널에서 실행하면 오류 로그를 확인할 수 있습니다.
+
+```bash
+pnpm start
+```
+
+## 프로젝트 구조
+
+```text
+src/
+  main.js                 Electron 메인 프로세스와 IPC
+  preload.js              렌더러에 노출하는 안전한 API
+  app.mjs                 화면 동작과 이벤트 처리
+  index.html              앱 화면
+  styles.css              앱 스타일
+  providers/              Codex/API 연결 브리지
+  *.mjs, *.js             설정·음성·아이콘·도구 모듈
+apps/landing/             정적 랜딩 페이지
+scripts/                  설치·테스트·빌드 보조 스크립트
+LICENSE                   MIT 라이선스
+THIRD_PARTY_NOTICES.md    포함된 오픈소스 고지
+```
+
+## 기여하기
+
+1. 저장소를 Fork합니다.
+2. 기능별 브랜치를 만듭니다.
+3. 변경 후 `pnpm test:safe`를 실행합니다.
+4. 변경 목적과 테스트 결과를 Pull Request에 적습니다.
+
+기존 사용자 설정이나 사용자가 직접 만든 `AGENTS.md` 파일을 덮어쓰는 변경은 피해주세요.
+
+## 라이선스
+
+Agent Micro는 [MIT License](LICENSE)로 배포됩니다. 포함된 외부 프로젝트의 조건은 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)를 확인하세요.
