@@ -19,8 +19,8 @@ Agent Micro は最大 6 個の Codex CLI セッションを管理し、承認・
 ### ソースから起動
 
 ```bash
-git clone https://github.com/lumpenop/agent-keyboard.git
-cd agent-keyboard
+git clone https://github.com/lumpenop/agent-micro.git
+cd agent-micro
 pnpm install
 pnpm start
 ```
@@ -48,7 +48,15 @@ pnpm start
 | Review | 現在の変更をレビュー |
 | DEV | 開発サーバーを起動・停止 |
 
-まずは Agent 1 から始めてください。ダイヤルは推論強度を、Touch は Codex・Prompts・Tools レイヤーを変更します。
+まずは Agent 1 から始めてください。ダイヤルを回すと Codex・Prompts・Tools レイヤーが切り替わり、Touch でも同じレイヤーを 1 つ進められます。
+
+## 分離された Agent Manager
+
+Agent Manager は各タスクに専用の Git worktree とブランチを作成します。同じファイルの変更を検出し、dirty・競合状態のマージを防ぎ、消えた worktree をブランチから復元します。マージに失敗してもメイン作業フォルダーに途中状態を残しません。
+
+## カスタム Provider
+
+`Responses API · Codex Agent` には OpenAI Responses API 互換の Provider または Proxy が必要です。公開 DeepSeek API を含む Chat Completions 専用サービスで Codex の sandbox・承認・Agent セッションを維持するには、Responses 互換 Proxy が必要です。
 
 ## 開発とテスト
 
@@ -56,8 +64,12 @@ pnpm start
 pnpm landing:dev
 pnpm landing:build
 pnpm test:safe
+pnpm test:controls
+pnpm test:providers
+pnpm test:coordinator
+pnpm test:coordinator:stress
 ```
 
 本プロジェクトは MIT ライセンスで公開されています。
 
-Agent Micro が役に立ったら、[GitHub で ⭐ Star](https://github.com/lumpenop/agent-keyboard) をお願いします。プロジェクトの成長に役立ちます。
+Agent Micro が役に立ったら、[GitHub で ⭐ Star](https://github.com/lumpenop/agent-micro) をお願いします。プロジェクトの成長に役立ちます。

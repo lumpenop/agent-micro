@@ -123,17 +123,28 @@ Fork는 빈 슬롯이 있을 때만 사용할 수 있습니다. 6개 슬롯이 �
 
 ### Dial과 Touch
 
-- **Dial**: 추론 강도를 `minimal → low → medium → high → xhigh` 순서로 변경합니다.
-- **Touch**: 탭할 때마다 `Codex → Prompts → App` 레이어를 전환합니다.
+- **Dial**: 돌릴 때마다 `Codex → Prompts → Tools` 레이어를 전환합니다.
+- **Touch**: 탭할 때마다 같은 레이어를 한 칸씩 전환합니다.
 - **Joystick**: 현재 레이어에 지정된 방향 동작을 실행합니다.
 
 | 레이어 | 위 | 오른쪽 | 아래 | 왼쪽 |
 |--------|---|--------|------|------|
-| Codex | Plan | history 다음 | 새 채팅 | history 이전 |
+| Codex | Plan | 다음 Agent | 새 채팅 | 이전 Agent |
 | Prompts | review PR | debug | docs | refactor |
-| App | composer | 새 채팅 | sidebar | history 이전 |
+| Tools | 모델 변경 | Continue | 개발 서버 | 도움말 |
 
 키캡을 우클릭하면 아이콘을 바꿀 수 있습니다. 아이콘 선택기의 `+` 버튼으로 개인 SVG/PNG도 추가할 수 있습니다.
+
+### Agent Manager와 격리 작업
+
+Agent Manager에서 작업과 슬롯을 선택하면 해당 Agent만 사용하는 Git worktree와 브랜치를 만들고, 그 폴더에서 Codex CLI를 실행합니다.
+
+- 동시에 만드는 작업도 프로젝트별로 직렬화해 Git 메타데이터 충돌을 막습니다.
+- 둘 이상의 Agent가 같은 파일을 수정하면 병합 전에 표시하고 차단합니다.
+- dirty worktree와 dirty 메인 작업공간은 병합하지 않습니다.
+- 실제 Git 충돌은 메인을 변경하기 전에 검사합니다.
+- worktree 폴더가 사라져도 브랜치가 남아 있으면 **복구**할 수 있습니다.
+- 병합이 실패해도 진행 중인 merge 상태를 메인에 남기지 않습니다.
 
 ## 단축키
 
@@ -171,6 +182,12 @@ Fork는 빈 슬롯이 있을 때만 사용할 수 있습니다. 6개 슬롯이 �
 - 언어와 수정키
 
 설정은 macOS의 Electron 사용자 데이터 폴더와 `~/.codex`에 저장됩니다. 일부 설정은 새로 여는 CLI 창부터 적용됩니다.
+
+### Custom provider 호환성
+
+`Responses API · Codex Agent`는 OpenAI Responses API와 호환되는 provider 또는 proxy용입니다. Codex의 sandbox, 승인, Agent 세션을 그대로 유지하는 대신 `/responses` 프로토콜이 필요합니다.
+
+DeepSeek 공개 API처럼 `/chat/completions`만 제공하는 API는 이 모드에 직접 연결할 수 없습니다. 그런 provider를 Codex Agent로 사용하려면 Responses API를 제공하는 호환 proxy가 필요합니다.
 
 ## 랜딩 페이지 개발
 
@@ -218,6 +235,11 @@ pnpm dist:dmg
 
 ```bash
 pnpm test:safe
+pnpm test:controls
+pnpm test:providers
+pnpm test:providers:codex
+pnpm test:coordinator
+pnpm test:coordinator:stress
 ```
 
 실제 터미널에 입력하거나 창을 여는 테스트는 부작용이 있으므로 별도 환경 변수 없이는 실행되지 않습니다.

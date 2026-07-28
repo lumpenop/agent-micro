@@ -19,8 +19,8 @@ Agent Micro controls up to six Codex CLI sessions. It can approve or decline req
 ### Run from source
 
 ```bash
-git clone https://github.com/lumpenop/agent-keyboard.git
-cd agent-keyboard
+git clone https://github.com/lumpenop/agent-micro.git
+cd agent-micro
 pnpm install
 pnpm start
 ```
@@ -48,7 +48,15 @@ Accessibility permission is required to focus, split, and control terminal windo
 | Review | Ask Codex to review current changes |
 | DEV | Start or stop the selected project's development server |
 
-Start with Agent 1. The dial changes reasoning intensity; Touch switches between Codex, Prompts, and Tools layers.
+Start with Agent 1. Turning the dial switches between Codex, Prompts, and Tools layers; Touch advances the same layer selector.
+
+## Isolated Agent Manager
+
+Agent Manager gives every task its own Git worktree and branch. It detects overlapping files, blocks dirty or conflicting merges, restores a missing worktree from its branch, and automatically keeps a failed merge out of the main workspace.
+
+## Custom providers
+
+`Responses API · Codex Agent` requires an OpenAI Responses-compatible provider or proxy. Chat Completions-only services, including the public DeepSeek API, need a Responses-compatible proxy to retain Codex sandboxing, approvals, and Agent sessions.
 
 ## Development
 
@@ -56,8 +64,12 @@ Start with Agent 1. The dial changes reasoning intensity; Touch switches between
 pnpm landing:dev
 pnpm landing:build
 pnpm test:safe
+pnpm test:controls
+pnpm test:providers
+pnpm test:coordinator
+pnpm test:coordinator:stress
 ```
 
 The project is released under the MIT license.
 
-If Agent Micro is useful to you, consider leaving a [⭐ Star on GitHub](https://github.com/lumpenop/agent-keyboard). It helps the project grow.
+If Agent Micro is useful to you, consider leaving a [⭐ Star on GitHub](https://github.com/lumpenop/agent-micro). It helps the project grow.

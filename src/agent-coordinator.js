@@ -6,6 +6,7 @@ const { execFile } = require('child_process');
 const STATE_FILE = process.env.AGENT_MICRO_COORDINATOR_STATE
   ? path.resolve(process.env.AGENT_MICRO_COORDINATOR_STATE)
   : path.join(os.homedir(), '.agent-micro', 'coordinator.json');
+const projectQueues = new Map();
 
 function runGit(cwd, args, timeout = 20000) {
   return new Promise((resolve, reject) => {
@@ -25,19 +26,42 @@ function safeSlug(value) {
 }
 
 function loadState() {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
-    return parsed && typeof parsed === 'object' ? parsed : { projects: {} };
-  } catch {
-    return { projects: {} };
+  for (const file of [STATE_FILE, `${STATE_FILE}.bak`]) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+      if (parsed && typeof parsed === 'object') {
+        if (!parsed.projects || typeof parsed.projects !== 'object') parsed.projects = {};
+        return parsed;
+      }
+    } catch {
+      /* try the backup */
+    }
   }
+  return { projects: {} };
 }
 
 function saveState(state) {
   fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
   const temp = `${STATE_FILE}.tmp`;
+  const backup = `${STATE_FILE}.bak`;
+  const backupTemp = `${backup}.tmp`;
+  if (fs.existsSync(STATE_FILE)) {
+    fs.copyFileSync(STATE_FILE, backupTemp);
+    fs.renameSync(backupTemp, backup);
+  }
   fs.writeFileSync(temp, JSON.stringify(state, null, 2), 'utf8');
   fs.renameSync(temp, STATE_FILE);
+}
+
+async function withProjectLock(root, operation) {
+  const previous = projectQueues.get(root) || Promise.resolve();
+  const current = previous.catch(() => {}).then(operation);
+  projectQueues.set(root, current);
+  try {
+    return await current;
+  } finally {
+    if (projectQueues.get(root) === current) projectQueues.delete(root);
+  }
 }
 
 async function repoRoot(cwd) {
@@ -65,7 +89,18 @@ async function changedFiles(record) {
 
 async function inspectRecord(record) {
   const exists = !!record.worktree && fs.existsSync(record.worktree);
-  if (!exists) return { ...record, state: 'missing', files: [], dirty: false, ahead: 0 };
+  if (!exists) {
+    const branchExists = await runGit(record.root, ['show-ref', '--verify', '--quiet', `refs/heads/${record.branch}`])
+      .then(() => true, () => false);
+    return {
+      ...record,
+      state: branchExists ? 'recoverable' : 'missing',
+      recoverable: branchExists,
+      files: [],
+      dirty: false,
+      ahead: 0,
+    };
+  }
   const porcelain = await runGit(record.worktree, ['status', '--porcelain=v1']).catch(() => '');
   const aheadText = await runGit(record.worktree, ['rev-list', '--count', `${record.baseCommit}..HEAD`]).catch(() => '0');
   const files = await changedFiles(record);
@@ -109,6 +144,10 @@ async function list(cwd) {
 
 async function createTask(cwd, input = {}) {
   const root = await repoRoot(cwd);
+  return withProjectLock(root, () => createTaskLocked(root, input));
+}
+
+async function createTaskLocked(root, input = {}) {
   const slot = Math.max(0, Math.min(5, Number(input.slot) || 0));
   const task = String(input.task || '').trim().slice(0, 240);
   if (!task) return { ok: false, error: 'Enter a task for this Agent' };
@@ -118,6 +157,14 @@ async function createTask(cwd, input = {}) {
   const existing = project.slots?.[slot];
   if (existing?.worktree && fs.existsSync(existing.worktree)) {
     return { ok: false, error: `Agent ${slot + 1} already owns an isolated task` };
+  }
+  if (existing?.branch) {
+    const branchExists = await runGit(root, ['show-ref', '--verify', '--quiet', `refs/heads/${existing.branch}`])
+      .then(() => true, () => false);
+    if (branchExists) {
+      return { ok: false, recoverable: true, error: `Agent ${slot + 1} has a recoverable isolated task` };
+    }
+    delete project.slots[slot];
   }
 
   const baseBranch = await currentBranch(root);
@@ -149,6 +196,10 @@ async function createTask(cwd, input = {}) {
 
 async function mergeTask(cwd, slotInput) {
   const root = await repoRoot(cwd);
+  return withProjectLock(root, () => mergeTaskLocked(root, slotInput));
+}
+
+async function mergeTaskLocked(root, slotInput) {
   const slot = Math.max(0, Math.min(5, Number(slotInput) || 0));
   const state = loadState();
   const record = state.projects[root]?.slots?.[slot];
@@ -168,17 +219,23 @@ async function mergeTask(cwd, slotInput) {
     return { ok: false, error: `Switch the main workspace to ${record.baseBranch} before merging` };
   }
   try {
+    await runGit(root, ['merge-tree', '--write-tree', 'HEAD', record.branch], 60000);
+  } catch (error) {
+    return { ok: false, conflict: true, error: 'Merge conflict detected before main was changed. Review the Agent branch first.' };
+  }
+  try {
     const output = await runGit(root, ['merge', '--no-ff', '--no-edit', record.branch], 120000);
     record.mergedAt = new Date().toISOString();
     saveState(state);
     return { ok: true, output, record: await inspectRecord(record) };
   } catch (error) {
     const merging = fs.existsSync(path.join(root, '.git', 'MERGE_HEAD'));
+    if (merging) await runGit(root, ['merge', '--abort'], 30000).catch(() => '');
     return {
       ok: false,
       conflict: merging,
       error: merging
-        ? 'Merge conflict detected. Resolve it in the main workspace, then commit or abort the merge.'
+        ? 'Merge conflict detected. Main workspace was restored automatically.'
         : error.message,
     };
   }
@@ -186,6 +243,10 @@ async function mergeTask(cwd, slotInput) {
 
 async function archiveTask(cwd, slotInput) {
   const root = await repoRoot(cwd);
+  return withProjectLock(root, () => archiveTaskLocked(root, slotInput));
+}
+
+async function archiveTaskLocked(root, slotInput) {
   const slot = Math.max(0, Math.min(5, Number(slotInput) || 0));
   const state = loadState();
   const project = state.projects[root];
@@ -193,7 +254,9 @@ async function archiveTask(cwd, slotInput) {
   if (!record) return { ok: false, error: 'Isolated task not found' };
   const task = await inspectRecord(record);
   if (task.dirty) return { ok: false, error: 'Commit or discard Agent changes before cleanup' };
-  if (task.ahead > 0 && !task.mergedAt) return { ok: false, error: 'Merge this task before cleanup' };
+  const merged = await runGit(root, ['merge-base', '--is-ancestor', record.branch, 'HEAD'])
+    .then(() => true, () => false);
+  if (task.ahead > 0 && !merged) return { ok: false, error: 'Merge this task before cleanup' };
   if (fs.existsSync(record.worktree)) {
     await runGit(root, ['worktree', 'remove', record.worktree], 60000);
   }
@@ -203,4 +266,28 @@ async function archiveTask(cwd, slotInput) {
   return { ok: true, slot, worktree: record.worktree, branch: record.branch };
 }
 
-module.exports = { list, createTask, mergeTask, archiveTask };
+async function restoreTask(cwd, slotInput) {
+  const root = await repoRoot(cwd);
+  return withProjectLock(root, () => restoreTaskLocked(root, slotInput));
+}
+
+async function restoreTaskLocked(root, slotInput) {
+  const slot = Math.max(0, Math.min(5, Number(slotInput) || 0));
+  const state = loadState();
+  const record = state.projects[root]?.slots?.[slot];
+  if (!record) return { ok: false, error: 'Isolated task not found' };
+  if (record.worktree && fs.existsSync(record.worktree)) {
+    return { ok: true, alreadyPresent: true, record: await inspectRecord(record) };
+  }
+  const branchExists = await runGit(root, ['show-ref', '--verify', '--quiet', `refs/heads/${record.branch}`])
+    .then(() => true, () => false);
+  if (!branchExists) return { ok: false, error: 'The Agent branch no longer exists' };
+  fs.mkdirSync(path.dirname(record.worktree), { recursive: true });
+  await runGit(root, ['worktree', 'prune'], 30000).catch(() => '');
+  await runGit(root, ['worktree', 'add', record.worktree, record.branch], 60000);
+  record.restoredAt = new Date().toISOString();
+  saveState(state);
+  return { ok: true, restored: true, record: await inspectRecord(record) };
+}
+
+module.exports = { list, createTask, mergeTask, archiveTask, restoreTask };

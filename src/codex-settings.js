@@ -362,11 +362,14 @@ function load() {
 
 function profileToml(s) {
   const cfg = normalize(s);
-  const customProvider = cfg.api_base_url && (cfg.api_model || cfg.model)
-    ? `model = ${tomlString(cfg.api_model || cfg.model)}\nmodel_provider = "agent-micro-custom"\n\n[model_providers.agent-micro-custom]\nname = "Agent Micro Custom API"\nbase_url = ${tomlString(cfg.api_base_url)}\nenv_key = ${tomlString(cfg.api_key_env || 'OPENAI_API_KEY')}\nwire_api = "chat"\n`
+  const usesCustomProvider = !!(cfg.api_base_url && (cfg.api_model || cfg.model));
+  const localProvider = /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/i.test(cfg.api_base_url);
+  const providerKey = localProvider ? '' : `env_key = ${tomlString(cfg.api_key_env || 'OPENAI_API_KEY')}\n`;
+  const customProvider = usesCustomProvider
+    ? `model = ${tomlString(cfg.api_model || cfg.model)}\nmodel_provider = "agent-micro-custom"\n\n[model_providers.agent-micro-custom]\nname = "Agent Micro Custom API"\nbase_url = ${tomlString(cfg.api_base_url)}\n${providerKey}wire_api = "responses"\n`
     : '';
   const optional = [
-    cfg.model && `model = ${tomlString(cfg.model)}`,
+    !usesCustomProvider && cfg.model && `model = ${tomlString(cfg.model)}`,
     cfg.model_reasoning_effort && `model_reasoning_effort = ${tomlString(cfg.model_reasoning_effort)}`,
     cfg.personality && `personality = ${tomlString(cfg.personality)}`,
     cfg.web_search && `web_search = ${tomlString(cfg.web_search)}`,
@@ -410,10 +413,11 @@ ${END}
 /** CLI -c overrides (highest precedence). */
 function cliConfigArgs(s = load()) {
   const cfg = normalize(s);
+  const usesCustomProvider = !!(cfg.api_base_url && (cfg.api_model || cfg.model));
   return [
-    cfg.api_base_url && (cfg.api_model || cfg.model) && `model_provider="agent-micro-custom"`,
-    cfg.api_base_url && (cfg.api_model || cfg.model) && `model=${tomlString(cfg.api_model || cfg.model)}`,
-    cfg.model && `model=${tomlString(cfg.model)}`,
+    usesCustomProvider && `model_provider="agent-micro-custom"`,
+    usesCustomProvider && `model=${tomlString(cfg.api_model || cfg.model)}`,
+    !usesCustomProvider && cfg.model && `model=${tomlString(cfg.model)}`,
     cfg.model_reasoning_effort && `model_reasoning_effort=${tomlString(cfg.model_reasoning_effort)}`,
     cfg.personality && `personality=${tomlString(cfg.personality)}`,
     cfg.web_search && `web_search=${tomlString(cfg.web_search)}`,

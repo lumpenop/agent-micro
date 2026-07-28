@@ -209,6 +209,9 @@ class CodexBridge extends EventEmitter {
     this._contextPoll = null;
     this._rolloutWatchers = new Map();
     this._rolloutWatchTimers = new Map();
+    this._modelPickerPending = null;
+    this._refreshThreadsPending = null;
+    this._refreshContextsPending = null;
   }
 
   getState() {
@@ -873,6 +876,16 @@ class CodexBridge extends EventEmitter {
   }
 
   async refreshThreads() {
+    if (this._refreshThreadsPending) return this._refreshThreadsPending;
+    this._refreshThreadsPending = this._refreshThreadsNow();
+    try {
+      return await this._refreshThreadsPending;
+    } finally {
+      this._refreshThreadsPending = null;
+    }
+  }
+
+  async _refreshThreadsNow() {
     if (!this.connected) return;
     let result;
     try {
@@ -905,8 +918,6 @@ class CodexBridge extends EventEmitter {
         this.agents[i] = emptyAgent();
         continue;
       }
-      if (prev.status === 'thinking' || prev.status === 'input') continue;
-
       const t = byId.get(prev.threadId);
       if (!t) continue;
 
@@ -1112,6 +1123,16 @@ class CodexBridge extends EventEmitter {
 
   /** Sync model/reasoning/Fast for already-associated CLI rollouts. */
   async refreshAgentContexts() {
+    if (this._refreshContextsPending) return this._refreshContextsPending;
+    this._refreshContextsPending = this._refreshAgentContextsNow();
+    try {
+      return await this._refreshContextsPending;
+    } finally {
+      this._refreshContextsPending = null;
+    }
+  }
+
+  async _refreshAgentContextsNow() {
     if (!this.connected) return;
     let changed = false;
     for (const agent of this.agents) {
@@ -1374,21 +1395,25 @@ class CodexBridge extends EventEmitter {
   }
 
   async openModelPicker() {
+    if (this._modelPickerPending) return this._modelPickerPending;
     const slot = this.selected;
-    const agent = this.agents[slot];
-    if (agent?.status === 'thinking' || agent?.status === 'working') {
-      return { ok: false, busy: true, error: 'Wait for the current response to finish before changing models' };
-    }
+    this._modelPickerPending = (async () => {
+      try {
+        const focus = await this.ensureAgentCliWindow(slot, { focus: true });
+        if (!focus?.ok) return { ok: false, error: focus?.error || focus?.reason || 'Codex CLI unavailable', slot };
+        await mac.clearCliInput(slot);
+        await mac.submitToCli(slot, '/model');
+        this.emitState('Codex · model picker');
+        return { ok: true, slot, mode: 'cli' };
+      } catch (error) {
+        this.emit('log', `model picker cli: ${error.message}`);
+        return { ok: false, error: error.message, slot };
+      }
+    })();
     try {
-      const focus = await this.ensureAgentCliWindow(slot, { focus: true });
-      if (!focus?.ok) return { ok: false, error: focus?.error || focus?.reason || 'Codex CLI unavailable', slot };
-      await mac.clearCliInput(slot);
-      await mac.submitToCli(slot, '/model');
-      this.emitState('Codex · model picker');
-      return { ok: true, slot, mode: 'cli' };
-    } catch (error) {
-      this.emit('log', `model picker cli: ${error.message}`);
-      return { ok: false, error: error.message, slot };
+      return await this._modelPickerPending;
+    } finally {
+      this._modelPickerPending = null;
     }
   }
 
@@ -1398,10 +1423,6 @@ class CodexBridge extends EventEmitter {
     // while keeping the value bounded and shell/JSON safe.
     if (!/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}$/.test(model)) return { ok: false, error: 'Invalid model name' };
     const slot = this.selected;
-    const agent = this.agents[slot];
-    if (agent?.status === 'thinking' || agent?.status === 'working') {
-      return { ok: false, busy: true, error: 'Wait for the current response to finish before changing models' };
-    }
     const updated = await this._updateSelectedThreadSettings({ model });
     if (updated.ok) {
       this.emitState(`Codex · ${model}`);

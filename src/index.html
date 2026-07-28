@@ -209,7 +209,7 @@
                 <label class="voice-label" data-i18n="settings.provider">Provider</label>
                 <div class="settings-row">
                   <button type="button" class="voice-btn settings-provider-btn" id="settings-provider-codex" data-provider="codex">Codex CLI</button>
-                  <button type="button" class="voice-btn settings-provider-btn" id="settings-provider-api" data-provider="api">Custom API · Codex Agent</button>
+                  <button type="button" class="voice-btn settings-provider-btn" id="settings-provider-api" data-provider="api">Responses API · Codex Agent</button>
                   <button type="button" class="voice-btn" id="settings-api-configure">Configure API</button>
                 </div>
                 <p class="settings-desc" data-i18n="settings.provider.desc">Codex CLI connection. Restarts the connection.</p>
@@ -220,8 +220,8 @@
                 <label class="voice-label" for="set-api-key-env">API key environment variable</label>
                 <input id="set-api-key-env" class="voice-input" type="text" placeholder="OPENAI_API_KEY" />
                 <label class="voice-label" for="set-api-model">API model</label>
-                <input id="set-api-model" class="voice-input" type="text" placeholder="gpt-4o-mini" />
-                <p class="settings-desc">Runs through Codex Agent with its sandbox, approvals, terminal sessions, and Fork support. API keys stay in your environment.</p>
+                <input id="set-api-model" class="voice-input" type="text" placeholder="provider-model-id" />
+                <p class="settings-desc">Requires an OpenAI Responses-compatible API. Runs through Codex Agent with its sandbox, approvals, terminal sessions, and Fork support. Chat Completions-only APIs require a Responses proxy.</p>
               </div>
               <div class="settings-field">
                 <label class="voice-label" id="set-codex-login-label" data-i18n="settings.codexLogin">Codex login</label>

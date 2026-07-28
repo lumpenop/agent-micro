@@ -1,4 +1,5 @@
 import { createPad3D } from './pad3d.mjs';
+import { createDialStepper } from './dial-controller.mjs';
 import {
   DEFAULT_KEY_ICONS,
   isPickerIcon,
@@ -374,7 +375,18 @@ async function setAgentManagerOpen(open) {
   }
 }
 
+let agentManagerRefreshPromise = null;
 async function refreshAgentManager() {
+  if (agentManagerRefreshPromise) return agentManagerRefreshPromise;
+  agentManagerRefreshPromise = refreshAgentManagerNow();
+  try {
+    return await agentManagerRefreshPromise;
+  } finally {
+    agentManagerRefreshPromise = null;
+  }
+}
+
+async function refreshAgentManagerNow() {
   if (!agentManagerPanel || agentManagerPanel.hidden || !agentTaskList) return;
   const result = await api?.listAgentTasks?.();
   agentTaskList.replaceChildren();
@@ -430,6 +442,8 @@ async function refreshAgentManager() {
     }
     const actions = document.createElement('div'); actions.className = 'agent-task-actions';
     const launch = document.createElement('button'); launch.type = 'button'; launch.textContent = '열기';
+    const unavailable = task.state === 'missing' || task.state === 'recoverable';
+    launch.disabled = unavailable;
     launch.addEventListener('click', async () => {
       launch.disabled = true;
       const opened = await api?.launchAgentTask?.(slot);
@@ -437,22 +451,28 @@ async function refreshAgentManager() {
       launch.disabled = false;
     });
     const merge = document.createElement('button'); merge.type = 'button';
-    merge.textContent = task.mergedAt ? '정리' : 'Merge';
-    merge.disabled = task.mergedAt
+    merge.textContent = task.state === 'recoverable' ? '복구' : task.state === 'missing' ? '정리' : task.mergedAt ? '정리' : 'Merge';
+    merge.disabled = task.state === 'recoverable' || task.state === 'missing'
+      ? false
+      : task.mergedAt
       ? task.dirty
       : task.dirty || !task.ahead || !!task.conflicts?.length;
-    merge.title = task.mergedAt ? '완료된 worktree와 브랜치 정리'
+    merge.title = task.state === 'recoverable' ? '기존 Agent 브랜치에서 worktree 복구'
+      : task.state === 'missing' ? '남아 있는 Agent Manager 기록 정리'
+      : task.mergedAt ? '완료된 worktree와 브랜치 정리'
       : task.dirty ? '먼저 Agent 작업을 커밋하세요'
         : task.conflicts?.length ? '겹치는 파일을 먼저 검토하세요'
           : !task.ahead ? '병합할 커밋이 없습니다' : '기준 브랜치에 병합';
     merge.addEventListener('click', async () => {
       merge.disabled = true;
-      const merged = task.mergedAt
+      const merged = task.state === 'recoverable'
+        ? await api?.restoreAgentTask?.(slot)
+        : task.state === 'missing' || task.mergedAt
         ? await api?.archiveAgentTask?.(slot)
         : await api?.mergeAgentTask?.(slot);
       if (!merged?.canceled) {
         flashAction(merged?.ok
-          ? `Agent ${slot + 1} · ${task.mergedAt ? 'cleaned' : 'merged'}`
+          ? `Agent ${slot + 1} · ${task.state === 'recoverable' ? 'restored' : task.state === 'missing' || task.mergedAt ? 'cleaned' : 'merged'}`
           : merged?.error || 'Agent task action failed');
       }
       await refreshAgentManager();
@@ -1341,7 +1361,7 @@ function buildKeymapItems(g = modGlyph()) {
     {
       marks: ['dial'],
       title: 'Dial',
-      text: 'reasoning: minimal → low → medium → high → xhigh',
+      text: 'Codex → Prompts → Tools layer',
     },
     { section: 'Joy · Codex' },
     {
@@ -2463,26 +2483,35 @@ document.getElementById('settings-open-config')?.addEventListener('click', () =>
   api?.openCodexConfig?.();
   flashAction(t('flash.configToml'));
 });
+let modelPickerOpening = false;
 async function openModelPickerFromHud() {
-  if (!state.connected) {
-    const linked = await connectAgent({ forceLogin: false });
-    if (!linked?.ok) return;
-  }
-  // Model availability is owned by Codex. Do not cycle through guessed model
-  // ids here: they go stale and also break custom providers such as DeepSeek.
-  const result = await api?.openModelPicker?.();
-  if (!result?.ok) flashAction(result?.error || t('flash.modelFail'));
-  else flashAction(t('flash.modelPicker'));
-  const next = await api?.getState?.();
-  if (next) applyBridgeState(next);
-  // The CLI picker is interactive; the selected model reaches the rollout
-  // after this handler returns, so re-read it briefly in the background.
-  if (result?.ok) {
-    for (let i = 0; i < 8; i += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      const updated = await api?.getState?.();
-      if (updated) applyBridgeState(updated);
+  if (modelPickerOpening) return;
+  modelPickerOpening = true;
+  if (hud.modelChange) hud.modelChange.disabled = true;
+  try {
+    if (!state.connected) {
+      const linked = await connectAgent({ forceLogin: false });
+      if (!linked?.ok) return;
     }
+    // Model availability is owned by Codex. Do not cycle through guessed model
+    // ids here: they go stale and also break custom providers.
+    const result = await api?.openModelPicker?.();
+    if (!result?.ok) flashAction(result?.error || t('flash.modelFail'));
+    else flashAction(t('flash.modelPicker'));
+    const next = await api?.getState?.();
+    if (next) applyBridgeState(next);
+    // The CLI picker is interactive; the selected model reaches the rollout
+    // after this handler returns, so re-read it briefly in the background.
+    if (result?.ok) {
+      for (let i = 0; i < 8; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const updated = await api?.getState?.();
+        if (updated) applyBridgeState(updated);
+      }
+    }
+  } finally {
+    modelPickerOpening = false;
+    if (hud.modelChange) hud.modelChange.disabled = false;
   }
 }
 hud.modelChange?.addEventListener('click', openModelPickerFromHud);
@@ -2527,8 +2556,8 @@ function render() {
   if (hud.tokenSaver) {
     const tokenIndex = Math.max(0, Math.min(TOKEN_SAVER_LABELS.length - 1, agentReasoningIndex));
     hud.tokenSaver.textContent = TOKEN_SAVER_LABELS[tokenIndex] || 'Balanced';
-    hud.tokenSaver.title = `Agent ${state.selected + 1} · Token Saver · turn the dial to adjust`;
-    hud.tokenMeter?.setAttribute('title', `Dial Token Saver · ${tokenIndex + 1}/${TOKEN_SAVER_LABELS.length}`);
+    hud.tokenSaver.title = `Agent ${state.selected + 1} · Token Saver`;
+    hud.tokenMeter?.setAttribute('title', `Token Saver · ${tokenIndex + 1}/${TOKEN_SAVER_LABELS.length}`);
     hud.tokenMeter?.querySelectorAll('i').forEach((dot, index) => dot.classList.toggle('is-active', index <= tokenIndex));
   }
   if (hud.fast) {
@@ -2604,11 +2633,6 @@ async function refreshDevServerStatus() {
 }
 
 async function toggleQuickDeepModel() {
-  const current = state.agents[state.selected] || {};
-  if (current.status === 'thinking' || current.status === 'working') {
-    flashAction(t('flash.modelBusy'));
-    return;
-  }
   const currentMode = state.agentModelModes[state.selected] || 'deep';
   const next = currentMode === 'light' ? 'deep' : 'light';
   const model = next === 'light' ? QUICK_MODEL : DEEP_MODEL;
@@ -2806,8 +2830,6 @@ async function onCmd(cmd) {
   }
 }
 
-let dialAcc = 0;
-const DIAL_STEP_DEGREES = 12;
 async function changeTokenSaver(step) {
   if (padBlocks()) return;
   const current = state.agents[state.selected] || {};
@@ -2835,15 +2857,18 @@ async function changeTokenSaver(step) {
   }
 }
 
+const dialStepper = createDialStepper({
+  stepDegrees: 12,
+  onStep(steps) {
+    state.layer = (state.layer + steps % LAYERS.length + LAYERS.length) % LAYERS.length;
+    pad3d?.setLayer?.(state.layer);
+    render();
+    flashAction(t('flash.layer', { name: layerDisplayName(state.layer) }));
+  },
+});
+
 function onDialDelta(d) {
-  dialAcc += d;
-  const steps = Math.trunc(dialAcc / DIAL_STEP_DEGREES);
-  if (!steps) return;
-  dialAcc -= steps * DIAL_STEP_DEGREES;
-  state.layer = (state.layer + steps % LAYERS.length + LAYERS.length) % LAYERS.length;
-  pad3d?.setLayer?.(state.layer);
-  render();
-  flashAction(t('flash.layer', { name: layerDisplayName(state.layer) }));
+  dialStepper.push(d);
 }
 
 function onJoy(dir, { force = false } = {}) {

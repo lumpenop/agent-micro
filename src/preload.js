@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('codexDesktop', {
   launchAgentTask: (slot) => ipcRenderer.invoke('coordinator:launch', slot),
   mergeAgentTask: (slot) => ipcRenderer.invoke('coordinator:merge', slot),
   archiveAgentTask: (slot) => ipcRenderer.invoke('coordinator:archive', slot),
+  restoreAgentTask: (slot) => ipcRenderer.invoke('coordinator:restore', slot),
 
   getState: () => ipcRenderer.invoke('codex:getState'),
   select: (index, focus) => ipcRenderer.invoke('codex:select', index, focus),

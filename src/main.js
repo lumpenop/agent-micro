@@ -1114,6 +1114,13 @@ ipcMain.handle('coordinator:merge', async (_e, slot) => {
     return { ok: false, error: error.message };
   }
 });
+ipcMain.handle('coordinator:restore', async (_e, slot) => {
+  try {
+    return await agentCoordinator.restoreTask(selectedWorkspace(), slot);
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
 ipcMain.handle('coordinator:archive', async (_e, slot) => {
   try {
     const answer = await dialog.showMessageBox(mainWindow, {

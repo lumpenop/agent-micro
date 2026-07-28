@@ -301,7 +301,7 @@ const en = {
   'onboarding.started': 'Agent 1 is ready',
 
   'settings.provider': 'Provider',
-  'settings.provider.desc': 'Choose ChatGPT login or run the Codex Agent with an OpenAI-compatible model provider.',
+  'settings.provider.desc': 'Choose ChatGPT login or run Codex Agent with a Responses-compatible model provider.',
 
 
   'flash.codexJump': 'Preparing local voice capture…',
@@ -807,7 +807,7 @@ const ko = {
   'onboarding.started': 'Agent 1을 시작했어요',
 
   'settings.provider': '제공자',
-  'settings.provider.desc': 'ChatGPT 로그인 또는 OpenAI 호환 모델을 Codex Agent에서 사용할 수 있습니다.',
+  'settings.provider.desc': 'ChatGPT 로그인 또는 Responses API 호환 모델을 Codex Agent에서 사용할 수 있습니다.',
 
 
   'flash.codexJump': '로컬 음성 입력 준비 중…',

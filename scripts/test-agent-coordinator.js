@@ -70,6 +70,37 @@ function git(cwd, args) {
     if (blockedDirty.ok || !/Commit the Agent changes/.test(blockedDirty.error || '')) {
       throw new Error('dirty merge was not blocked');
     }
+
+    fs.writeFileSync(path.join(repo, 'preflight.txt'), 'base\n');
+    git(repo, ['add', '.']);
+    git(repo, ['commit', '-m', 'preflight base']);
+    const preflight = await coordinator.createTask(repo, { slot: 4, task: 'preflight conflict' });
+    if (!preflight.ok) throw new Error('preflight worktree creation failed');
+    fs.writeFileSync(path.join(preflight.record.worktree, 'preflight.txt'), 'agent branch\n');
+    git(preflight.record.worktree, ['add', '.']);
+    git(preflight.record.worktree, ['commit', '-m', 'agent-side conflict']);
+    fs.writeFileSync(path.join(repo, 'preflight.txt'), 'main branch\n');
+    git(repo, ['add', '.']);
+    git(repo, ['commit', '-m', 'main-side conflict']);
+    const blockedPreflight = await coordinator.mergeTask(repo, 4);
+    if (blockedPreflight.ok || !blockedPreflight.conflict) {
+      throw new Error('real Git merge conflict was not blocked before merge');
+    }
+    if (fs.existsSync(path.join(repo, '.git', 'MERGE_HEAD'))) {
+      throw new Error('conflict preflight left main in a merge state');
+    }
+
+    const recoverable = await coordinator.createTask(repo, { slot: 5, task: 'recover after missing folder' });
+    if (!recoverable.ok) throw new Error('recoverable worktree creation failed');
+    fs.writeFileSync(path.join(recoverable.record.worktree, 'recovered.txt'), 'safe\n');
+    git(recoverable.record.worktree, ['add', '.']);
+    git(recoverable.record.worktree, ['commit', '-m', 'recoverable result']);
+    git(repo, ['worktree', 'remove', recoverable.record.worktree]);
+    const missing = await coordinator.list(repo);
+    if (missing.slots[5]?.state !== 'recoverable') throw new Error('missing worktree was not marked recoverable');
+    const restored = await coordinator.restoreTask(repo, 5);
+    if (!restored.ok || !fs.existsSync(recoverable.record.worktree)) throw new Error('worktree restore failed');
+
     process.stdout.write('agent coordinator ok\n');
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });

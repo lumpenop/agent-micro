@@ -19,8 +19,8 @@ Agent Micro 可以管理最多 6 个 Codex CLI 会话，批准或拒绝请求、
 ### 从源码运行
 
 ```bash
-git clone https://github.com/lumpenop/agent-keyboard.git
-cd agent-keyboard
+git clone https://github.com/lumpenop/agent-micro.git
+cd agent-micro
 pnpm install
 pnpm start
 ```
@@ -48,7 +48,15 @@ pnpm start
 | Review | 请求 Codex 检查当前修改 |
 | DEV | 启动或停止开发服务器 |
 
-建议从 Agent 1 开始。旋钮用于调整推理强度，Touch 用于切换 Codex、Prompts 和 Tools 图层。
+建议从 Agent 1 开始。旋转旋钮可切换 Codex、Prompts 和 Tools 图层；Touch 也可将同一图层选择器前进一步。
+
+## 隔离式 Agent Manager
+
+Agent Manager 会为每个任务创建独立的 Git worktree 和分支。它会检测多个 Agent 修改同一文件的情况，阻止 dirty 或冲突合并，从分支恢复丢失的 worktree，并确保失败的合并不会在主工作区留下中间状态。
+
+## 自定义 Provider
+
+`Responses API · Codex Agent` 需要兼容 OpenAI Responses API 的 Provider 或代理。仅支持 Chat Completions 的服务（包括 DeepSeek 公共 API）需要 Responses 兼容代理，才能保留 Codex 的沙箱、审批和 Agent 会话能力。
 
 ## 开发与测试
 
@@ -56,8 +64,12 @@ pnpm start
 pnpm landing:dev
 pnpm landing:build
 pnpm test:safe
+pnpm test:controls
+pnpm test:providers
+pnpm test:coordinator
+pnpm test:coordinator:stress
 ```
 
 本项目采用 MIT 许可证发布。
 
-如果 Agent Micro 对你有帮助，欢迎在 [GitHub 点 ⭐ Star](https://github.com/lumpenop/agent-keyboard)，这会帮助项目继续发展。
+如果 Agent Micro 对你有帮助，欢迎在 [GitHub 点 ⭐ Star](https://github.com/lumpenop/agent-micro)，这会帮助项目继续发展。

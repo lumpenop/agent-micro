@@ -58,7 +58,7 @@ function wait(ms) {
   await command('Runtime.enable');
   await evaluate(`window.codexDesktop.saveCodexSettings({ working_directory: ${JSON.stringify(integrationRepo)} })`);
   const apiReady = await evaluate(`[
-    'listAgentTasks','createAgentTask','launchAgentTask','mergeAgentTask','archiveAgentTask'
+    'listAgentTasks','createAgentTask','launchAgentTask','mergeAgentTask','archiveAgentTask','restoreAgentTask'
   ].every((name) => typeof window.codexDesktop[name] === 'function')`);
   if (!apiReady) throw new Error('Agent Manager preload API is incomplete');
   const created = await evaluate(`window.codexDesktop.createAgentTask({
