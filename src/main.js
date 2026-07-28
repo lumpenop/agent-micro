@@ -13,6 +13,7 @@ const skillManager = require('./skill-manager');
 const whisperModel = require('./whisper-model');
 const toolInstaller = require('./tool-installer');
 const agentRules = require('./agent-rules');
+const agentCoordinator = require('./agent-coordinator');
 const { detectDevCommand } = require('./dev-runner');
 const { findCodexNative } = require('./providers/codex-bridge');
 
@@ -33,6 +34,16 @@ function trayResetText(epochSeconds) {
   const minutes = Math.floor((seconds % 3600) / 60);
   if (hours >= 24) return `reset in ${Math.floor(hours / 24)}d ${hours % 24}h`;
   return `reset in ${hours}h ${minutes}m`;
+}
+
+function trayUsageTitle(rate) {
+  const percent = Number(rate?.usedPercent);
+  if (!Number.isFinite(percent)) return '—';
+  const used = Math.max(0, Math.min(100, Math.round(percent)));
+  const filled = Math.round(used / 20);
+  const graph = `${'▰'.repeat(filled)}${'▱'.repeat(5 - filled)}`;
+  const reset = trayResetText(rate?.resetsAt).replace(/^reset in /, '').replace(/^reset /, '');
+  return `${used}% ${graph} · ${reset}`;
 }
 
 function showMainWindow() {
@@ -86,9 +97,8 @@ function updateStatusTrayMenu(usage = null) {
   const settings = codexSettings.load();
   const rate = usage?.rateLimit;
   const used = rate?.usedPercent != null ? `${rate.usedPercent}% used` : 'Usage unavailable';
-  const weekly = rate?.secondary?.usedPercent != null ? `${rate.secondary.usedPercent}% used` : 'unavailable';
   const reset = trayResetText(rate?.resetsAt);
-  const credits = rate?.resetCredits?.availableCount;
+  const title = trayUsageTitle(rate);
   const saveTraySetting = (partial) => {
     try {
       codexSettings.save(partial);
@@ -157,12 +167,11 @@ function updateStatusTrayMenu(usage = null) {
     checked: settings.web_search === value,
     click: () => saveTraySetting({ web_search: value }),
   }));
-  statusTray.setToolTip(`Codex · 5h ${used} · 7d ${weekly} · ${reset}`);
+  statusTray.setTitle(title);
+  statusTray.setToolTip(`Codex · ${title}`);
   statusTray.setContextMenu(Menu.buildFromTemplate([
     { label: `Codex · ${used}`, enabled: false },
-    { label: `Weekly quota · ${weekly}`, enabled: false },
     { label: reset, enabled: false },
-    { label: credits == null ? 'Reset credits unavailable' : `${credits} reset credit(s) available`, enabled: false },
     { type: 'separator' },
     { label: 'Open Agent Micro', click: showMainWindow },
     { label: 'Refresh usage', click: () => refreshStatusTray() },
@@ -223,9 +232,6 @@ async function refreshStatusTray() {
     const rateLimitSnapshot = await bridge?.readRateLimits?.();
     const usage = codexUsage.getUsage({ rateLimitSnapshot });
     statusTrayUsage = usage;
-    const used = usage.rateLimit?.usedPercent;
-    const weekly = usage.rateLimit?.secondary?.usedPercent;
-    statusTray.setTitle(`5h ${used != null ? `${used}%` : '—'} · 7d ${weekly != null ? `${weekly}%` : '—'}`);
     updateStatusTrayMenu(usage);
   } catch {
     statusTrayUsage = null;
@@ -273,6 +279,7 @@ function trialDenied() {
 /** Global pad shortcuts armed while Codex CLI terminal is frontmost */
 let cliPadGlobalsArmed = false;
 let padContextTimer = null;
+let lastFocusedCliSlotCheck = 0;
 
 /** Base defs — modifier (⌘ ⌥ ⌃ ⇪) chosen in pad prefs */
 const PAD_HOTKEY_DEFS = [
@@ -453,8 +460,15 @@ async function syncPadHotkeyContext() {
       return;
     }
     const cliOurs = await mac.isOurCliFrontmost();
-    if (cliOurs) registerCliPadGlobals();
-    else unregisterCliPadGlobals();
+    if (cliOurs) {
+      registerCliPadGlobals();
+      const now = Date.now();
+      if (now - lastFocusedCliSlotCheck >= 500) {
+        lastFocusedCliSlotCheck = now;
+        const focusedSlot = await mac.getFocusedCliSlot?.();
+        if (Number.isInteger(focusedSlot)) bridge?.syncSelectedSlot?.(focusedSlot);
+      }
+    } else unregisterCliPadGlobals();
   } catch (e) {
     console.log('[hotkey] sync', e.message);
   }
@@ -680,8 +694,6 @@ function installAppMenu() {
 function createWindow() {
   const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
   // Fit chrome + pad (modest outer rim) + hud
-  // Reserve the Git rail up front. Toggling a transparent macOS window's
-  // bounds causes a full compositor flash, so the window itself stays fixed.
   const winW = 558;
   const winH = 596;
 
@@ -816,9 +828,11 @@ app.whenReady().then(async () => {
 
   const locked = trialLocked();
   if (!locked) {
-    // Start with Codex CLI by default
-    bridge = createBridge('codex');
-    activeProvider = 'codex';
+    // Reuse a configured custom model provider; otherwise start with Codex CLI.
+    const savedSettings = codexSettings.load();
+    const initialProvider = savedSettings.api_base_url && (savedSettings.api_model || savedSettings.model) ? 'api' : 'codex';
+    bridge = createBridge(initialProvider);
+    activeProvider = initialProvider;
     bindBridge(bridge);
     setTimeout(() => bridge.start(), 400);
   }
@@ -875,6 +889,20 @@ ipcMain.handle('window:minimize', () => mainWindow?.minimize());
 ipcMain.handle('window:close', () => mainWindow?.close());
 ipcMain.handle('window:setGitPanel', (_e, open) => {
   if (!mainWindow || mainWindow.isDestroyed()) return false;
+  const extraWidth = 210;
+  const bounds = mainWindow.getBounds();
+  const expanded = bounds.width > 558;
+  const next = !!open;
+  if (next && !expanded) {
+    mainWindow.setBounds({ ...bounds, x: bounds.x - extraWidth, width: bounds.width + extraWidth }, false);
+  } else if (!next && expanded) {
+    mainWindow.setBounds({ ...bounds, x: bounds.x + extraWidth, width: bounds.width - extraWidth }, false);
+  }
+  return true;
+});
+ipcMain.handle('window:setMousePassthrough', (_e, passthrough) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  mainWindow.setIgnoreMouseEvents(!!passthrough, { forward: true });
   return true;
 });
 ipcMain.handle('git:status', async () => {
@@ -1037,6 +1065,78 @@ ipcMain.handle('git:sync', async (_e, action, context = {}) => {
     });
     return { ok: true, action: mode, output };
   } catch (error) { return { ok: false, action: mode, error: error.message }; }
+});
+ipcMain.handle('coordinator:list', async () => {
+  try {
+    return await agentCoordinator.list(selectedWorkspace());
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
+ipcMain.handle('coordinator:create', async (_e, input) => {
+  try {
+    const result = await agentCoordinator.createTask(selectedWorkspace(), input);
+    if (!result?.ok) return result;
+    const slot = result.record.slot;
+    const settings = codexSettings.load();
+    const slots = settings.agent_slots.map((entry) => ({ ...entry }));
+    slots[slot] = {
+      ...slots[slot],
+      enabled: true,
+      name: String(input?.task || `Agent ${slot + 1}`).trim().slice(0, 80),
+      working_directory: result.record.worktree,
+    };
+    codexSettings.save({ agent_slots: slots });
+    if (bridge?.agents?.[slot]) {
+      bridge.agents[slot].cwd = result.record.worktree;
+      bridge.agents[slot].projectRoot = result.record.worktree;
+      bridge.agents[slot].projectName = path.basename(result.record.worktree);
+    }
+    bridge?.emitState?.(`Agent ${slot + 1} · isolated`);
+    return result;
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
+ipcMain.handle('coordinator:launch', async (_e, slotInput) => {
+  try {
+    const slot = Math.max(0, Math.min(5, Number(slotInput) || 0));
+    const result = await bridge?.select?.(slot, { focus: true });
+    return result && typeof result === 'object' ? result : { ok: true, slot };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
+ipcMain.handle('coordinator:merge', async (_e, slot) => {
+  try {
+    return await agentCoordinator.mergeTask(selectedWorkspace(), slot);
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+});
+ipcMain.handle('coordinator:archive', async (_e, slot) => {
+  try {
+    const answer = await dialog.showMessageBox(mainWindow, {
+      type: 'warning',
+      buttons: ['Cancel', 'Clean up'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Clean up Agent worktree',
+      message: `Agent ${Number(slot) + 1}의 완료된 worktree와 브랜치를 정리할까요?`,
+      detail: '병합되지 않은 커밋이나 수정 중인 파일이 있으면 정리되지 않습니다.',
+    });
+    if (answer.response !== 1) return { ok: false, canceled: true };
+    const result = await agentCoordinator.archiveTask(selectedWorkspace(), slot);
+    if (result?.ok) {
+      const settings = codexSettings.load();
+      const slots = settings.agent_slots.map((entry) => ({ ...entry }));
+      slots[Number(slot)] = { ...slots[Number(slot)], working_directory: '' };
+      codexSettings.save({ agent_slots: slots });
+    }
+    return result;
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
 });
 ipcMain.handle('window:suspendPadHotkeys', (_e, suspended) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1320,7 +1420,8 @@ ipcMain.handle('voice:ensureModel', async () => {
 });
 ipcMain.handle('tools:ensure', async (_event, provider) => {
   if (trialLocked()) return trialDenied();
-  if (provider === 'api') return { ok: true, downloaded: false };
+  // Custom APIs still use the Codex CLI agent runtime, so ensure that binary.
+  if (provider === 'api') provider = 'codex';
   if (provider !== 'codex') return { ok: false, error: 'Only Codex CLI is supported' };
   try {
     return await toolInstaller.install(provider, (progress) => {
@@ -1387,8 +1488,9 @@ ipcMain.handle('voice:submitText', async (_e, text) => {
   return r;
 });
 
-ipcMain.handle('codex:getState', () => {
+ipcMain.handle('codex:getState', async () => {
   if (trialLocked()) return null;
+  await bridge?.refreshAgentContexts?.().catch(() => {});
   return bridge?.getState();
 });
 ipcMain.handle('codex:select', async (_e, index, focus) => {
@@ -1431,6 +1533,15 @@ ipcMain.handle('codex:fork', async () => {
 ipcMain.handle('codex:send', async (_e, text) => {
   if (trialLocked()) return trialDenied();
   return withCliFocus(() => bridge?.send(text));
+});
+ipcMain.handle('codex:clearInput', async () => {
+  if (trialLocked()) return trialDenied();
+  try {
+    const slot = Math.max(0, Math.min(5, Number(bridge?.selected) || 0));
+    return await withCliFocus(() => mac.clearCliInput(slot));
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
 });
 ipcMain.handle('codex:setReasoning', (_e, index) => {
   if (trialLocked()) return trialDenied();
@@ -1517,7 +1628,7 @@ ipcMain.handle('codex:loginStatus', async () => {
   try {
     const { CodexBridge, findCodexNative } = require('./providers/codex-bridge');
     if (findCodexNative()) {
-      const tempBridge = new CodexBridge();
+      const tempBridge = new CodexBridge({ customProvider: activeProvider === 'api' });
       codexStatus = await tempBridge.checkLogin();
     } else {
       codexStatus = { hasCodex: false, loggedIn: false };

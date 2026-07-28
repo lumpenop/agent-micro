@@ -47,5 +47,11 @@ if (downloadButton && downloadUrl) {
   downloadButton.target = '_blank';
   downloadButton.rel = 'noreferrer';
 } else {
-  downloadButton?.addEventListener('click', (event) => event.preventDefault());
+  // Keep the page useful before a custom DMG URL is configured.
+  if (downloadButton) {
+    downloadButton.href = 'https://github.com/lumpenop/agent-keyboard/releases/latest';
+    downloadButton.target = '_blank';
+    downloadButton.rel = 'noreferrer';
+    downloadButton.textContent = 'View latest release';
+  }
 }

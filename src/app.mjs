@@ -31,6 +31,19 @@ const api = window.codexDesktop;
 const STORAGE_KEY = 'agent-micro-key-icons-v1';
 const CUSTOM_ICONS_KEY = 'agent-micro-custom-icons-v1';
 const MAX_CUSTOM_ICONS = 32;
+const ACCENT_THEMES = ['blue', 'violet', 'amber', 'mint'];
+const ACCENT_THEME_KEY = 'agent-micro-accent-theme-v1';
+let accentThemeIndex = Math.max(0, ACCENT_THEMES.indexOf(localStorage.getItem(ACCENT_THEME_KEY)));
+
+function applyAccentTheme(index, { announce = true } = {}) {
+  accentThemeIndex = (index + ACCENT_THEMES.length) % ACCENT_THEMES.length;
+  const theme = ACCENT_THEMES[accentThemeIndex];
+  document.body.dataset.accent = theme;
+  localStorage.setItem(ACCENT_THEME_KEY, theme);
+  if (announce) flashAction(`Color · ${theme}`);
+}
+
+applyAccentTheme(accentThemeIndex, { announce: false });
 
 /**
  * Joystick layers (Touch cycles these):
@@ -264,6 +277,32 @@ const shellEl = document.getElementById('shell');
 const gitButton = document.getElementById('btn-git');
 const gitPanel = document.getElementById('git-side-panel');
 const gitClose = document.getElementById('git-side-close');
+const agentManagerButton = document.getElementById('btn-agents');
+const agentManagerPanel = document.getElementById('agent-manager-panel');
+const agentManagerClose = document.getElementById('agent-manager-close');
+const agentTaskForm = document.getElementById('agent-task-form');
+const agentTaskSlot = document.getElementById('agent-task-slot');
+const agentTaskInput = document.getElementById('agent-task-input');
+const agentTaskList = document.getElementById('agent-task-list');
+const agentManagerSummary = document.getElementById('agent-manager-summary');
+let agentManagerTimer = null;
+let mousePassthrough = null;
+
+function updateMousePassthrough(event) {
+  const target = document.elementFromPoint(event.clientX, event.clientY);
+  const interactive = target?.closest?.('.pad, .chrome, .hud, .git-side-panel, .icon-picker, button, input, textarea, select');
+  const next = !interactive;
+  if (next === mousePassthrough) return;
+  mousePassthrough = next;
+  api?.setMousePassthrough?.(next);
+}
+
+document.addEventListener('mousemove', updateMousePassthrough, { passive: true });
+document.addEventListener('mouseleave', () => {
+  if (mousePassthrough === true) return;
+  mousePassthrough = true;
+  api?.setMousePassthrough?.(true);
+}, { passive: true });
 const gitRefresh = document.getElementById('git-refresh');
 let gitRefreshTimer = null;
 let gitStatusSnapshot = null;
@@ -282,6 +321,8 @@ const hud = {
   continueStatus: document.getElementById('hud-continue-status'),
   continueButton: document.getElementById('hud-continue'),
   usage: document.getElementById('hud-usage'),
+  usageFill: document.getElementById('hud-usage-fill'),
+  usageTime: document.getElementById('hud-usage-time'),
   badges: document.getElementById('hud-badges'),
   autoBadge: document.getElementById('hud-auto-badge'),
   devBadge: document.getElementById('hud-dev-badge'),
@@ -289,20 +330,136 @@ const hud = {
 
 async function setGitPanelOpen(open) {
   const next = !!open;
-  if (gitPanel) gitPanel.hidden = !next;
-  // The Git rail must not reserve/reposition space while hidden. Only move
-  // the keyboard aside when the actual panel is visible.
-  // The Git rail is fixed-position UI. Never re-align or resize the pad when
-  // it opens; the main body must remain perfectly still.
-  shellEl?.classList.remove('git-host', 'git-open');
+  if (next && agentManagerPanel && !agentManagerPanel.hidden) {
+    agentManagerPanel.hidden = true;
+    agentManagerButton?.classList.remove('is-active');
+    if (agentManagerTimer) clearInterval(agentManagerTimer);
+    agentManagerTimer = null;
+  }
   gitButton?.classList.toggle('is-active', next);
   gitButton?.setAttribute('aria-expanded', String(next));
+  // Avoid rendering the rail during the bounds transition: opening expands
+  // first, while closing hides it before the transparent window contracts.
+  if (!next && gitPanel) gitPanel.hidden = true;
   await api?.setGitPanel?.(next);
+  shellEl?.classList.toggle('git-open', next);
+  if (next && gitPanel) gitPanel.hidden = false;
   if (gitRefreshTimer) clearInterval(gitRefreshTimer);
   gitRefreshTimer = null;
   if (next) {
     await refreshGitStatus();
     gitRefreshTimer = setInterval(refreshGitStatus, 4000);
+  }
+}
+
+async function setAgentManagerOpen(open) {
+  const next = !!open;
+  if (next && gitPanel && !gitPanel.hidden) {
+    gitPanel.hidden = true;
+    gitButton?.classList.remove('is-active');
+    if (gitRefreshTimer) clearInterval(gitRefreshTimer);
+    gitRefreshTimer = null;
+  }
+  agentManagerButton?.classList.toggle('is-active', next);
+  agentManagerButton?.setAttribute('aria-expanded', String(next));
+  if (!next && agentManagerPanel) agentManagerPanel.hidden = true;
+  await api?.setGitPanel?.(next);
+  shellEl?.classList.toggle('git-open', next);
+  if (next && agentManagerPanel) agentManagerPanel.hidden = false;
+  if (agentManagerTimer) clearInterval(agentManagerTimer);
+  agentManagerTimer = null;
+  if (next) {
+    await refreshAgentManager();
+    agentManagerTimer = setInterval(refreshAgentManager, 3000);
+  }
+}
+
+async function refreshAgentManager() {
+  if (!agentManagerPanel || agentManagerPanel.hidden || !agentTaskList) return;
+  const result = await api?.listAgentTasks?.();
+  agentTaskList.replaceChildren();
+  if (!result?.ok) {
+    if (agentManagerSummary) {
+      agentManagerSummary.textContent = result?.error || 'Agent Manager unavailable';
+      agentManagerSummary.classList.add('is-conflict');
+    }
+    return;
+  }
+  const conflictCount = result.conflicts?.length || 0;
+  if (agentManagerSummary) {
+    agentManagerSummary.textContent = conflictCount
+      ? `⚠ 겹치는 파일 ${conflictCount}개 · 병합 전 확인 필요`
+      : `${result.baseBranch} · Agent별 작업 폴더 분리됨`;
+    agentManagerSummary.classList.toggle('is-conflict', conflictCount > 0);
+  }
+  for (let slot = 0; slot < 6; slot += 1) {
+    const task = result.slots?.[slot];
+    const card = document.createElement('article');
+    card.className = `agent-task-card${task?.conflicts?.length ? ' is-conflict' : ''}`;
+    const head = document.createElement('div'); head.className = 'agent-task-head';
+    const name = document.createElement('span'); name.className = 'agent-task-name';
+    name.textContent = task ? `Agent ${slot + 1} · ${task.task}` : `Agent ${slot + 1}`;
+    name.title = task?.task || '';
+    const status = document.createElement('span'); status.className = 'agent-task-state';
+    status.dataset.state = task?.state || 'empty';
+    status.textContent = task?.state || 'empty';
+    head.append(name, status);
+    card.append(head);
+    if (!task) {
+      const empty = document.createElement('p'); empty.className = 'agent-task-meta';
+      empty.textContent = '아직 격리 작업이 없습니다';
+      card.append(empty);
+      card.addEventListener('click', () => {
+        if (agentTaskSlot) agentTaskSlot.value = String(slot);
+        agentTaskInput?.focus();
+      });
+      agentTaskList.append(card);
+      continue;
+    }
+    const meta = document.createElement('p'); meta.className = 'agent-task-meta';
+    meta.textContent = task.branch;
+    meta.title = task.worktree;
+    const files = document.createElement('p'); files.className = 'agent-task-files';
+    files.textContent = `${task.files?.length ? `${task.files.length} files · ${task.ahead} commits` : '변경 없음'}${task.baseHadLocalChanges ? ' · HEAD 기준 생성' : ''}`;
+    card.append(meta, files);
+    if (task.conflicts?.length) {
+      const warning = document.createElement('p'); warning.className = 'agent-task-conflict';
+      warning.textContent = `겹침: ${task.conflicts.slice(0, 3).join(', ')}`;
+      warning.title = task.conflicts.join('\n');
+      card.append(warning);
+    }
+    const actions = document.createElement('div'); actions.className = 'agent-task-actions';
+    const launch = document.createElement('button'); launch.type = 'button'; launch.textContent = '열기';
+    launch.addEventListener('click', async () => {
+      launch.disabled = true;
+      const opened = await api?.launchAgentTask?.(slot);
+      if (!opened?.ok) flashAction(opened?.error || `Agent ${slot + 1}을 열지 못했습니다`);
+      launch.disabled = false;
+    });
+    const merge = document.createElement('button'); merge.type = 'button';
+    merge.textContent = task.mergedAt ? '정리' : 'Merge';
+    merge.disabled = task.mergedAt
+      ? task.dirty
+      : task.dirty || !task.ahead || !!task.conflicts?.length;
+    merge.title = task.mergedAt ? '완료된 worktree와 브랜치 정리'
+      : task.dirty ? '먼저 Agent 작업을 커밋하세요'
+        : task.conflicts?.length ? '겹치는 파일을 먼저 검토하세요'
+          : !task.ahead ? '병합할 커밋이 없습니다' : '기준 브랜치에 병합';
+    merge.addEventListener('click', async () => {
+      merge.disabled = true;
+      const merged = task.mergedAt
+        ? await api?.archiveAgentTask?.(slot)
+        : await api?.mergeAgentTask?.(slot);
+      if (!merged?.canceled) {
+        flashAction(merged?.ok
+          ? `Agent ${slot + 1} · ${task.mergedAt ? 'cleaned' : 'merged'}`
+          : merged?.error || 'Agent task action failed');
+      }
+      await refreshAgentManager();
+    });
+    actions.append(launch, merge);
+    card.append(actions);
+    agentTaskList.append(card);
   }
 }
 
@@ -370,6 +527,35 @@ async function refreshGitStatus() {
 
 gitButton?.addEventListener('click', () => setGitPanelOpen(!!gitPanel?.hidden));
 gitClose?.addEventListener('click', () => setGitPanelOpen(false));
+agentManagerButton?.addEventListener('click', () => setAgentManagerOpen(!!agentManagerPanel?.hidden));
+agentManagerClose?.addEventListener('click', () => setAgentManagerOpen(false));
+agentTaskForm?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const task = String(agentTaskInput?.value || '').trim();
+  const slot = Number(agentTaskSlot?.value || 0);
+  if (!task) {
+    agentTaskInput?.focus();
+    return;
+  }
+  const submit = agentTaskForm.querySelector('button[type="submit"]');
+  if (submit) submit.disabled = true;
+  if (agentManagerSummary) agentManagerSummary.textContent = `Agent ${slot + 1} worktree 생성 중…`;
+  const created = await api?.createAgentTask?.({ slot, task });
+  if (!created?.ok) {
+    flashAction(created?.error || '격리 작업을 만들지 못했습니다');
+  } else {
+    if (agentTaskInput) agentTaskInput.value = '';
+    flashAction(`Agent ${slot + 1} · isolated`);
+    const opened = await api?.launchAgentTask?.(slot);
+    if (!opened?.ok) flashAction(opened?.error || `Agent ${slot + 1}을 열지 못했습니다`);
+    else {
+      const assigned = await api?.send?.(task);
+      if (!assigned?.ok) flashAction(assigned?.error || `Agent ${slot + 1}에 작업을 전달하지 못했습니다`);
+    }
+  }
+  if (submit) submit.disabled = false;
+  await refreshAgentManager();
+});
 gitRefresh?.addEventListener('click', async () => {
   gitRefresh?.classList.add('is-loading');
   await refreshGitStatus();
@@ -446,7 +632,7 @@ function trialBlocks() {
 }
 
 function loginBlocks() {
-  return !!state.needsCodexLogin;
+  return !!state.needsCodexLogin || (!!loginGateEl && !loginGateEl.hidden);
 }
 
 /** Pad / hotkeys blocked while the Codex login gate is up */
@@ -460,6 +646,47 @@ const loginGateHintEl = document.getElementById('login-gate-hint');
 const loginGateLeadEl = document.getElementById('login-gate-lead');
 const loginProviderGrid = document.getElementById('login-provider-grid');
 let _pendingLoginProvider = 'codex';
+const ONBOARDING_KEY = 'agent-micro-onboarding-complete-v1';
+let onboardingDirectory = '';
+
+function onboardingComplete() {
+  return localStorage.getItem(ONBOARDING_KEY) === '1';
+}
+
+function updateOnboardingUI() {
+  const connected = !!state.connected;
+  const folder = String(onboardingDirectory || '').trim();
+  const ready = connected && !!folder;
+  const steps = [
+    [document.getElementById('onboarding-step-connect'), connected],
+    [document.getElementById('onboarding-step-folder'), ready],
+    [document.getElementById('onboarding-step-start'), false],
+  ];
+  let activeFound = false;
+  for (const [el, done] of steps) {
+    if (!el) continue;
+    el.classList.toggle('is-done', done);
+    const active = !done && !activeFound;
+    el.classList.toggle('is-active', active);
+    if (active) activeFound = true;
+  }
+  const folderLabel = document.getElementById('onboarding-folder-label');
+  if (folderLabel) folderLabel.textContent = folder ? folder.split(/[\\/]+/).filter(Boolean).pop() : t('onboarding.folder.desc');
+  const folderBtn = document.getElementById('onboarding-folder-btn');
+  const startBtn = document.getElementById('onboarding-start-btn');
+  if (folderBtn) folderBtn.disabled = !connected;
+  if (startBtn) startBtn.disabled = !ready;
+  if (loginGateBtn) loginGateBtn.disabled = connected;
+  if (loginGateBtn) loginGateBtn.textContent = connected ? t('onboarding.done') : t('onboarding.connect.button');
+}
+
+function showOnboardingGate() {
+  if (onboardingComplete()) return;
+  shellEl?.classList.add('login-required');
+  closeGuide(); closeKeymap(); closeSettings(); closeIconPicker();
+  loginGateEl?.removeAttribute('hidden');
+  updateOnboardingUI();
+}
 
 function updateLoginGateUI() {
   const provider = _pendingLoginProvider;
@@ -488,6 +715,7 @@ function updateLoginGateUI() {
       if (hint) hint.textContent = t('loginGate.installHint');
     }
   }).catch(() => {});
+  updateOnboardingUI();
 }
 
 async function ensureProviderTool(provider) {
@@ -519,6 +747,7 @@ function hideLoginGate() {
   state.needsCodexLogin = false;
   shellEl?.classList.remove('login-required');
   loginGateEl?.setAttribute('hidden', '');
+  if (!onboardingComplete()) showOnboardingGate();
 }
 
 async function ensureCodexLoginOnEntry() {
@@ -528,10 +757,26 @@ async function ensureCodexLoginOnEntry() {
     const loginStatus = await api?.loginStatus?.();
     const codexInstalled = !!loginStatus?.hasCodex;
     const codexLoggedIn = codexInstalled && !!loginStatus?.codex?.loggedIn;
+    const customProvider = state.provider === 'api' || loginStatus?.currentProvider === 'api';
+
+    if (customProvider) {
+      const settings = await api?.getCodexSettings?.();
+      onboardingDirectory = settings?.settings?.working_directory || '';
+      if (loginStatus?.loggedIn) {
+        hideLoginGate();
+        await connectAgent({ forceLogin: false });
+      } else {
+        showLoginGate();
+        flashAction(loginStatus?.codex?.detail || 'Custom API configuration required');
+      }
+      return;
+    }
 
     // Prefer whichever is already logged in
     if (codexLoggedIn) {
       state.provider = 'codex';
+      const settings = await api?.getCodexSettings?.();
+      onboardingDirectory = settings?.settings?.working_directory || '';
       hideLoginGate();
       await connectAgent({ forceLogin: false });
       return;
@@ -860,6 +1105,7 @@ function closeAllOverlays() {
   closeMcp();
   closeSkills();
   if (gitPanel && !gitPanel.hidden) setGitPanelOpen(false);
+  if (agentManagerPanel && !agentManagerPanel.hidden) setAgentManagerOpen(false);
 }
 
 function commitPendingCustomIcon() {
@@ -1351,12 +1597,6 @@ const usageMonthEl = document.getElementById('usage-month');
 const usageContextEl = document.getElementById('usage-context');
 const usageRateEl = document.getElementById('usage-rate');
 const usageMetaEl = document.getElementById('usage-meta');
-const usagePlanEl = document.getElementById('usage-plan');
-const usageShortLimitEl = document.getElementById('usage-short-limit');
-const usageLongLimitEl = document.getElementById('usage-long-limit');
-const usageShortResetEl = document.getElementById('usage-short-reset');
-const usageLongResetEl = document.getElementById('usage-long-reset');
-const usageCreditsEl = document.getElementById('usage-credits');
 const setGlobalAgentRules = document.getElementById('set-global-agent-rules');
 const setProjectAgentRules = document.getElementById('set-project-agent-rules');
 const setProjectRulesPath = document.getElementById('set-project-rules-path');
@@ -1714,25 +1954,6 @@ function formatLimitWindow(limit) {
   return `${limit.usedPercent}%`;
 }
 
-function renderResetTracker(rate) {
-  const short = rate?.windowMinutes === 300 ? rate : rate?.secondary?.windowMinutes === 300 ? rate.secondary : null;
-  const long = rate?.windowMinutes >= 10000 ? rate : rate?.secondary?.windowMinutes >= 10000 ? rate.secondary : null;
-  if (usagePlanEl) usagePlanEl.textContent = rate?.planType || '—';
-  if (usageShortLimitEl) usageShortLimitEl.textContent = formatLimitWindow(short);
-  if (usageLongLimitEl) usageLongLimitEl.textContent = formatLimitWindow(long);
-  if (usageShortResetEl) usageShortResetEl.textContent = short?.resetsAt ? `${formatResetCountdown(short.resetsAt)} · ${formatUsageDate(short.resetsAt)}` : '—';
-  if (usageLongResetEl) usageLongResetEl.textContent = long?.resetsAt ? `${formatResetCountdown(long.resetsAt)} · ${formatUsageDate(long.resetsAt)}` : '—';
-  if (usageCreditsEl) {
-    const credits = rate?.credits;
-    const resetCredits = rate?.resetCredits;
-    usageCreditsEl.textContent = credits?.unlimited
-      ? t('settings.usage.unlimited')
-      : Number.isFinite(Number(resetCredits?.availableCount))
-        ? String(resetCredits.availableCount)
-        : credits?.balance ?? (credits?.hasCredits ? t('settings.usage.available') : t('settings.usage.none'));
-  }
-}
-
 function formatRateLimitSummary(rate) {
   if (!rate || rate.usedPercent == null) return t('settings.usage.noRate');
   const credits = rate.resetCredits?.availableCount ?? null;
@@ -1748,11 +1969,13 @@ async function refreshCodexUsage() {
   if (!result?.ok) return;
   const current = result.current || {};
   const rate = result.rateLimit;
+  const usedTokens = Number(current.lastTokens) || 0;
+  const contextWindow = Number(current.contextWindow) || 0;
+  const usedPercent = usedTokens && contextWindow
+    ? Math.min(100, Math.max(0, Math.round((usedTokens / contextWindow) * 100)))
+    : null;
   if (hud.usage) {
-    const usedTokens = Number(current.lastTokens) || 0;
-    const contextWindow = Number(current.contextWindow) || 0;
-    if (usedTokens && contextWindow) {
-      const usedPercent = Math.min(100, Math.round((usedTokens / contextWindow) * 100));
+    if (usedPercent != null) {
       hud.usage.textContent = state.locale === 'ko' ? `${usedPercent}% 사용` : `${usedPercent}% used`;
       hud.usage.title = state.locale === 'ko'
         ? `${formatTokens(usedTokens)} / ${formatTokens(contextWindow)} 토큰 사용${rate?.resetsAt ? ` · ${formatRateLimitSummary(rate)}` : ''}`
@@ -1762,11 +1985,14 @@ async function refreshCodexUsage() {
       hud.usage.title = rate?.resetsAt ? formatRateLimitSummary(rate) : 'Context usage unavailable';
     }
   }
+  if (hud.usageFill) hud.usageFill.style.width = `${usedPercent ?? 0}%`;
+  if (hud.usageTime) hud.usageTime.textContent = rate?.resetsAt
+    ? `${state.locale === 'ko' ? '리셋까지 ' : 'resets '}${formatResetCountdown(rate.resetsAt)}`
+    : state.locale === 'ko' ? '리셋 시간 없음' : 'reset time unavailable';
   if (usageSessionEl) usageSessionEl.textContent = formatTokens(current.totalTokens);
   if (usageTodayEl) usageTodayEl.textContent = formatTokens(result.todayTokens);
   if (usageMonthEl) usageMonthEl.textContent = formatTokens(result.monthTokens);
   if (usageContextEl) usageContextEl.textContent = current.contextWindow ? formatTokens(current.contextWindow) : '—';
-  renderResetTracker(rate);
   if (usageRateEl) usageRateEl.textContent = formatRateLimitSummary(rate);
   if (usageMetaEl) usageMetaEl.textContent = t('settings.usage.checked', { date: new Date(result.checkedAt || Date.now()).toLocaleTimeString(state.locale === 'ko' ? 'ko-KR' : undefined), sessions: result.sessions || 0 });
 }
@@ -2242,19 +2468,22 @@ async function openModelPickerFromHud() {
     const linked = await connectAgent({ forceLogin: false });
     if (!linked?.ok) return;
   }
-  const currentModel = String(state.agents[state.selected]?.model || '').trim();
-  const nextModel = currentModel === 'gpt-5.6-luna' ? 'gpt-5.6-sol' : currentModel === 'gpt-5.6-sol' ? 'gpt-5.6-luna' : '';
-  const result = nextModel
-    ? await api?.switchActiveModel?.(nextModel)
-    : await api?.openModelPicker?.();
+  // Model availability is owned by Codex. Do not cycle through guessed model
+  // ids here: they go stale and also break custom providers such as DeepSeek.
+  const result = await api?.openModelPicker?.();
   if (!result?.ok) flashAction(result?.error || t('flash.modelFail'));
-  else if (result.modelPicker) flashAction(t('flash.modelPicker'));
-  else {
-    if (state.agents[state.selected]) state.agents[state.selected].model = result.model || nextModel;
-    flashAction(`Agent ${state.selected + 1} · ${result.model || nextModel}`);
-  }
+  else flashAction(t('flash.modelPicker'));
   const next = await api?.getState?.();
   if (next) applyBridgeState(next);
+  // The CLI picker is interactive; the selected model reaches the rollout
+  // after this handler returns, so re-read it briefly in the background.
+  if (result?.ok) {
+    for (let i = 0; i < 8; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const updated = await api?.getState?.();
+      if (updated) applyBridgeState(updated);
+    }
+  }
 }
 hud.modelChange?.addEventListener('click', openModelPickerFromHud);
 hud.fast?.addEventListener('click', async () => {
@@ -2302,9 +2531,11 @@ function render() {
     hud.tokenMeter?.setAttribute('title', `Dial Token Saver · ${tokenIndex + 1}/${TOKEN_SAVER_LABELS.length}`);
     hud.tokenMeter?.querySelectorAll('i').forEach((dot, index) => dot.classList.toggle('is-active', index <= tokenIndex));
   }
-  hud.fast.textContent = agentFastMode ? t('hud.fastOn') : t('hud.fastOff');
-  hud.fast.classList.toggle('is-active', agentFastMode);
-  hud.fast.setAttribute('aria-pressed', String(agentFastMode));
+  if (hud.fast) {
+    hud.fast.textContent = agentFastMode ? t('hud.fastOn') : t('hud.fastOff');
+    hud.fast.classList.toggle('is-active', agentFastMode);
+    hud.fast.setAttribute('aria-pressed', String(agentFastMode));
+  }
   const agentBusy = current.status === 'thinking' || current.status === 'working';
   const actualModel = String(current.model || '').trim();
   const modelMode = actualModel === QUICK_MODEL
@@ -2325,7 +2556,9 @@ function render() {
       : `Agent ${state.selected + 1} · Model not detected`;
   }
   if (hud.modelChange) {
-    hud.modelChange.disabled = agentBusy;
+    // Let Codex perform the authoritative busy check; stale renderer state
+    // should not make the Change button appear dead.
+    hud.modelChange.disabled = false;
     hud.modelChange.textContent = t('hud.changeModel');
     hud.modelChange.title = `Change Agent ${state.selected + 1} model`;
   }
@@ -2541,6 +2774,9 @@ function onMicRelease() {
 
 async function onCmd(cmd) {
   if (padBlocks()) return;
+  // Every physical command key starts from a clean selected-Agent composer.
+  // Failure to focus/clear must not swallow the command itself.
+  try { await api?.clearSelectedAgentInput?.(); } catch {}
   if (cmd === 'send') {
     await toggleCurrentDevServer();
     return;
@@ -2571,7 +2807,6 @@ async function onCmd(cmd) {
 }
 
 let dialAcc = 0;
-let tokenSaverQueue = Promise.resolve();
 const DIAL_STEP_DEGREES = 12;
 async function changeTokenSaver(step) {
   if (padBlocks()) return;
@@ -2601,21 +2836,20 @@ async function changeTokenSaver(step) {
 }
 
 function onDialDelta(d) {
-  if (padBlocks()) return;
   dialAcc += d;
   const steps = Math.trunc(dialAcc / DIAL_STEP_DEGREES);
   if (!steps) return;
   dialAcc -= steps * DIAL_STEP_DEGREES;
-  const direction = steps > 0 ? 1 : -1;
-  tokenSaverQueue = tokenSaverQueue.then(async () => {
-    for (let i = 0; i < Math.abs(steps); i += 1) await changeTokenSaver(direction);
-  }).catch(() => {});
+  state.layer = (state.layer + steps % LAYERS.length + LAYERS.length) % LAYERS.length;
+  pad3d?.setLayer?.(state.layer);
+  render();
+  flashAction(t('flash.layer', { name: layerDisplayName(state.layer) }));
 }
 
-function onJoy(dir) {
+function onJoy(dir, { force = false } = {}) {
   if (padBlocks()) return;
   const now = Date.now();
-  if (state.lastJoy.dir === dir && now - state.lastJoy.at < 450) return;
+  if (!force && state.lastJoy.dir === dir && now - state.lastJoy.at < 450) return;
   state.lastJoy = { dir, at: now };
   const layer = LAYERS[state.layer] || LAYERS[0];
   const fn = layer.joy?.[dir];
@@ -2673,7 +2907,10 @@ async function connectAgent({ forceLogin = false } = {}) {
       flashAction(t('flash.needLogin'));
     } else if (result?.ok || result === true) {
       flashAction(t('flash.connected'));
-      hideLoginGate();
+      state.connected = true;
+      updateOnboardingUI();
+      if (onboardingComplete()) hideLoginGate();
+      else showOnboardingGate();
     } else {
       flashAction(t('flash.demo'));
     }
@@ -2876,13 +3113,33 @@ loginGateBtn?.addEventListener('click', async () => {
     loginGateBtn.disabled = false;
   }
 });
-state.provider = 'codex';
-state.linkMode = 'cli';
-api?.getState?.().then(applyBridgeState);
-ensureCodexLoginOnEntry();
 
+document.getElementById('onboarding-folder-btn')?.addEventListener('click', async () => {
+  if (!state.connected) return;
+  const result = await api?.chooseCodexWorkingDirectory?.();
+  if (!result?.ok || !result.path) return;
+  const current = await api?.getCodexSettings?.();
+  const saved = await api?.saveCodexSettings?.({ ...(current?.settings || {}), working_directory: result.path });
+  if (!saved?.ok) { flashAction(saved?.error || t('flash.settingsFail')); return; }
+  onboardingDirectory = result.path;
+  updateOnboardingUI();
+  flashAction(t('onboarding.folder.saved'));
+});
+
+document.getElementById('onboarding-start-btn')?.addEventListener('click', async () => {
+  if (!state.connected || !onboardingDirectory) return;
+  const result = await api?.select?.(0, false);
+  if (result?.ok === false) { flashAction(result.error || t('flash.connectFail')); return; }
+  localStorage.setItem(ONBOARDING_KEY, '1');
+  hideLoginGate();
+  flashAction(t('onboarding.started'));
+});
 state.provider = 'codex';
 state.linkMode = 'cli';
+api?.getState?.().then((snapshot) => {
+  applyBridgeState(snapshot);
+  return ensureCodexLoginOnEntry();
+}).catch(() => ensureCodexLoginOnEntry());
 
 /** While typing in inputs, allow bare keys — Mod chords still win (main before-input). */
 function isEditableEl(el) {

@@ -1,13 +1,14 @@
 /** Codex CLI bridge factory. */
 const { CodexBridge, focusChatGPT } = require('./codex-bridge');
-const { OpenAICompatibleBridge } = require('./openai-compatible-bridge');
 
 function createCodexBridge() {
   return new CodexBridge();
 }
 
 function createApiBridge() {
-  return new OpenAICompatibleBridge();
+  // Custom APIs run through Codex CLI so Agent Micro keeps sandbox,
+  // approvals, terminal sessions, fork, and review.
+  return new CodexBridge({ customProvider: true });
 }
 
 function focusCodexDesktop() {

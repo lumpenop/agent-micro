@@ -4,6 +4,10 @@ Codex CLI를 키보드와 작은 플로팅 맥로패드로 조작하는 macOS �
 
 이 문서는 처음 설치하는 사람도 앱을 실행하고 기본 기능을 사용할 수 있도록 작성했습니다.
 
+문서 언어: [English](README.en.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
+
+기여하고 싶다면 [CONTRIBUTING.md](CONTRIBUTING.md)를 먼저 확인해 주세요. 현재 작업 방향은 [ROADMAP.md](ROADMAP.md)에서 볼 수 있습니다.
+
 ## Agent Micro가 하는 일
 
 Agent Micro는 Codex CLI의 명령을 대신 입력해 주는 리모컨에 가깝습니다.
@@ -13,7 +17,7 @@ Agent Micro는 Codex CLI의 명령을 대신 입력해 주는 리모컨에 가�
 - 선택한 프로젝트의 개발 서버를 시작하고 종료합니다.
 - 조이스틱과 Touch 레이어로 Plan, history, sidebar, 새 채팅 등을 실행합니다.
 - Codex의 모델·추론 강도·작업 폴더·권한 관련 설정을 앱 안에서 관리합니다.
-- 로컬 음성 입력과 개인 Skills/MCP 설정을 지원합니다.
+- 개인 Skills/MCP 설정을 지원합니다.
 
 Agent Micro 자체는 AI 모델을 제공하지 않습니다. 실제 작업과 답변은 연결된 Codex CLI가 처리합니다.
 
@@ -36,8 +40,8 @@ Agent Micro 자체는 AI 모델을 제공하지 않습니다. 실제 작업과 �
 터미널을 열고 저장소를 내려받습니다.
 
 ```bash
-git clone https://github.com/lumpenop/agent-micro.git
-cd agent-micro
+git clone https://github.com/lumpenop/agent-keyboard.git
+cd agent-keyboard
 ```
 
 이미 저장소를 받은 경우에는 `cd`로 프로젝트 폴더에 들어갑니다. 현재 폴더에 `package.json`과 `src` 폴더가 보여야 합니다.
@@ -63,16 +67,19 @@ pnpm start
 
 앱 창이 열리면 설치가 완료된 것입니다. 개발 중에는 터미널에 앱 로그가 표시될 수 있습니다.
 
-### 5. 첫 로그인
+### 5. 첫 실행: 세 단계
 
-1. 앱에서 **Connect** 또는 제목 옆의 점/새로고침 아이콘을 누릅니다.
-2. 처음 사용하는 경우 브라우저에서 ChatGPT 로그인을 진행합니다.
-3. 로그인 후 앱으로 돌아와 연결 상태를 확인합니다.
-4. 점이 초록색이면 Codex CLI에 연결된 상태입니다.
+앱을 처음 열면 다음 순서가 표시됩니다.
 
-같은 Mac에서 Codex CLI에 이미 로그인했다면 로그인 화면이 나타나지 않고 바로 연결될 수 있습니다.
+1. **Codex 연결**: ChatGPT 계정으로 로그인합니다.
+2. **프로젝트 선택**: Codex가 작업할 폴더를 선택합니다.
+3. **Agent 시작**: `Start`를 눌러 첫 번째 Codex 세션을 엽니다.
+
+같은 Mac에서 Codex CLI에 이미 로그인했다면 1단계가 자동으로 완료될 수 있습니다. 작업 폴더와 고급 기능은 Settings에서 바꿀 수 있습니다.
 
 이 프로젝트는 MIT 라이선스로 공개된 오픈소스 소프트웨어입니다. 체험 기간, 구매 절차, 라이선스 키는 없습니다.
+
+도움이 되었다면 [GitHub에서 ⭐ Star](https://github.com/lumpenop/agent-keyboard)를 눌러주세요. 프로젝트를 계속 발전시키는 데 큰 도움이 됩니다.
 
 ## macOS 권한 설정
 
@@ -86,12 +93,6 @@ CLI 창에 포커스를 맞추거나 터미널을 분할하고 전역 단축키�
 2. **개인정보 보호 및 보안 → 손쉬운 사용**으로 이동합니다.
 3. Agent Micro 또는 Electron을 목록에 추가하고 켭니다.
 4. 앱을 완전히 종료한 뒤 다시 실행합니다.
-
-### 마이크 권한
-
-음성 입력을 사용할 때 macOS가 마이크 접근을 요청합니다. 음성 기능을 사용하려면 허용을 선택하세요.
-
-권한을 거부한 뒤 다시 허용하려면 **시스템 설정 → 개인정보 보호 및 보안 → 마이크**에서 Agent Micro 또는 Electron을 켭니다.
 
 ## 기본 사용법
 
@@ -234,10 +235,6 @@ pnpm test:safe
 
 손쉬운 사용 권한이 필요합니다. 권한을 켠 뒤 Agent Micro와 터미널 앱을 모두 종료하고 다시 실행하세요.
 
-### 음성 입력이 동작하지 않음
-
-마이크 권한을 확인하고, 로컬 음성 모델이 준비될 때까지 잠시 기다립니다. 음성 모델 다운로드가 필요한 경우 첫 실행이 평소보다 오래 걸릴 수 있습니다.
-
 ### `pnpm install` 중 Electron 관련 메시지가 나옴
 
 의존성 설치가 끝난 뒤 아래 명령을 한 번 실행해 보세요.
@@ -264,7 +261,7 @@ src/
   index.html              앱 화면
   styles.css              앱 스타일
   providers/              Codex/API 연결 브리지
-  *.mjs, *.js             설정·음성·아이콘·도구 모듈
+  *.mjs, *.js             설정·아이콘·도구 모듈
 apps/landing/             정적 랜딩 페이지
 scripts/                  설치·테스트·빌드 보조 스크립트
 LICENSE                   MIT 라이선스

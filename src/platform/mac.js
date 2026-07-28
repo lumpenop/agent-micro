@@ -270,6 +270,17 @@ async function cliKeystroke(slot, key, mods = []) {
   return { ok: true, slot: Math.max(0, Math.min(5, Number(slot) || 0)) };
 }
 
+/** Clear any draft text in the selected Agent CLI composer. */
+async function clearCliInput(slot) {
+  const index = Math.max(0, Math.min(5, Number(slot) || 0));
+  await focusCliSlot(index);
+  await sendKey('a', ['command']);
+  await delay(45);
+  await sendKey('delete');
+  await delay(45);
+  return { ok: true, slot: index };
+}
+
 /**
  * Paste text into Agent CLI composer and press Return.
  * Ghostty: prefer native `input text` + enter; else clipboard ⌘V.
@@ -581,6 +592,56 @@ async function isOurCliFrontmost() {
     return true;
   } catch {
     return false;
+  }
+}
+
+/** Slot whose tracked Agent CLI terminal/pane currently has keyboard focus. */
+async function getFocusedCliSlot() {
+  if (process.platform !== 'darwin' || !hasOurCliSession()) return null;
+  try {
+    const front = await frontmostAppName();
+    const term = await getDefaultTerminalApp();
+    if (!looksLikeTerminalFrontmost(front, term)) return null;
+    const kind = terminalKind(term);
+    const appName = asEscape(term.name || 'Ghostty');
+    if (kind === 'ghostty') {
+      const terminalId = String(await osa(`
+        tell application "${appName}"
+          try
+            return id of (focused terminal of selected tab of front window) as text
+          on error
+            return ""
+          end try
+        end tell
+      `, { timeout: 1600 }) || '').trim();
+      if (!terminalId) return null;
+      for (const [slot, id] of slotTerminalIds.entries()) {
+        if (String(id) === terminalId) return slot;
+      }
+      return null;
+    }
+    const title = String(await osa(`
+      tell application "${appName}"
+        try
+          set t to selected tab of front window
+          try
+            set customName to custom title of t as text
+            if customName is not "" then return customName
+          end try
+          return name of t as text
+        on error
+          try
+            return name of front window as text
+          on error
+            return ""
+          end try
+        end try
+      end tell
+    `, { timeout: 1600 }) || '');
+    const match = title.match(/Codex\s*·?\s*Agent\s+([1-6])/i);
+    return match ? Number(match[1]) - 1 : null;
+  } catch {
+    return null;
   }
 }
 
@@ -1309,6 +1370,7 @@ module.exports = {
   submitToCodex,
   focusCliSlot,
   cliKeystroke,
+  clearCliInput,
   submitToCli,
   cliApprove,
   cliDecline,
@@ -1327,6 +1389,7 @@ module.exports = {
   ensureCodexCliWindow,
   isCodexCliTerminalFrontmost,
   isOurCliFrontmost,
+  getFocusedCliSlot,
   hasOurCliSession,
   pruneStaleCliSession,
   listGhosttyTerminalIds,

@@ -187,9 +187,10 @@ function spawnCodex(bin, args, opts = {}) {
 }
 
 class CodexBridge extends EventEmitter {
-  constructor() {
+  constructor({ customProvider = false } = {}) {
     super();
-    this.provider = 'codex';
+    this.customProvider = !!customProvider;
+    this.provider = this.customProvider ? 'api' : 'codex';
     /** @type {'cli'} */
     this.linkMode = 'cli';
     this.proc = null;
@@ -405,6 +406,21 @@ class CodexBridge extends EventEmitter {
       this._loggedIn = false;
       return { hasCodex: false, loggedIn: false };
     }
+    if (this.customProvider) {
+      const settings = require('../codex-settings').load();
+      const base = String(settings.api_base_url || '').trim();
+      const model = String(settings.api_model || settings.model || '').trim();
+      const envName = String(settings.api_key_env || 'OPENAI_API_KEY').trim();
+      const hasKey = !!process.env[envName] || /^https?:\/\/localhost(?::|\/)/i.test(base);
+      const configured = !!base && !!model && hasKey;
+      this._loggedIn = configured;
+      return {
+        hasCodex: true,
+        loggedIn: configured,
+        customProvider: true,
+        detail: configured ? 'Custom model provider configured' : 'Set API base URL, model, and API key environment variable',
+      };
+    }
     try {
       const out = await this._runCodex(bin, ['login', 'status'], 8000);
       const detail = out.trim();
@@ -500,6 +516,10 @@ class CodexBridge extends EventEmitter {
 
   /** Opens ChatGPT device login in the browser, then reports status. */
   async login() {
+    if (this.customProvider) {
+      const status = await this.checkLogin();
+      return status.loggedIn ? { ok: true, ...status } : { ok: false, reason: 'config', ...status };
+    }
     const bin = findCodexNative();
     if (!bin) {
       this.emitState(lt('bridge.missingInstall'));
@@ -531,6 +551,15 @@ class CodexBridge extends EventEmitter {
     }
 
     const status = await this.checkLogin();
+    if (this.customProvider) {
+      if (!status.loggedIn) {
+        this.emitState(status.detail || 'Custom API configuration required');
+        return { ok: false, reason: 'config', linkMode: 'cli', ...status };
+      }
+      this.stop();
+      const started = await this.start();
+      return { ok: started, reason: started ? 'connected' : 'offline', loggedIn: true, linkMode: 'cli', customProvider: true };
+    }
     if (forceLogin || !status.loggedIn) {
       const login = await this.login();
       if (!login.ok) return { ok: false, reason: 'login', linkMode: 'cli', ...login };
@@ -973,6 +1002,21 @@ class CodexBridge extends EventEmitter {
     }
   }
 
+  syncSelectedSlot(index) {
+    const slot = Math.max(0, Math.min(5, Number(index) || 0));
+    if (slot === this.selected) return false;
+    this.selected = slot;
+    const agent = this.agents[slot];
+    if (agent && agent.status === 'off') {
+      agent.status = 'idle';
+      agent.name = this._slotName(slot);
+      agent.cwd = this._configuredWorkingDirectory(slot);
+      agent.projectName = this._projectName(agent.cwd);
+    }
+    this.emitState(`Agent ${slot + 1} · focused`);
+    return true;
+  }
+
   /** Shell command to launch interactive Codex CLI in Terminal. */
   _codexCliCommand(slot = this.selected) {
     return this._codexSubcommand('', slot);
@@ -1239,7 +1283,7 @@ class CodexBridge extends EventEmitter {
    * Send prompt into the visible Agent CLI terminal (paste + Return).
    * Does not use the hidden app-server turn/start path.
    */
-  async send(text) {
+  async send(text, options = {}) {
     const prompt = text || 'Continue.';
     const slot = this.selected;
     const a = this.agents[slot];
@@ -1253,6 +1297,7 @@ class CodexBridge extends EventEmitter {
         return { ok: false, code: 'NO_CLI', slot };
       }
 
+      if (options.clearInput) await mac.clearCliInput(slot);
       await mac.submitToCli(slot, prompt);
       if (a) {
         a.status = 'thinking';
@@ -1299,7 +1344,7 @@ class CodexBridge extends EventEmitter {
     const nextFastMode = !this.fastMode;
     // Fast is a CLI slash command. Keep the pad and the visible CLI on the
     // same path so pressing “Fast Off” really executes `/fast` there.
-    const updated = await this.send('/fast');
+    const updated = await this.send('/fast', { clearInput: true });
     if (!updated?.ok) return { ok: false, fastMode: this.fastMode, applied: false, ...updated };
     this.fastMode = nextFastMode;
     if (agent) agent.fastMode = nextFastMode;
@@ -1337,6 +1382,7 @@ class CodexBridge extends EventEmitter {
     try {
       const focus = await this.ensureAgentCliWindow(slot, { focus: true });
       if (!focus?.ok) return { ok: false, error: focus?.error || focus?.reason || 'Codex CLI unavailable', slot };
+      await mac.clearCliInput(slot);
       await mac.submitToCli(slot, '/model');
       this.emitState('Codex · model picker');
       return { ok: true, slot, mode: 'cli' };
@@ -1348,7 +1394,9 @@ class CodexBridge extends EventEmitter {
 
   async switchModel(rawModel) {
     const model = String(rawModel || '').trim();
-    if (!/^gpt-[a-z0-9.-]+$/.test(model)) return { ok: false, error: 'Invalid model name' };
+    // Accept provider-owned ids (for example deepseek-chat or a local model),
+    // while keeping the value bounded and shell/JSON safe.
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}$/.test(model)) return { ok: false, error: 'Invalid model name' };
     const slot = this.selected;
     const agent = this.agents[slot];
     if (agent?.status === 'thinking' || agent?.status === 'working') {

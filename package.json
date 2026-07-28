@@ -13,6 +13,7 @@
     "test:voice": "node scripts/test-local-voice.js",
     "test:assets": "node scripts/test-on-demand-assets.js",
     "test:rules": "node scripts/test-agent-rules.js",
+    "test:coordinator": "node scripts/test-agent-coordinator.js",
     "ensure:whisper": "node scripts/ensure-whisper.js",
     "dist:mac": "electron-builder --mac dir --arm64",
     "dist:dmg": "electron-builder --mac dmg --arm64",

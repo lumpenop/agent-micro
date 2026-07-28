@@ -3,18 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Agent Micro is the focused Mac companion for controlling Codex." />
+    <meta name="description" content="Run up to six Codex agents from one compact Mac surface. Agent Micro isolates parallel tasks with Git worktrees, detects overlap, and keeps every session in sync." />
     <meta name="theme-color" content="#f5f5f7" />
-    <meta property="og:title" content="Agent Micro — Your agents. In reach." />
-    <meta property="og:description" content="Control six AI coding agents, speak locally, and keep every session moving." />
+    <meta property="og:title" content="Agent Micro — Six agents. No collisions." />
+    <meta property="og:description" content="A compact macOS control surface for running parallel Codex agents in isolated Git worktrees." />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="./assets/og.png" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Agent Micro — Your agents. In reach." />
-    <meta name="twitter:description" content="Control six AI coding agents, speak locally, and keep every session moving." />
+    <meta name="twitter:title" content="Agent Micro — Six agents. No collisions." />
+    <meta name="twitter:description" content="Run parallel Codex agents in isolated Git worktrees from one compact Mac surface." />
     <meta name="twitter:image" content="./assets/og.png" />
-    <title>Agent Micro — Your agents. In reach.</title>
-    <link rel="preload" href="./assets/hero-product.png" as="image" fetchpriority="high" />
+    <title>Agent Micro — Six agents. No collisions.</title>
+    <link rel="preload" href="./assets/hero-product-v2.png" as="image" fetchpriority="high" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -28,10 +28,11 @@
           <span></span><span></span><span class="sr-only">Open menu</span>
         </button>
         <nav id="site-nav" class="site-nav" aria-label="Main navigation">
-          <a href="#product">Product</a>
-          <a href="#control">Control</a>
-          <a href="#rules">Rules</a>
-          <a href="#privacy">Privacy</a>
+          <a href="#how">How it works</a>
+          <a href="#orchestration">Agent Manager</a>
+          <a href="#control">Controls</a>
+          <a href="#privacy">Safety</a>
+          <a href="https://github.com/lumpenop/agent-keyboard" target="_blank" rel="noreferrer">GitHub</a>
           <a class="nav-buy" href="#download">Download</a>
         </nav>
       </div>
@@ -40,26 +41,41 @@
     <main id="top">
       <section class="hero">
         <div class="hero-copy reveal">
-          <p class="eyebrow">Agent control, refined.</p>
-          <h1>Your agents.<br /><span>In reach.</span></h1>
-          <p class="hero-lede">One quiet surface for Codex. Switch sessions, approve work, speak a prompt, and stay in flow.</p>
+          <p class="eyebrow">A control plane for parallel Codex work.</p>
+          <h1>Six agents.<br /><span>No collisions.</span></h1>
+          <p class="hero-lede">Run multiple Codex sessions on the same project without letting them overwrite each other. Every task gets its own worktree, branch, and place to finish.</p>
           <div class="hero-actions">
             <a class="button button-primary" href="#download">Download for macOS</a>
-            <a class="inline-link" href="#product">See the product <span aria-hidden="true">›</span></a>
+            <a class="inline-link" href="#how">See how it works <span aria-hidden="true">›</span></a>
           </div>
-          <p class="compatibility">Designed for Apple silicon · Local-first voice</p>
+          <div class="hero-pills" aria-label="Compatibility">
+            <span>6 Agent slots</span><span>Git worktree isolation</span><span>Open source</span>
+          </div>
         </div>
         <div class="hero-visual reveal" data-delay="1">
           <div class="hero-halo" aria-hidden="true"></div>
-          <img src="./assets/hero-product.png" alt="Agent Micro translucent control surface floating above a glass plinth" width="1586" height="992" fetchpriority="high" />
+          <img src="./assets/hero-product-v2.png" alt="Agent Micro translucent control surface floating above a glass plinth" width="1586" height="992" fetchpriority="high" />
+        </div>
+      </section>
+
+      <section class="how section" id="how">
+        <div class="section-copy centered reveal">
+          <p class="eyebrow">Start in three steps</p>
+          <h2>From one project<br /><span>to parallel work.</span></h2>
+          <p>Connect your existing Codex CLI, choose a repository, then hand separate tasks to separate Agents.</p>
+        </div>
+        <div class="steps-grid">
+          <article class="step-card reveal"><span class="step-number">01</span><div><h3>Connect Codex</h3><p>Sign in with ChatGPT once. If Codex is already signed in on your Mac, this step can complete automatically.</p></div></article>
+          <article class="step-card reveal" data-delay="1"><span class="step-number">02</span><div><h3>Choose a repository</h3><p>Pick the project once. Agent Micro reads its Git state and keeps your main workspace explicit.</p></div></article>
+          <article class="step-card reveal" data-delay="2"><span class="step-number">03</span><div><h3>Assign isolated tasks</h3><p>Choose Agent 1–6 and describe the work. A dedicated worktree and branch are created automatically.</p></div></article>
         </div>
       </section>
 
       <section class="product-intro section" id="product">
         <div class="section-copy centered reveal">
           <p class="eyebrow">Built around attention</p>
-          <h2>Everything you need.<br /><span>Nothing in the way.</span></h2>
-          <p>Agent Micro stays compact on your desktop and brings the actions that matter forward. Six sessions remain visible without turning your workspace into a control room.</p>
+          <h2>Every Agent visible.<br /><span>Nothing tangled.</span></h2>
+          <p>The floating pad shows which Agent is active, follows the terminal pane you click, and keeps model, status, approvals, and common commands close.</p>
         </div>
         <div class="interface-stage reveal" data-delay="1">
           <div class="stage-glow" aria-hidden="true"></div>
@@ -69,36 +85,54 @@
               <span>Agent Micro</span>
               <span class="window-status"><i></i> Ready</span>
             </div>
-            <img src="./assets/app-interface.png" alt="Actual Agent Micro app interface with agent pads and command controls" width="355" height="349" loading="lazy" />
+            <img src="./assets/app-interface-v2.png" alt="Actual Agent Micro app interface with agent pads and command controls" width="1265" height="1243" loading="lazy" />
           </div>
           <span class="stage-note note-one">Actual interface</span>
           <span class="stage-note note-two">01 / 06</span>
         </div>
         <div class="product-facts reveal">
-          <div><strong>6</strong><span>parallel agents</span></div>
-          <div><strong>&lt; 1s</strong><span>to switch context</span></div>
-          <div><strong>Local</strong><span>voice transcription</span></div>
+          <div><strong>6</strong><span>parallel Agent slots</span></div>
+          <div><strong>1:1</strong><span>task-to-worktree isolation</span></div>
+          <div><strong>Live</strong><span>terminal focus sync</span></div>
+        </div>
+      </section>
+
+      <section class="orchestration section" id="orchestration">
+        <div class="orchestration-layout">
+          <div class="section-copy reveal">
+            <p class="eyebrow">Agent Manager</p>
+            <h2>Parallel by default.<br /><span>Safe by design.</span></h2>
+            <p>Each assignment lives on its own branch and disk checkout. Agent Micro tracks changed files, commit readiness, and overlap before anything reaches main.</p>
+            <div class="orchestration-points">
+              <span><i>01</i> Create an isolated task</span>
+              <span><i>02</i> Review files and commits</span>
+              <span><i>03</i> Merge only when safe</span>
+            </div>
+          </div>
+          <div class="manager-demo reveal" data-delay="1" aria-label="Agent Manager preview">
+            <div class="manager-top"><span>ISOLATED WORK</span><strong>Agents</strong><em>main</em></div>
+            <article class="manager-agent ready"><div><b>Agent 1</b><span>Windows build</span></div><small>ready</small><p>8 files · 2 commits</p><button>Merge</button></article>
+            <article class="manager-agent working"><div><b>Agent 2</b><span>Landing refresh</span></div><small>working</small><p>4 files · uncommitted</p><button disabled>Merge</button></article>
+            <article class="manager-agent conflict"><div><b>Agent 3</b><span>Settings cleanup</span></div><small>overlap</small><p>⚠ src/app.mjs also changed by Agent 2</p><button disabled>Review</button></article>
+            <div class="manager-foot"><span>3 isolated worktrees</span><span>1 overlap blocked</span></div>
+          </div>
         </div>
       </section>
 
       <section class="control section-dark" id="control">
         <div class="section-copy centered reveal">
           <p class="eyebrow">One surface. Every move.</p>
-          <h2>Move at the speed<br />of your thought.</h2>
-          <p>Common actions stay one gesture away, while the full terminal remains exactly where you left it.</p>
+          <h2>Control the Agent<br />you are actually in.</h2>
+          <p>Click a terminal pane and Agent Micro follows. Switch sessions, clear stale drafts, change models, approve, decline, fork, or review without losing the active target.</p>
         </div>
         <div class="control-grid">
           <article class="control-card reveal">
             <div class="agent-grid" aria-hidden="true"><i></i><i class="active"></i><i></i><i></i><i></i><i></i></div>
-            <div><p class="card-kicker">Focus</p><h3>Six threads.<br />One mental model.</h3><p>Jump between implementation, review, debugging, and documentation without rebuilding context.</p></div>
+            <div><p class="card-kicker">Focus sync</p><h3>Click a pane.<br />The pad follows.</h3><p>The selected 1–6 key, model, and status update when you focus a tracked Terminal or Ghostty session.</p></div>
           </article>
-          <article class="control-card voice-card reveal" data-delay="1">
-            <div class="voice-orb" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
-            <div><p class="card-kicker">Voice</p><h3>Say the next move.</h3><p>Hold to speak. Whisper transcribes on your Mac and downloads only when you first need it.</p></div>
-          </article>
-          <article class="control-card command-card reveal" data-delay="2">
+          <article class="control-card command-card reveal" data-delay="1">
             <div class="command-row" aria-hidden="true"><kbd>✓</kbd><kbd>×</kbd><kbd>↗</kbd></div>
-            <div><p class="card-kicker">Command</p><h3>Approve. Fork.<br />Keep moving.</h3><p>Respond to permission prompts, branch useful sessions, and send your next instruction without hunting for a window.</p></div>
+            <div><p class="card-kicker">Clean commands</p><h3>Clear. Execute.<br />Keep moving.</h3><p>Command buttons clear stale CLI input before running their assigned action, so a forgotten draft never contaminates the next command.</p></div>
           </article>
         </div>
       </section>
@@ -108,8 +142,8 @@
           <div class="section-copy reveal">
             <p class="eyebrow">A role for every agent</p>
             <h2>Set the rules.<br /><span>Once.</span></h2>
-            <p>Give each slot its own role, model, workspace, tools, and instructions. Global and project rules layer cleanly, so every session starts aligned.</p>
-            <a class="inline-link" href="#download">Build your agent lineup <span aria-hidden="true">›</span></a>
+            <p>Give each slot its own role, model, workspace, tools, and instructions. Use Codex CLI or an OpenAI-compatible custom API without exposing advanced controls in the everyday view.</p>
+          <a class="inline-link" href="#download">Get Agent Micro <span aria-hidden="true">›</span></a>
           </div>
           <div class="rules-panel reveal" data-delay="1" aria-label="Agent rules configuration preview">
             <div class="panel-top"><span>Agent profiles</span><span>3 active</span></div>
@@ -126,26 +160,27 @@
         <div class="privacy-card reveal">
           <div class="privacy-icon" aria-hidden="true"><span></span></div>
           <div class="privacy-copy">
-            <p class="eyebrow">Small by design</p>
-            <h2>Downloads what it needs.<br /><span>Only when you need it.</span></h2>
-            <p>Codex and Whisper are detected on your Mac first. Missing components download on demand, cached assets are reused, and your voice stays local.</p>
+            <p class="eyebrow">Git-native safety</p>
+            <h2>Your main workspace<br /><span>stays out of the crossfire.</span></h2>
+            <p>Parallel tasks start from an explicit commit, run in separate worktrees, and cannot merge while dirty or overlapping another Agent’s files.</p>
           </div>
           <ul class="privacy-list">
-            <li><span>01</span>Existing installs detected</li>
-            <li><span>02</span>Verified on-demand downloads</li>
-            <li><span>03</span>Local transcription</li>
+            <li><span>01</span>Dirty Agent work is blocked from merge</li>
+            <li><span>02</span>Shared-file overlap is surfaced early</li>
+            <li><span>03</span>Completed worktrees clean up safely</li>
           </ul>
         </div>
       </section>
 
       <section class="download section" id="download">
         <div class="download-orb" aria-hidden="true">⌁</div>
-        <p class="eyebrow reveal">Ready when you are</p>
-        <h2 class="reveal" data-delay="1">Bring your agents<br /><span>closer.</span></h2>
-        <p class="reveal" data-delay="2">A focused companion for people who build with AI every day.</p>
+        <p class="eyebrow reveal">Ready for your next task?</p>
+        <h2 class="reveal" data-delay="1">Make Codex<br /><span>feel closer.</span></h2>
+        <p class="reveal" data-delay="2">Free, open source, and built for parallel Codex work on Apple silicon Macs.</p>
         <div class="reveal" data-delay="2">
-          <a class="button button-primary" id="download-button" href="#" aria-disabled="true">Download coming soon</a>
-          <span class="download-meta">macOS · Apple silicon · Open source · MIT</span>
+          <a class="button button-primary" id="download-button" href="https://github.com/lumpenop/agent-keyboard/releases/latest">View latest release</a>
+          <a class="github-star-link" href="https://github.com/lumpenop/agent-keyboard" target="_blank" rel="noreferrer" aria-label="Star Agent Micro on GitHub">★ Star on GitHub</a>
+          <span class="download-meta">macOS only · Apple silicon · Open source · MIT · Codex CLI required</span>
         </div>
       </section>
     </main>
@@ -154,7 +189,7 @@
       <div class="footer-shell">
         <a class="brand" href="#top"><span class="brand-glyph" aria-hidden="true">⌁</span><span>Agent Micro</span></a>
         <p>Built for the next command.</p>
-        <p>© <span id="year"></span> Agent Micro</p>
+        <p><a class="footer-github" href="https://github.com/lumpenop/agent-keyboard" target="_blank" rel="noreferrer">GitHub ↗</a> · © <span id="year"></span> Agent Micro</p>
       </div>
     </footer>
     <script src="./config.js"></script>

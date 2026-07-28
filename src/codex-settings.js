@@ -362,6 +362,9 @@ function load() {
 
 function profileToml(s) {
   const cfg = normalize(s);
+  const customProvider = cfg.api_base_url && (cfg.api_model || cfg.model)
+    ? `model = ${tomlString(cfg.api_model || cfg.model)}\nmodel_provider = "agent-micro-custom"\n\n[model_providers.agent-micro-custom]\nname = "Agent Micro Custom API"\nbase_url = ${tomlString(cfg.api_base_url)}\nenv_key = ${tomlString(cfg.api_key_env || 'OPENAI_API_KEY')}\nwire_api = "chat"\n`
+    : '';
   const optional = [
     cfg.model && `model = ${tomlString(cfg.model)}`,
     cfg.model_reasoning_effort && `model_reasoning_effort = ${tomlString(cfg.model_reasoning_effort)}`,
@@ -375,7 +378,7 @@ function profileToml(s) {
   ].filter(Boolean).join('\n');
   return `${BEGIN}
 # Written by Agent Micro · use: codex --profile ${PROFILE}
-${optional ? `${optional}\n` : ''}sandbox_mode = "${cfg.sandbox_mode}"
+${customProvider}${optional ? `${optional}\n` : ''}sandbox_mode = "${cfg.sandbox_mode}"
 approval_policy = "${cfg.approval_policy}"
 agents.max_threads = ${cfg.max_threads}
 agents.max_depth = ${cfg.max_depth}
@@ -408,6 +411,8 @@ ${END}
 function cliConfigArgs(s = load()) {
   const cfg = normalize(s);
   return [
+    cfg.api_base_url && (cfg.api_model || cfg.model) && `model_provider="agent-micro-custom"`,
+    cfg.api_base_url && (cfg.api_model || cfg.model) && `model=${tomlString(cfg.api_model || cfg.model)}`,
     cfg.model && `model=${tomlString(cfg.model)}`,
     cfg.model_reasoning_effort && `model_reasoning_effort=${tomlString(cfg.model_reasoning_effort)}`,
     cfg.personality && `personality=${tomlString(cfg.personality)}`,

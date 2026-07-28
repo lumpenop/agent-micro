@@ -17,6 +17,9 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         </button>
         <div class="chrome-actions no-drag">
+          <button type="button" class="chrome-btn" id="btn-agents" title="Agent Manager" aria-label="Agent Manager">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="7" cy="7" r="2"/><circle cx="17" cy="7" r="2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M9 7h6M7 9v6M17 9v6M9 17h6"/></svg>
+          </button>
           <button type="button" class="chrome-btn" id="btn-git" title="Git" aria-label="Git">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M6 9v1a8 8 0 0 0 8 8"/><path d="M18 9v1a8 8 0 0 1-8 8"/></svg>
           </button>
@@ -52,6 +55,25 @@
           <button type="button" class="git-ai-message" id="git-ai-message">✦ Auto message</button>
           <button type="button" class="git-commit" id="git-commit">Commit</button>
         </div>
+      </aside>
+
+      <aside class="git-side-panel agent-manager-panel no-drag" id="agent-manager-panel" hidden>
+        <div class="git-side-head">
+          <div><span class="git-kicker">ISOLATED WORK</span><strong>Agents</strong></div>
+          <button type="button" class="chrome-btn" id="agent-manager-close" title="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        </div>
+        <p class="agent-manager-copy">각 Agent를 별도 worktree와 브랜치에서 실행합니다.</p>
+        <form class="agent-task-form" id="agent-task-form">
+          <select id="agent-task-slot" aria-label="Agent slot">
+            <option value="0">Agent 1</option><option value="1">Agent 2</option>
+            <option value="2">Agent 3</option><option value="3">Agent 4</option>
+            <option value="4">Agent 5</option><option value="5">Agent 6</option>
+          </select>
+          <textarea id="agent-task-input" rows="2" placeholder="이 Agent가 맡을 작업"></textarea>
+          <button type="submit" class="git-commit">격리 작업 만들기</button>
+        </form>
+        <div class="agent-manager-summary" id="agent-manager-summary">저장소 확인 중…</div>
+        <div class="agent-task-list" id="agent-task-list"></div>
       </aside>
 
       <div class="pad pad-3d" id="pad" role="application" aria-label="Agent Micro">
@@ -187,7 +209,7 @@
                 <label class="voice-label" data-i18n="settings.provider">Provider</label>
                 <div class="settings-row">
                   <button type="button" class="voice-btn settings-provider-btn" id="settings-provider-codex" data-provider="codex">Codex CLI</button>
-                  <button type="button" class="voice-btn settings-provider-btn" id="settings-provider-api" data-provider="api">Custom API</button>
+                  <button type="button" class="voice-btn settings-provider-btn" id="settings-provider-api" data-provider="api">Custom API · Codex Agent</button>
                   <button type="button" class="voice-btn" id="settings-api-configure">Configure API</button>
                 </div>
                 <p class="settings-desc" data-i18n="settings.provider.desc">Codex CLI connection. Restarts the connection.</p>
@@ -199,7 +221,7 @@
                 <input id="set-api-key-env" class="voice-input" type="text" placeholder="OPENAI_API_KEY" />
                 <label class="voice-label" for="set-api-model">API model</label>
                 <input id="set-api-model" class="voice-input" type="text" placeholder="gpt-4o-mini" />
-                <p class="settings-desc">OpenAI-compatible Chat Completions endpoint. API keys stay in your environment.</p>
+                <p class="settings-desc">Runs through Codex Agent with its sandbox, approvals, terminal sessions, and Fork support. API keys stay in your environment.</p>
               </div>
               <div class="settings-field">
                 <label class="voice-label" id="set-codex-login-label" data-i18n="settings.codexLogin">Codex login</label>
@@ -226,15 +248,6 @@
                 <div class="usage-card"><span data-i18n="settings.usage.today">Today</span><strong id="usage-today">—</strong></div>
                 <div class="usage-card"><span data-i18n="settings.usage.month">This month</span><strong id="usage-month">—</strong></div>
                 <div class="usage-card"><span data-i18n="settings.usage.context">Context window</span><strong id="usage-context">—</strong></div>
-              </div>
-              <div class="usage-rate" id="usage-rate">—</div>
-              <div class="reset-tracker" aria-live="polite">
-                <div class="reset-tracker-head"><span data-i18n="settings.usage.limits">Rate-limit reset tracker</span><span id="usage-plan">—</span></div>
-                <div class="reset-grid">
-                  <div class="reset-card"><span data-i18n="settings.usage.shortWindow">5-hour window</span><strong id="usage-short-limit">—</strong><small id="usage-short-reset">—</small></div>
-                  <div class="reset-card"><span data-i18n="settings.usage.longWindow">Weekly window</span><strong id="usage-long-limit">—</strong><small id="usage-long-reset">—</small></div>
-                </div>
-                <div class="reset-credits"><span data-i18n="settings.usage.banked">Banked resets</span><strong id="usage-credits">—</strong></div>
               </div>
               <p class="settings-desc usage-meta" id="usage-meta">—</p>
             </div>
@@ -605,33 +618,32 @@
       </div>
 
       <div class="icon-picker gate-modal" id="codex-login-gate" hidden>
-        <div class="icon-picker-card guide-card gate-modal-card provider-pick-card">
+        <div class="icon-picker-card guide-card gate-modal-card onboarding-card">
           <div class="guide-head">
             <div class="guide-head-copy">
               <span class="guide-kicker">Agent Micro</span>
-              <span class="guide-title" data-i18n="loginGate.title">Choose provider</span>
+              <span class="guide-title" data-i18n="onboarding.title">Let’s get you set up</span>
             </div>
           </div>
-          <p class="provider-lead" data-i18n="loginGate.lead">
-            Pick the AI CLI tool you want to use. Login is required on first launch.
-          </p>
-          <div class="provider-grid" id="login-provider-grid">
-            <button type="button" class="provider-tile active" id="login-pick-codex" data-provider="codex">
-              <strong>Codex CLI</strong>
-              <span data-i18n="loginGate.codexDesc">OpenAI · ChatGPT login · app-server</span>
-            </button>
+          <p class="onboarding-lead" data-i18n="onboarding.lead">Three quick steps, then you can start your first task.</p>
+          <div class="onboarding-steps" id="onboarding-steps">
+            <div class="onboarding-step is-active" id="onboarding-step-connect">
+              <div class="onboarding-step-number">1</div>
+              <div class="onboarding-step-copy"><strong data-i18n="onboarding.connect.title">Connect Codex</strong><span data-i18n="onboarding.connect.desc">Sign in with your ChatGPT account.</span></div>
+              <button type="button" class="voice-btn primary onboarding-step-action" id="login-gate-btn" data-i18n="onboarding.connect.button">Connect</button>
+            </div>
+            <div class="onboarding-step" id="onboarding-step-folder">
+              <div class="onboarding-step-number">2</div>
+              <div class="onboarding-step-copy"><strong data-i18n="onboarding.folder.title">Choose a project</strong><span id="onboarding-folder-label" data-i18n="onboarding.folder.desc">Pick the folder Codex should work in.</span></div>
+              <button type="button" class="voice-btn onboarding-step-action" id="onboarding-folder-btn" data-i18n="onboarding.folder.button">Choose</button>
+            </div>
+            <div class="onboarding-step" id="onboarding-step-start">
+              <div class="onboarding-step-number">3</div>
+              <div class="onboarding-step-copy"><strong data-i18n="onboarding.start.title">Start your first Agent</strong><span data-i18n="onboarding.start.desc">Open a ready-to-use Codex session.</span></div>
+              <button type="button" class="voice-btn onboarding-step-action" id="onboarding-start-btn" data-i18n="onboarding.start.button">Start</button>
+            </div>
           </div>
-          <p class="provider-lead" id="login-gate-lead" data-i18n="loginGate.codexLead">
-            Sign in with ChatGPT to use Codex CLI.
-          </p>
-          <div class="voice-actions gate-modal-actions">
-            <button type="button" class="voice-btn primary" id="login-gate-btn" data-i18n="loginGate.btn">
-              Log in
-            </button>
-          </div>
-          <p class="icon-picker-hint" id="login-gate-hint" data-i18n="loginGate.hint">
-            Browser opens · finish login · then the pad unlocks
-          </p>
+          <p class="onboarding-status" id="login-gate-hint" data-i18n="onboarding.hint">You can change these choices later in Settings.</p>
         </div>
       </div>
 
@@ -654,27 +666,6 @@
             <span class="hud-value hud-model-button" id="hud-model" title="Current model">—</span>
             <button type="button" class="hud-value hud-toggle-button" id="hud-model-change" data-i18n="hud.changeModel" title="Change the selected agent's model">Change</button>
           </span>
-        </div>
-        <div class="hud-row">
-          <span class="hud-label">Mode</span>
-          <button type="button" class="hud-value hud-toggle-button" id="hud-fast" title="Toggle fast mode" aria-label="Toggle fast mode">Fast Off</button>
-        </div>
-        <div class="hud-row">
-          <span class="hud-label">Tokens</span>
-          <span class="hud-token-control">
-            <span class="hud-value" id="hud-token-saver">Balanced</span>
-            <span class="hud-token-meter" id="hud-token-meter" aria-label="Token Saver level" title="Dial Token Saver level">
-              <i></i><i></i><i></i><i></i><i></i>
-            </span>
-          </span>
-        </div>
-        <div class="hud-row">
-          <span class="hud-label">Context</span>
-          <span class="hud-value" id="hud-usage">—</span>
-        </div>
-        <div class="hud-badges" id="hud-badges" hidden>
-          <span class="hud-badge hud-badge-auto" id="hud-auto-badge" hidden>Auto Continue</span>
-          <span class="hud-badge hud-badge-dev" id="hud-dev-badge" hidden>DEV running</span>
         </div>
       </div>
     </div>

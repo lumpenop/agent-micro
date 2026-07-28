@@ -1129,7 +1129,10 @@ export function createPad3D(container, handlers = {}) {
       dialLastAngle = a;
       dialRotation -= (cw * Math.PI) / 180;
       dialKnob.rotation.y = dialRotation;
-      if (Math.abs(cw) > 2) playDialTick(cw);
+      if (Math.abs(cw) > 2) {
+        dialMoved = true;
+        playDialTick(cw);
+      }
       handlers.onDialDelta?.(cw);
       e.preventDefault();
       return;
