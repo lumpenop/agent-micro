@@ -52,7 +52,7 @@ Start with Agent 1. Turning the dial switches between Codex, Prompts, and Tools 
 
 ## Isolated Agent Manager
 
-Agent Manager gives every task its own Git worktree and branch. It detects overlapping files, blocks dirty or conflicting merges, restores a missing worktree from its branch, and automatically keeps a failed merge out of the main workspace.
+Agent 1 remains the main coordinator. Enter a task and Agent Manager assigns the next free worker from Agent 2–6, creates its Git worktree and branch, then launches Codex there. You can choose a worker manually or place a task after another task in the merge queue. Missing worker sessions receive one safe automatic restart; repeated failures stop for review. Agent Manager also detects overlapping files, blocks dirty or out-of-order merges, restores missing worktrees, and keeps failed merges out of main.
 
 ## Custom providers
 

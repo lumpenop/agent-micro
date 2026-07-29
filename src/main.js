@@ -24,6 +24,8 @@ let statusTray = null;
 let statusTrayTimer = null;
 let statusTrayRefreshing = false;
 let statusTrayUsage = null;
+let coordinatorHealthTimer = null;
+let coordinatorHealthBusy = false;
 const devServers = new Map();
 
 function trayResetText(epochSeconds) {
@@ -259,6 +261,75 @@ function selectedWorkspace() {
   const resolved = path.resolve(String(candidate || process.cwd()));
   if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) throw new Error('Selected agent working folder is unavailable');
   return resolved;
+}
+
+function coordinatorWorkspace() {
+  const configured = String(codexSettings.load()?.working_directory || '').trim();
+  if (configured && path.isAbsolute(configured)) {
+    try {
+      if (fs.statSync(configured).isDirectory()) return path.resolve(configured);
+    } catch {
+      /* fall back to the selected live workspace */
+    }
+  }
+  return selectedWorkspace();
+}
+
+async function launchIsolatedAgent(slotInput, options = {}) {
+  const slot = Math.max(0, Math.min(5, Number(slotInput) || 0));
+  const cwd = options.cwd || coordinatorWorkspace();
+  let result = null;
+  try {
+    if (typeof bridge?.ensureAgentCliWindow === 'function') {
+      // Terminal splits are ordered. Recreate missing predecessors quietly
+      // before opening the assigned worker.
+      for (let prerequisite = 0; prerequisite < slot; prerequisite += 1) {
+        const prepared = await bridge.ensureAgentCliWindow(prerequisite, { focus: false });
+        if (prepared?.ok === false) {
+          result = prepared;
+          break;
+        }
+      }
+      if (!result) {
+        result = options.focus === false
+          ? await bridge.ensureAgentCliWindow(slot, { focus: false })
+          : await bridge.select(slot, { focus: true });
+      }
+    } else {
+      result = await bridge?.select?.(slot, { focus: options.focus !== false });
+    }
+    if (!result || typeof result !== 'object') result = { ok: true, slot };
+  } catch (error) {
+    result = { ok: false, slot, error: error.message };
+  }
+  await agentCoordinator.recordLaunch(cwd, slot, result, {
+    automatic: !!options.automatic,
+    trackOpen: activeProvider === 'codex' && process.platform === 'darwin',
+  }).catch(() => {});
+  return result;
+}
+
+async function monitorCoordinatorHealth() {
+  if (coordinatorHealthBusy || !bridge || activeProvider !== 'codex' || process.platform !== 'darwin') return;
+  coordinatorHealthBusy = true;
+  try {
+    const cwd = coordinatorWorkspace();
+    const openSlots = await mac.listOpenCodexCliSlots();
+    const observed = await agentCoordinator.observeRuntime(cwd, openSlots, { claimRetries: true });
+    for (const slot of observed.retries || []) {
+      await launchIsolatedAgent(slot, { cwd, focus: false, automatic: true });
+    }
+  } catch {
+    /* no valid Git workspace yet */
+  } finally {
+    coordinatorHealthBusy = false;
+  }
+}
+
+function startCoordinatorHealthMonitor() {
+  if (coordinatorHealthTimer) return;
+  coordinatorHealthTimer = setInterval(monitorCoordinatorHealth, 5000);
+  setTimeout(monitorCoordinatorHealth, 1500);
 }
 
 function stopDevServer(cwd) {
@@ -693,8 +764,12 @@ function installAppMenu() {
 
 function createWindow() {
   const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
-  // Fit chrome + pad (modest outer rim) + hud
-  const winW = 558;
+  // Keep the native transparent window at its expanded width permanently.
+  // The right 558px hosts the pad; the transparent left rail is click-through
+  // while closed. Avoiding native resize prevents macOS/WebGL redraw glitches.
+  const baseWidth = 558;
+  const railWidth = 210;
+  const winW = baseWidth + railWidth;
   const winH = 596;
 
   mainWindow = new BrowserWindow({
@@ -719,6 +794,10 @@ function createWindow() {
 
   mainWindow.setAlwaysOnTop(true, 'floating');
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  // Start in pass-through mode. The renderer still receives forwarded mouse
+  // movement and turns interaction back on as soon as the pointer reaches a
+  // visible control, while the closed transparent rail never eats a click.
+  mainWindow.setIgnoreMouseEvents(true, { forward: true });
   // Re-apply after the window exists as well. This keeps the macOS menu
   // available when dev mode reloads/recreates the BrowserWindow.
   installAppMenu();
@@ -835,6 +914,7 @@ app.whenReady().then(async () => {
     activeProvider = initialProvider;
     bindBridge(bridge);
     setTimeout(() => bridge.start(), 400);
+    startCoordinatorHealthMonitor();
   }
 
   // ⌘⇧M always global. Pad keys: pad focused (local) OR Codex CLI terminal frontmost (global).
@@ -857,6 +937,8 @@ app.whenReady().then(async () => {
     statusTrayTimer = null;
     statusTray?.destroy();
     statusTray = null;
+    if (coordinatorHealthTimer) clearInterval(coordinatorHealthTimer);
+    coordinatorHealthTimer = null;
   });
 });
 
@@ -867,6 +949,7 @@ function ensureUnlockedRuntime() {
     bindBridge(bridge);
     setTimeout(() => bridge.start(), 200);
   }
+  startCoordinatorHealthMonitor();
   startPadContextWatch();
   syncPadHotkeyContext();
   return true;
@@ -881,6 +964,8 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   for (const cwd of [...devServers.keys()]) stopDevServer(cwd);
   bridge?.stop();
+  if (coordinatorHealthTimer) clearInterval(coordinatorHealthTimer);
+  coordinatorHealthTimer = null;
   stopPadContextWatch();
   globalShortcut.unregisterAll();
 });
@@ -889,16 +974,16 @@ ipcMain.handle('window:minimize', () => mainWindow?.minimize());
 ipcMain.handle('window:close', () => mainWindow?.close());
 ipcMain.handle('window:setGitPanel', (_e, open) => {
   if (!mainWindow || mainWindow.isDestroyed()) return false;
+  const baseWidth = 558;
   const extraWidth = 210;
   const bounds = mainWindow.getBounds();
-  const expanded = bounds.width > 558;
-  const next = !!open;
-  if (next && !expanded) {
-    mainWindow.setBounds({ ...bounds, x: bounds.x - extraWidth, width: bounds.width + extraWidth }, false);
-  } else if (!next && expanded) {
-    mainWindow.setBounds({ ...bounds, x: bounds.x + extraWidth, width: bounds.width - extraWidth }, false);
+  const targetWidth = baseWidth + extraWidth;
+  const rightEdge = bounds.x + bounds.width;
+  const targetX = rightEdge - targetWidth;
+  if (bounds.width !== targetWidth || bounds.x !== targetX) {
+    mainWindow.setBounds({ ...bounds, x: targetX, width: targetWidth }, false);
   }
-  return true;
+  return { ok: true, open: !!open, fixedWindow: true, bounds: mainWindow.getBounds() };
 });
 ipcMain.handle('window:setMousePassthrough', (_e, passthrough) => {
   if (!mainWindow || mainWindow.isDestroyed()) return false;
@@ -1068,14 +1153,18 @@ ipcMain.handle('git:sync', async (_e, action, context = {}) => {
 });
 ipcMain.handle('coordinator:list', async () => {
   try {
-    return await agentCoordinator.list(selectedWorkspace());
+    const cwd = coordinatorWorkspace();
+    const openSlots = process.platform === 'darwin' ? await mac.listOpenCodexCliSlots().catch(() => []) : [];
+    await agentCoordinator.observeRuntime(cwd, openSlots);
+    return await agentCoordinator.list(cwd);
   } catch (error) {
     return { ok: false, error: error.message };
   }
 });
 ipcMain.handle('coordinator:create', async (_e, input) => {
   try {
-    const result = await agentCoordinator.createTask(selectedWorkspace(), input);
+    const cwd = coordinatorWorkspace();
+    const result = await agentCoordinator.createTask(cwd, input);
     if (!result?.ok) return result;
     const slot = result.record.slot;
     const settings = codexSettings.load();
@@ -1101,22 +1190,21 @@ ipcMain.handle('coordinator:create', async (_e, input) => {
 ipcMain.handle('coordinator:launch', async (_e, slotInput) => {
   try {
     const slot = Math.max(0, Math.min(5, Number(slotInput) || 0));
-    const result = await bridge?.select?.(slot, { focus: true });
-    return result && typeof result === 'object' ? result : { ok: true, slot };
+    return await launchIsolatedAgent(slot, { cwd: coordinatorWorkspace(), focus: true });
   } catch (error) {
     return { ok: false, error: error.message };
   }
 });
 ipcMain.handle('coordinator:merge', async (_e, slot) => {
   try {
-    return await agentCoordinator.mergeTask(selectedWorkspace(), slot);
+    return await agentCoordinator.mergeTask(coordinatorWorkspace(), slot);
   } catch (error) {
     return { ok: false, error: error.message };
   }
 });
 ipcMain.handle('coordinator:restore', async (_e, slot) => {
   try {
-    return await agentCoordinator.restoreTask(selectedWorkspace(), slot);
+    return await agentCoordinator.restoreTask(coordinatorWorkspace(), slot);
   } catch (error) {
     return { ok: false, error: error.message };
   }
@@ -1133,7 +1221,7 @@ ipcMain.handle('coordinator:archive', async (_e, slot) => {
       detail: '병합되지 않은 커밋이나 수정 중인 파일이 있으면 정리되지 않습니다.',
     });
     if (answer.response !== 1) return { ok: false, canceled: true };
-    const result = await agentCoordinator.archiveTask(selectedWorkspace(), slot);
+    const result = await agentCoordinator.archiveTask(coordinatorWorkspace(), slot);
     if (result?.ok) {
       const settings = codexSettings.load();
       const slots = settings.agent_slots.map((entry) => ({ ...entry }));

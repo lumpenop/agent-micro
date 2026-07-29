@@ -101,6 +101,67 @@ function git(cwd, args) {
     const restored = await coordinator.restoreTask(repo, 5);
     if (!restored.ok || !fs.existsSync(recoverable.record.worktree)) throw new Error('worktree restore failed');
 
+    const queueRepo = path.join(temp, 'queue-repo');
+    fs.mkdirSync(queueRepo);
+    git(queueRepo, ['init', '-b', 'main']);
+    git(queueRepo, ['config', 'user.email', 'queue@example.test']);
+    git(queueRepo, ['config', 'user.name', 'Agent Micro Queue Test']);
+    fs.writeFileSync(path.join(queueRepo, 'base.txt'), 'base\n');
+    git(queueRepo, ['add', '.']);
+    git(queueRepo, ['commit', '-m', 'base']);
+
+    const automaticFirst = await coordinator.createTask(queueRepo, { slot: 'auto', task: 'automatic first worker' });
+    if (!automaticFirst.ok || automaticFirst.record.slot !== 1) {
+      throw new Error(`automatic worker allocation failed: ${JSON.stringify(automaticFirst)}`);
+    }
+    const automaticSecond = await coordinator.createTask(queueRepo, {
+      slot: 'auto',
+      task: 'merge after first worker',
+      dependsOn: automaticFirst.record.id,
+    });
+    if (!automaticSecond.ok || automaticSecond.record.slot !== 2) {
+      throw new Error(`second automatic worker allocation failed: ${JSON.stringify(automaticSecond)}`);
+    }
+    fs.writeFileSync(path.join(automaticFirst.record.worktree, 'first.txt'), 'first\n');
+    git(automaticFirst.record.worktree, ['add', '.']);
+    git(automaticFirst.record.worktree, ['commit', '-m', 'first worker']);
+    fs.writeFileSync(path.join(automaticSecond.record.worktree, 'second.txt'), 'second\n');
+    git(automaticSecond.record.worktree, ['add', '.']);
+    git(automaticSecond.record.worktree, ['commit', '-m', 'second worker']);
+    const queued = await coordinator.list(queueRepo);
+    if (queued.slots[1].queuePosition !== 1 || queued.slots[2].queuePosition !== 2 || queued.slots[2].dependenciesReady) {
+      throw new Error('merge queue order was not calculated');
+    }
+    const blockedDependency = await coordinator.mergeTask(queueRepo, 2);
+    if (blockedDependency.ok || !blockedDependency.dependencyBlocked) {
+      throw new Error('dependency merge was not blocked');
+    }
+    const firstMerged = await coordinator.mergeTask(queueRepo, 1);
+    if (!firstMerged.ok) throw new Error(`first queued merge failed: ${firstMerged.error}`);
+    const firstCleaned = await coordinator.archiveTask(queueRepo, 1);
+    if (!firstCleaned.ok) throw new Error(`first queued cleanup failed: ${firstCleaned.error}`);
+    const afterDependency = await coordinator.list(queueRepo);
+    if (!afterDependency.slots[2].dependenciesReady) throw new Error('completed dependency was not retained after cleanup');
+    const secondMerged = await coordinator.mergeTask(queueRepo, 2);
+    if (!secondMerged.ok) throw new Error(`second queued merge failed: ${secondMerged.error}`);
+
+    const reusedWorker = await coordinator.createTask(queueRepo, { slot: 'auto', task: 'reuse lowest free worker' });
+    if (!reusedWorker.ok || reusedWorker.record.slot !== 1) throw new Error('lowest free worker was not reused');
+    await coordinator.recordLaunch(queueRepo, 1, { ok: true }, { now: 1000 });
+    const grace = await coordinator.observeRuntime(queueRepo, [], { now: 2000, claimRetries: true });
+    if (grace.retries.length) throw new Error('runtime retried before the grace period');
+    const firstRetry = await coordinator.observeRuntime(queueRepo, [], { now: 10000, claimRetries: true });
+    if (firstRetry.retries.length !== 1 || firstRetry.retries[0] !== 1) {
+      throw new Error('stopped runtime did not claim one safe retry');
+    }
+    await coordinator.recordLaunch(queueRepo, 1, { ok: true }, { now: 11000, automatic: true });
+    await coordinator.observeRuntime(queueRepo, [], { now: 12000, claimRetries: true });
+    const exhausted = await coordinator.observeRuntime(queueRepo, [], { now: 21000, claimRetries: true });
+    const exhaustedState = await coordinator.list(queueRepo);
+    if (exhausted.retries.length || exhaustedState.slots[1].runtime.health !== 'attention') {
+      throw new Error('runtime exceeded the single automatic retry limit');
+    }
+
     process.stdout.write('agent coordinator ok\n');
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });

@@ -7,6 +7,9 @@ const STATE_FILE = process.env.AGENT_MICRO_COORDINATOR_STATE
   ? path.resolve(process.env.AGENT_MICRO_COORDINATOR_STATE)
   : path.join(os.homedir(), '.agent-micro', 'coordinator.json');
 const projectQueues = new Map();
+const WORKER_SLOTS = [1, 2, 3, 4, 5];
+const RUNTIME_GRACE_MS = 8000;
+const MAX_AUTO_RESTARTS = 1;
 
 function runGit(cwd, args, timeout = 20000) {
   return new Promise((resolve, reject) => {
@@ -51,6 +54,39 @@ function saveState(state) {
   }
   fs.writeFileSync(temp, JSON.stringify(state, null, 2), 'utf8');
   fs.renameSync(temp, STATE_FILE);
+}
+
+function projectState(state, root) {
+  const project = state.projects[root] || { root, slots: {}, completed: {} };
+  if (!project.slots || typeof project.slots !== 'object') project.slots = {};
+  if (!project.completed || typeof project.completed !== 'object') project.completed = {};
+  for (const [slot, record] of Object.entries(project.slots)) {
+    if (record && !record.id) record.id = `legacy-a${Number(slot) + 1}-${safeSlug(record.branch || record.task)}`;
+    if (record && !Array.isArray(record.dependsOn)) record.dependsOn = dependencyIds(record.dependsOn);
+  }
+  state.projects[root] = project;
+  return project;
+}
+
+function dependencyIds(input) {
+  const values = Array.isArray(input) ? input : input ? [input] : [];
+  return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))].slice(0, 5);
+}
+
+function dependencyState(project, record) {
+  const ids = dependencyIds(record.dependsOn);
+  const active = Object.values(project.slots || {}).filter(Boolean);
+  const details = ids.map((id) => {
+    const task = active.find((candidate) => candidate.id === id);
+    if (task?.mergedAt || project.completed?.[id]) return { id, state: 'merged', task: task?.task || project.completed[id]?.task || id };
+    if (task) return { id, state: 'waiting', task: task.task };
+    return { id, state: 'missing', task: id };
+  });
+  return {
+    dependencies: details,
+    dependenciesReady: details.every((item) => item.state === 'merged'),
+    blockedBy: details.filter((item) => item.state !== 'merged'),
+  };
 }
 
 async function withProjectLock(root, operation) {
@@ -116,7 +152,7 @@ async function inspectRecord(record) {
 async function list(cwd) {
   const root = await repoRoot(cwd);
   const state = loadState();
-  const project = state.projects[root] || { root, slots: {} };
+  const project = projectState(state, root);
   const slots = Array.from({ length: 6 }, (_, slot) => project.slots?.[slot] || null);
   const inspected = await Promise.all(slots.map((record) => record ? inspectRecord(record) : null));
   const owners = new Map();
@@ -130,15 +166,33 @@ async function list(cwd) {
   const conflicts = [...owners.entries()]
     .filter(([, slotList]) => slotList.length > 1)
     .map(([file, slotList]) => ({ file, slots: slotList }));
+  const enriched = inspected.map((record) => {
+    if (!record) return null;
+    return {
+      ...record,
+      ...dependencyState(project, record),
+      conflicts: conflicts.filter((item) => item.slots.includes(record.slot)).map((item) => item.file),
+    };
+  });
+  const queue = enriched
+    .filter((record) => record && !record.mergedAt)
+    .sort((a, b) => {
+      if (a.dependenciesReady !== b.dependenciesReady) return a.dependenciesReady ? -1 : 1;
+      return String(a.createdAt).localeCompare(String(b.createdAt));
+    })
+    .map((record, index) => ({ id: record.id, slot: record.slot, position: index + 1, ready: record.dependenciesReady }));
+  const queueById = new Map(queue.map((item) => [item.id, item]));
+  const queuedSlots = enriched.map((record) => record && ({
+    ...record,
+    queuePosition: queueById.get(record.id)?.position || null,
+  }));
   return {
     ok: true,
     root,
     baseBranch: await currentBranch(root),
-    slots: inspected.map((record) => record && ({
-      ...record,
-      conflicts: conflicts.filter((item) => item.slots.includes(record.slot)).map((item) => item.file),
-    })),
+    slots: queuedSlots,
     conflicts,
+    queue,
   };
 }
 
@@ -148,12 +202,23 @@ async function createTask(cwd, input = {}) {
 }
 
 async function createTaskLocked(root, input = {}) {
-  const slot = Math.max(0, Math.min(5, Number(input.slot) || 0));
   const task = String(input.task || '').trim().slice(0, 240);
   if (!task) return { ok: false, error: 'Enter a task for this Agent' };
-  const rootDirty = await runGit(root, ['status', '--porcelain=v1']);
   const state = loadState();
-  const project = state.projects[root] || { root, slots: {} };
+  const project = projectState(state, root);
+  const automatic = input.slot === undefined || input.slot === null || input.slot === '' || input.slot === 'auto';
+  const slot = automatic
+    ? WORKER_SLOTS.find((candidate) => !project.slots?.[candidate])
+    : Math.max(0, Math.min(5, Number(input.slot) || 0));
+  if (slot === undefined) return { ok: false, full: true, error: 'All worker Agents already own an isolated task' };
+  const dependsOn = dependencyIds(input.dependsOn);
+  const knownIds = new Set([
+    ...Object.values(project.slots || {}).filter(Boolean).map((record) => record.id),
+    ...Object.keys(project.completed || {}),
+  ]);
+  const unknownDependency = dependsOn.find((id) => !knownIds.has(id));
+  if (unknownDependency) return { ok: false, error: 'The selected merge dependency is no longer available' };
+  const rootDirty = await runGit(root, ['status', '--porcelain=v1']);
   const existing = project.slots?.[slot];
   if (existing?.worktree && fs.existsSync(existing.worktree)) {
     return { ok: false, error: `Agent ${slot + 1} already owns an isolated task` };
@@ -170,6 +235,7 @@ async function createTaskLocked(root, input = {}) {
   const baseBranch = await currentBranch(root);
   const baseCommit = await runGit(root, ['rev-parse', 'HEAD']);
   const stamp = Date.now().toString(36);
+  const id = `task-${stamp}-a${slot + 1}`;
   const branch = `agent-micro/a${slot + 1}-${safeSlug(task)}-${stamp}`;
   const repoName = safeSlug(path.basename(root));
   const worktreeRoot = path.join(path.dirname(root), '.agent-micro-worktrees', repoName);
@@ -178,8 +244,10 @@ async function createTaskLocked(root, input = {}) {
   await runGit(root, ['worktree', 'add', '-b', branch, worktree, baseCommit], 60000);
 
   const record = {
+    id,
     slot,
     task,
+    dependsOn,
     root,
     worktree,
     branch,
@@ -187,6 +255,11 @@ async function createTaskLocked(root, input = {}) {
     baseCommit,
     baseHadLocalChanges: !!rootDirty,
     createdAt: new Date().toISOString(),
+    runtime: {
+      expectedOpen: false,
+      health: 'not-started',
+      autoRestartCount: 0,
+    },
   };
   project.slots = { ...(project.slots || {}), [slot]: record };
   state.projects[root] = project;
@@ -202,8 +275,17 @@ async function mergeTask(cwd, slotInput) {
 async function mergeTaskLocked(root, slotInput) {
   const slot = Math.max(0, Math.min(5, Number(slotInput) || 0));
   const state = loadState();
-  const record = state.projects[root]?.slots?.[slot];
+  const project = projectState(state, root);
+  const record = project.slots?.[slot];
   if (!record || !fs.existsSync(record.worktree)) return { ok: false, error: 'Isolated task not found' };
+  const dependency = dependencyState(project, record);
+  if (!dependency.dependenciesReady) {
+    return {
+      ok: false,
+      dependencyBlocked: true,
+      error: `Merge queue is waiting for: ${dependency.blockedBy.map((item) => item.task).slice(0, 3).join(', ')}`,
+    };
+  }
   const task = await inspectRecord(record);
   const snapshot = await list(root);
   const overlap = snapshot.slots?.[slot]?.conflicts || [];
@@ -249,7 +331,7 @@ async function archiveTask(cwd, slotInput) {
 async function archiveTaskLocked(root, slotInput) {
   const slot = Math.max(0, Math.min(5, Number(slotInput) || 0));
   const state = loadState();
-  const project = state.projects[root];
+  const project = state.projects[root] ? projectState(state, root) : null;
   const record = project?.slots?.[slot];
   if (!record) return { ok: false, error: 'Isolated task not found' };
   const task = await inspectRecord(record);
@@ -261,6 +343,14 @@ async function archiveTaskLocked(root, slotInput) {
     await runGit(root, ['worktree', 'remove', record.worktree], 60000);
   }
   await runGit(root, ['branch', '-d', record.branch]).catch(() => '');
+  if (record.id && (record.mergedAt || merged)) {
+    project.completed[record.id] = {
+      id: record.id,
+      task: record.task,
+      branch: record.branch,
+      mergedAt: record.mergedAt || new Date().toISOString(),
+    };
+  }
   delete project.slots[slot];
   saveState(state);
   return { ok: true, slot, worktree: record.worktree, branch: record.branch };
@@ -290,4 +380,80 @@ async function restoreTaskLocked(root, slotInput) {
   return { ok: true, restored: true, record: await inspectRecord(record) };
 }
 
-module.exports = { list, createTask, mergeTask, archiveTask, restoreTask };
+async function recordLaunch(cwd, slotInput, result = {}, options = {}) {
+  const root = await repoRoot(cwd);
+  return withProjectLock(root, async () => {
+    const slot = Math.max(0, Math.min(5, Number(slotInput) || 0));
+    const state = loadState();
+    const project = projectState(state, root);
+    const record = project.slots?.[slot];
+    if (!record) return { ok: false, error: 'Isolated task not found' };
+    const now = new Date(options.now || Date.now()).toISOString();
+    const runtime = { ...(record.runtime || {}) };
+    runtime.expectedOpen = options.trackOpen !== false && result?.ok !== false;
+    runtime.health = result?.ok === false ? 'attention' : 'live';
+    runtime.lastLaunchAt = result?.ok === false ? runtime.lastLaunchAt : now;
+    runtime.lastLaunchError = result?.ok === false ? String(result.error || result.reason || 'launch failed').slice(0, 240) : '';
+    runtime.missingSince = null;
+    if (!options.automatic) runtime.autoRestartCount = 0;
+    record.runtime = runtime;
+    saveState(state);
+    return { ok: true, slot, runtime };
+  });
+}
+
+async function observeRuntime(cwd, openSlots = [], options = {}) {
+  const root = await repoRoot(cwd);
+  return withProjectLock(root, async () => {
+    const state = loadState();
+    const project = projectState(state, root);
+    const open = new Set((openSlots || []).map((value) => Number(value)));
+    const nowMs = Number(options.now || Date.now());
+    const retries = [];
+    let changed = false;
+    for (const record of Object.values(project.slots || {}).filter(Boolean)) {
+      const runtime = { health: 'not-started', autoRestartCount: 0, ...(record.runtime || {}) };
+      if (record.mergedAt) {
+        if (runtime.health !== 'complete') changed = true;
+        runtime.health = 'complete';
+        runtime.expectedOpen = false;
+        runtime.missingSince = null;
+      } else if (open.has(record.slot)) {
+        if (runtime.health !== 'live' || runtime.missingSince) changed = true;
+        runtime.health = 'live';
+        runtime.lastSeenAt = new Date(nowMs).toISOString();
+        runtime.missingSince = null;
+      } else if (runtime.expectedOpen) {
+        if (!runtime.missingSince) {
+          runtime.missingSince = new Date(nowMs).toISOString();
+          runtime.health = 'checking';
+          changed = true;
+        } else if (nowMs - Date.parse(runtime.missingSince) >= RUNTIME_GRACE_MS) {
+          const canRetry = Number(runtime.autoRestartCount || 0) < MAX_AUTO_RESTARTS;
+          runtime.health = canRetry ? 'stopped' : 'attention';
+          if (options.claimRetries && canRetry) {
+            runtime.health = 'restarting';
+            runtime.autoRestartCount = Number(runtime.autoRestartCount || 0) + 1;
+            runtime.lastRetryAt = new Date(nowMs).toISOString();
+            retries.push(record.slot);
+          }
+          changed = true;
+        }
+      }
+      record.runtime = runtime;
+    }
+    if (changed) saveState(state);
+    return { ok: true, root, retries: retries.sort((a, b) => a - b) };
+  });
+}
+
+module.exports = {
+  WORKER_SLOTS,
+  list,
+  createTask,
+  mergeTask,
+  archiveTask,
+  restoreTask,
+  recordLaunch,
+  observeRuntime,
+};

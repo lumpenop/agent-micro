@@ -52,7 +52,7 @@ pnpm start
 
 ## 分離された Agent Manager
 
-Agent Manager は各タスクに専用の Git worktree とブランチを作成します。同じファイルの変更を検出し、dirty・競合状態のマージを防ぎ、消えた worktree をブランチから復元します。マージに失敗してもメイン作業フォルダーに途中状態を残しません。
+Agent 1 はメイン調整用として維持されます。タスクを入力すると、Agent Manager が Agent 2–6 から空いている Worker を自動選択し、専用の Git worktree とブランチを作成して Codex を起動します。Worker の手動指定と先行タスク付きマージキューにも対応します。Worker セッションが消えた場合は安全な自動再起動を 1 回だけ行い、再失敗時は確認待ちにします。同一ファイル、dirty、競合、順序違反のマージを防ぎ、消えた worktree も復元できます。
 
 ## カスタム Provider
 

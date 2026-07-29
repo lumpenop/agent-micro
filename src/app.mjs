@@ -283,6 +283,7 @@ const agentManagerPanel = document.getElementById('agent-manager-panel');
 const agentManagerClose = document.getElementById('agent-manager-close');
 const agentTaskForm = document.getElementById('agent-task-form');
 const agentTaskSlot = document.getElementById('agent-task-slot');
+const agentTaskDependency = document.getElementById('agent-task-dependency');
 const agentTaskInput = document.getElementById('agent-task-input');
 const agentTaskList = document.getElementById('agent-task-list');
 const agentManagerSummary = document.getElementById('agent-manager-summary');
@@ -329,50 +330,65 @@ const hud = {
   devBadge: document.getElementById('hud-dev-badge'),
 };
 
-async function setGitPanelOpen(open) {
-  const next = !!open;
-  if (next && agentManagerPanel && !agentManagerPanel.hidden) {
-    agentManagerPanel.hidden = true;
-    agentManagerButton?.classList.remove('is-active');
-    if (agentManagerTimer) clearInterval(agentManagerTimer);
-    agentManagerTimer = null;
-  }
-  gitButton?.classList.toggle('is-active', next);
-  gitButton?.setAttribute('aria-expanded', String(next));
-  // Avoid rendering the rail during the bounds transition: opening expands
-  // first, while closing hides it before the transparent window contracts.
-  if (!next && gitPanel) gitPanel.hidden = true;
-  await api?.setGitPanel?.(next);
-  shellEl?.classList.toggle('git-open', next);
-  if (next && gitPanel) gitPanel.hidden = false;
+let activeSidePanel = null;
+let desiredSidePanel = null;
+let sidePanelTransition = null;
+
+function stopSidePanelTimers() {
   if (gitRefreshTimer) clearInterval(gitRefreshTimer);
   gitRefreshTimer = null;
-  if (next) {
-    await refreshGitStatus();
-    gitRefreshTimer = setInterval(refreshGitStatus, 4000);
+  if (agentManagerTimer) clearInterval(agentManagerTimer);
+  agentManagerTimer = null;
+}
+
+function renderSidePanelState(panel) {
+  const gitOpen = panel === 'git';
+  const agentsOpen = panel === 'agents';
+  if (gitPanel) gitPanel.hidden = !gitOpen;
+  if (agentManagerPanel) agentManagerPanel.hidden = !agentsOpen;
+  gitButton?.classList.toggle('is-active', gitOpen);
+  gitButton?.setAttribute('aria-expanded', String(gitOpen));
+  agentManagerButton?.classList.toggle('is-active', agentsOpen);
+  agentManagerButton?.setAttribute('aria-expanded', String(agentsOpen));
+  shellEl?.classList.toggle('git-open', !!panel);
+}
+
+async function drainSidePanelTransitions() {
+  while (activeSidePanel !== desiredSidePanel) {
+    const target = desiredSidePanel;
+    stopSidePanelTimers();
+    renderSidePanelState(null);
+    await api?.setGitPanel?.(!!target);
+    activeSidePanel = target;
+    if (target !== desiredSidePanel) continue;
+    renderSidePanelState(target);
+    if (target === 'git' && desiredSidePanel === target) {
+      await refreshGitStatus();
+      if (desiredSidePanel === target) gitRefreshTimer = setInterval(refreshGitStatus, 4000);
+    } else if (target === 'agents' && desiredSidePanel === target) {
+      await refreshAgentManager();
+      if (desiredSidePanel === target) agentManagerTimer = setInterval(refreshAgentManager, 3000);
+    }
   }
 }
 
-async function setAgentManagerOpen(open) {
-  const next = !!open;
-  if (next && gitPanel && !gitPanel.hidden) {
-    gitPanel.hidden = true;
-    gitButton?.classList.remove('is-active');
-    if (gitRefreshTimer) clearInterval(gitRefreshTimer);
-    gitRefreshTimer = null;
+function setSidePanel(panel) {
+  desiredSidePanel = panel === 'git' || panel === 'agents' ? panel : null;
+  if (!sidePanelTransition) {
+    sidePanelTransition = drainSidePanelTransitions().finally(() => {
+      sidePanelTransition = null;
+      if (activeSidePanel !== desiredSidePanel) setSidePanel(desiredSidePanel);
+    });
   }
-  agentManagerButton?.classList.toggle('is-active', next);
-  agentManagerButton?.setAttribute('aria-expanded', String(next));
-  if (!next && agentManagerPanel) agentManagerPanel.hidden = true;
-  await api?.setGitPanel?.(next);
-  shellEl?.classList.toggle('git-open', next);
-  if (next && agentManagerPanel) agentManagerPanel.hidden = false;
-  if (agentManagerTimer) clearInterval(agentManagerTimer);
-  agentManagerTimer = null;
-  if (next) {
-    await refreshAgentManager();
-    agentManagerTimer = setInterval(refreshAgentManager, 3000);
-  }
+  return sidePanelTransition;
+}
+
+function setGitPanelOpen(open) {
+  return setSidePanel(open ? 'git' : desiredSidePanel === 'git' ? null : desiredSidePanel);
+}
+
+function setAgentManagerOpen(open) {
+  return setSidePanel(open ? 'agents' : desiredSidePanel === 'agents' ? null : desiredSidePanel);
 }
 
 let agentManagerRefreshPromise = null;
@@ -397,12 +413,32 @@ async function refreshAgentManagerNow() {
     }
     return;
   }
+  if (agentTaskDependency) {
+    const selectedDependency = agentTaskDependency.value;
+    agentTaskDependency.replaceChildren();
+    const none = document.createElement('option');
+    none.value = '';
+    none.textContent = '선행 없음';
+    agentTaskDependency.append(none);
+    for (const dependency of result.slots?.filter((task) => task && !task.mergedAt) || []) {
+      const option = document.createElement('option');
+      option.value = dependency.id;
+      option.textContent = `A${dependency.slot + 1} 이후 · ${dependency.task}`;
+      agentTaskDependency.append(option);
+    }
+    if ([...agentTaskDependency.options].some((option) => option.value === selectedDependency)) {
+      agentTaskDependency.value = selectedDependency;
+    }
+  }
   const conflictCount = result.conflicts?.length || 0;
+  const attentionCount = result.slots?.filter((task) => ['stopped', 'restarting', 'attention'].includes(task?.runtime?.health)).length || 0;
   if (agentManagerSummary) {
     agentManagerSummary.textContent = conflictCount
       ? `⚠ 겹치는 파일 ${conflictCount}개 · 병합 전 확인 필요`
-      : `${result.baseBranch} · Agent별 작업 폴더 분리됨`;
-    agentManagerSummary.classList.toggle('is-conflict', conflictCount > 0);
+      : attentionCount
+        ? `⚠ 세션 확인 필요 ${attentionCount}개 · 자동 복구 1회`
+        : `${result.baseBranch} · 병합 큐 ${result.queue?.length || 0}개`;
+    agentManagerSummary.classList.toggle('is-conflict', conflictCount > 0 || attentionCount > 0);
   }
   for (let slot = 0; slot < 6; slot += 1) {
     const task = result.slots?.[slot];
@@ -413,18 +449,22 @@ async function refreshAgentManagerNow() {
     name.textContent = task ? `Agent ${slot + 1} · ${task.task}` : `Agent ${slot + 1}`;
     name.title = task?.task || '';
     const status = document.createElement('span'); status.className = 'agent-task-state';
-    status.dataset.state = task?.state || 'empty';
-    status.textContent = task?.state || 'empty';
+    const runtimeHealth = task?.runtime?.health || '';
+    const visibleState = ['stopped', 'restarting', 'attention'].includes(runtimeHealth) ? runtimeHealth : task?.state || 'empty';
+    status.dataset.state = visibleState;
+    status.textContent = visibleState;
     head.append(name, status);
     card.append(head);
     if (!task) {
       const empty = document.createElement('p'); empty.className = 'agent-task-meta';
-      empty.textContent = '아직 격리 작업이 없습니다';
+      empty.textContent = slot === 0 ? '메인 조정용 workspace' : '아직 격리 작업이 없습니다';
       card.append(empty);
-      card.addEventListener('click', () => {
-        if (agentTaskSlot) agentTaskSlot.value = String(slot);
-        agentTaskInput?.focus();
-      });
+      if (slot > 0) {
+        card.addEventListener('click', () => {
+          if (agentTaskSlot) agentTaskSlot.value = String(slot);
+          agentTaskInput?.focus();
+        });
+      }
       agentTaskList.append(card);
       continue;
     }
@@ -432,8 +472,14 @@ async function refreshAgentManagerNow() {
     meta.textContent = task.branch;
     meta.title = task.worktree;
     const files = document.createElement('p'); files.className = 'agent-task-files';
-    files.textContent = `${task.files?.length ? `${task.files.length} files · ${task.ahead} commits` : '변경 없음'}${task.baseHadLocalChanges ? ' · HEAD 기준 생성' : ''}`;
+    files.textContent = `${task.queuePosition ? `Queue #${task.queuePosition} · ` : ''}${task.files?.length ? `${task.files.length} files · ${task.ahead} commits` : '변경 없음'}${task.baseHadLocalChanges ? ' · HEAD 기준 생성' : ''}`;
     card.append(meta, files);
+    if (task.blockedBy?.length) {
+      const dependency = document.createElement('p'); dependency.className = 'agent-task-dependency';
+      dependency.textContent = `병합 대기: ${task.blockedBy.map((item) => item.task).slice(0, 2).join(', ')}`;
+      dependency.title = task.blockedBy.map((item) => item.task).join('\n');
+      card.append(dependency);
+    }
     if (task.conflicts?.length) {
       const warning = document.createElement('p'); warning.className = 'agent-task-conflict';
       warning.textContent = `겹침: ${task.conflicts.slice(0, 3).join(', ')}`;
@@ -441,14 +487,15 @@ async function refreshAgentManagerNow() {
       card.append(warning);
     }
     const actions = document.createElement('div'); actions.className = 'agent-task-actions';
-    const launch = document.createElement('button'); launch.type = 'button'; launch.textContent = '열기';
+    const launch = document.createElement('button'); launch.type = 'button';
+    launch.textContent = ['stopped', 'attention'].includes(runtimeHealth) ? '재실행' : runtimeHealth === 'restarting' ? '복구 중…' : '열기';
     const unavailable = task.state === 'missing' || task.state === 'recoverable';
-    launch.disabled = unavailable;
+    launch.disabled = unavailable || runtimeHealth === 'restarting';
     launch.addEventListener('click', async () => {
       launch.disabled = true;
       const opened = await api?.launchAgentTask?.(slot);
       if (!opened?.ok) flashAction(opened?.error || `Agent ${slot + 1}을 열지 못했습니다`);
-      launch.disabled = false;
+      await refreshAgentManager();
     });
     const merge = document.createElement('button'); merge.type = 'button';
     merge.textContent = task.state === 'recoverable' ? '복구' : task.state === 'missing' ? '정리' : task.mergedAt ? '정리' : 'Merge';
@@ -456,12 +503,13 @@ async function refreshAgentManagerNow() {
       ? false
       : task.mergedAt
       ? task.dirty
-      : task.dirty || !task.ahead || !!task.conflicts?.length;
+      : task.dirty || !task.ahead || !!task.conflicts?.length || !task.dependenciesReady;
     merge.title = task.state === 'recoverable' ? '기존 Agent 브랜치에서 worktree 복구'
       : task.state === 'missing' ? '남아 있는 Agent Manager 기록 정리'
       : task.mergedAt ? '완료된 worktree와 브랜치 정리'
       : task.dirty ? '먼저 Agent 작업을 커밋하세요'
         : task.conflicts?.length ? '겹치는 파일을 먼저 검토하세요'
+          : !task.dependenciesReady ? `먼저 병합: ${task.blockedBy?.map((item) => item.task).join(', ')}`
           : !task.ahead ? '병합할 커밋이 없습니다' : '기준 브랜치에 병합';
     merge.addEventListener('click', async () => {
       merge.disabled = true;
@@ -483,7 +531,18 @@ async function refreshAgentManagerNow() {
   }
 }
 
+let gitStatusRefreshPromise = null;
 async function refreshGitStatus() {
+  if (gitStatusRefreshPromise) return gitStatusRefreshPromise;
+  gitStatusRefreshPromise = refreshGitStatusNow();
+  try {
+    return await gitStatusRefreshPromise;
+  } finally {
+    gitStatusRefreshPromise = null;
+  }
+}
+
+async function refreshGitStatusNow() {
   if (!gitPanel || gitPanel.hidden) return;
   const list = document.getElementById('git-change-list');
   gitRefresh?.classList.add('is-loading');
@@ -545,26 +604,29 @@ async function refreshGitStatus() {
   }
 }
 
-gitButton?.addEventListener('click', () => setGitPanelOpen(!!gitPanel?.hidden));
+gitButton?.addEventListener('click', () => setGitPanelOpen(desiredSidePanel !== 'git'));
 gitClose?.addEventListener('click', () => setGitPanelOpen(false));
-agentManagerButton?.addEventListener('click', () => setAgentManagerOpen(!!agentManagerPanel?.hidden));
+agentManagerButton?.addEventListener('click', () => setAgentManagerOpen(desiredSidePanel !== 'agents'));
 agentManagerClose?.addEventListener('click', () => setAgentManagerOpen(false));
 agentTaskForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
   const task = String(agentTaskInput?.value || '').trim();
-  const slot = Number(agentTaskSlot?.value || 0);
+  const requestedSlot = agentTaskSlot?.value || 'auto';
+  const dependsOn = agentTaskDependency?.value || '';
   if (!task) {
     agentTaskInput?.focus();
     return;
   }
   const submit = agentTaskForm.querySelector('button[type="submit"]');
   if (submit) submit.disabled = true;
-  if (agentManagerSummary) agentManagerSummary.textContent = `Agent ${slot + 1} worktree 생성 중…`;
-  const created = await api?.createAgentTask?.({ slot, task });
+  if (agentManagerSummary) agentManagerSummary.textContent = requestedSlot === 'auto' ? '빈 Worker 찾는 중…' : `Agent ${Number(requestedSlot) + 1} worktree 생성 중…`;
+  const created = await api?.createAgentTask?.({ slot: requestedSlot, task, dependsOn });
   if (!created?.ok) {
     flashAction(created?.error || '격리 작업을 만들지 못했습니다');
   } else {
+    const slot = created.record.slot;
     if (agentTaskInput) agentTaskInput.value = '';
+    if (agentTaskDependency) agentTaskDependency.value = '';
     flashAction(`Agent ${slot + 1} · isolated`);
     const opened = await api?.launchAgentTask?.(slot);
     if (!opened?.ok) flashAction(opened?.error || `Agent ${slot + 1}을 열지 못했습니다`);

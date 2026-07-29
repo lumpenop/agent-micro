@@ -56,7 +56,14 @@ function wait(ms) {
   };
 
   await command('Runtime.enable');
-  await evaluate(`window.codexDesktop.saveCodexSettings({ working_directory: ${JSON.stringify(integrationRepo)} })`);
+  await evaluate(`(async () => {
+    const current = await window.codexDesktop.getCodexSettings();
+    const slots = (current.agent_slots || []).map((slot) => ({ ...slot, working_directory: '' }));
+    return window.codexDesktop.saveCodexSettings({
+      working_directory: ${JSON.stringify(integrationRepo)},
+      agent_slots: slots
+    });
+  })()`);
   const apiReady = await evaluate(`[
     'listAgentTasks','createAgentTask','launchAgentTask','mergeAgentTask','archiveAgentTask','restoreAgentTask'
   ].every((name) => typeof window.codexDesktop[name] === 'function')`);
@@ -82,7 +89,18 @@ function wait(ms) {
   const coordinator = require('../src/agent-coordinator');
   const archived = await coordinator.archiveTask(integrationRepo, 5);
   if (!archived?.ok) throw new Error(`Agent task cleanup failed: ${JSON.stringify(archived)}`);
-  await evaluate(`window.codexDesktop.saveCodexSettings({ working_directory: ${JSON.stringify(project)} })`);
+  await evaluate(`(async () => {
+    const current = await window.codexDesktop.getCodexSettings();
+    const slots = (current.agent_slots || []).map((slot) => ({ ...slot, working_directory: '' }));
+    return window.codexDesktop.saveCodexSettings({
+      working_directory: ${JSON.stringify(project)},
+      agent_slots: slots
+    });
+  })()`);
+  const baseline = await evaluate(`(() => {
+    const rect = document.getElementById('pad').getBoundingClientRect();
+    return { width: window.innerWidth, globalPadX: window.screenX + rect.left };
+  })()`);
   await evaluate(`document.getElementById('btn-agents').click()`);
   await wait(900);
   const opened = await evaluate(`(() => {
@@ -92,10 +110,12 @@ function wait(ms) {
       active: document.getElementById('btn-agents').classList.contains('is-active'),
       cards: document.querySelectorAll('.agent-task-card').length,
       summary: document.getElementById('agent-manager-summary').textContent,
-      width: window.innerWidth
+      width: window.innerWidth,
+      globalPadX: window.screenX + document.getElementById('pad').getBoundingClientRect().left
     };
   })()`);
-  if (opened.hidden || !opened.active || opened.cards !== 6 || opened.width < 760) {
+  if (opened.hidden || !opened.active || opened.cards !== 6 || opened.width !== 768
+    || Math.abs(opened.globalPadX - baseline.globalPadX) > 2) {
     throw new Error(`Agent Manager open state invalid: ${JSON.stringify(opened)}`);
   }
   await evaluate(`document.getElementById('agent-manager-close').click()`);
@@ -105,12 +125,64 @@ function wait(ms) {
     active: document.getElementById('btn-agents').classList.contains('is-active'),
     width: window.innerWidth
   })`);
-  if (!closed.hidden || closed.active || closed.width > 560) {
+  if (!closed.hidden || closed.active || closed.width !== 768) {
     throw new Error(`Agent Manager close state invalid: ${JSON.stringify(closed)}`);
   }
+
+  await evaluate(`(() => {
+    const git = document.getElementById('btn-git');
+    const agents = document.getElementById('btn-agents');
+    for (let i = 0; i < 20; i += 1) { git.click(); agents.click(); }
+  })()`);
+  await wait(1800);
+  const rapid = await evaluate(`(() => {
+    const rect = document.getElementById('pad').getBoundingClientRect();
+    return {
+      gitHidden: document.getElementById('git-side-panel').hidden,
+      agentsHidden: document.getElementById('agent-manager-panel').hidden,
+      gitActive: document.getElementById('btn-git').classList.contains('is-active'),
+      agentsActive: document.getElementById('btn-agents').classList.contains('is-active'),
+      width: window.innerWidth,
+      shellWidth: document.getElementById('shell').getBoundingClientRect().width,
+      globalPadX: window.screenX + rect.left,
+    };
+  })()`);
+  if (!rapid.gitHidden || rapid.agentsHidden || rapid.gitActive || !rapid.agentsActive
+    || rapid.width !== 768 || rapid.shellWidth !== 558
+    || Math.abs(rapid.globalPadX - baseline.globalPadX) > 2) {
+    throw new Error(`Rapid panel toggle state invalid: ${JSON.stringify(rapid)}`);
+  }
+  await evaluate(`document.getElementById('agent-manager-close').click()`);
+  await wait(500);
+  const settled = await evaluate(`({
+    width: window.innerWidth,
+    gitHidden: document.getElementById('git-side-panel').hidden,
+    agentsHidden: document.getElementById('agent-manager-panel').hidden
+  })`);
+  if (settled.width !== 768 || !settled.gitHidden || !settled.agentsHidden) {
+    throw new Error(`Panel close did not settle: ${JSON.stringify(settled)}`);
+  }
+  await evaluate(`document.getElementById('btn-git').click()`);
+  await wait(700);
+  const gitOpened = await evaluate(`(() => {
+    const rect = document.getElementById('pad').getBoundingClientRect();
+    return {
+      hidden: document.getElementById('git-side-panel').hidden,
+      agentsHidden: document.getElementById('agent-manager-panel').hidden,
+      active: document.getElementById('btn-git').classList.contains('is-active'),
+      width: window.innerWidth,
+      globalPadX: window.screenX + rect.left
+    };
+  })()`);
+  if (gitOpened.hidden || !gitOpened.agentsHidden || !gitOpened.active || gitOpened.width !== 768
+    || Math.abs(gitOpened.globalPadX - baseline.globalPadX) > 2) {
+    throw new Error(`Git panel open state invalid: ${JSON.stringify(gitOpened)}`);
+  }
+  await evaluate(`document.getElementById('git-side-close').click()`);
+  await wait(400);
   socket.close();
   fs.rmSync(integrationRoot, { recursive: true, force: true });
-  process.stdout.write(`agent manager ui ok · ${opened.summary}\n`);
+  process.stdout.write(`agent manager ui ok · rapid toggles stable · ${opened.summary}\n`);
 })().catch((error) => {
   process.stderr.write(`${error.stack || error.message}\n`);
   process.exitCode = 1;

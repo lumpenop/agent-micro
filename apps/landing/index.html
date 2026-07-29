@@ -33,7 +33,7 @@
           <a href="#menubar">Menu bar</a>
           <a href="#control">Controls</a>
           <a href="#privacy">Safety</a>
-          <a href="https://github.com/lumpenop/agent-keyboard" target="_blank" rel="noreferrer">GitHub</a>
+          <a href="https://github.com/lumpenop/agent-micro" target="_blank" rel="noreferrer">GitHub</a>
           <a class="nav-buy" href="#download">Download</a>
         </nav>
       </div>
@@ -44,13 +44,13 @@
         <div class="hero-copy reveal">
           <p class="eyebrow">A control plane for parallel Codex work.</p>
           <h1>Six agents.<br /><span>No collisions.</span></h1>
-          <p class="hero-lede">Run multiple Codex sessions on the same project without letting them overwrite each other. Every task gets its own worktree, branch, and place to finish.</p>
+          <p class="hero-lede">Keep one main workspace for coordination, then let Agent Micro assign parallel tasks to isolated Codex workers, recover a stopped session once, and merge them in dependency order.</p>
           <div class="hero-actions">
             <a class="button button-primary" href="#download">Download for macOS</a>
             <a class="inline-link" href="#how">See how it works <span aria-hidden="true">›</span></a>
           </div>
           <div class="hero-pills" aria-label="Compatibility">
-            <span>6 Agent slots</span><span>Git worktree isolation</span><span>Open source</span>
+            <span>1 coordinator + 5 workers</span><span>Dependency merge queue</span><span>Safe auto-restart</span>
           </div>
         </div>
         <div class="hero-visual actual-ui-hero reveal" data-delay="1">
@@ -69,7 +69,7 @@
         <div class="steps-grid">
           <article class="step-card reveal"><span class="step-number">01</span><div><h3>Connect Codex</h3><p>Sign in with ChatGPT once. If Codex is already signed in on your Mac, this step can complete automatically.</p></div></article>
           <article class="step-card reveal" data-delay="1"><span class="step-number">02</span><div><h3>Choose a repository</h3><p>Pick the project once. Agent Micro reads its Git state and keeps your main workspace explicit.</p></div></article>
-          <article class="step-card reveal" data-delay="2"><span class="step-number">03</span><div><h3>Assign isolated tasks</h3><p>Choose Agent 1–6 and describe the work. A dedicated worktree and branch are created automatically.</p></div></article>
+          <article class="step-card reveal" data-delay="2"><span class="step-number">03</span><div><h3>Describe the task</h3><p>Agent Micro picks the next free Worker, creates its worktree and branch, and launches Codex automatically.</p></div></article>
         </div>
       </section>
 
@@ -80,9 +80,9 @@
           <p>The floating pad shows which Agent is active, follows the terminal pane you click, and keeps model, status, approvals, and common commands close.</p>
         </div>
         <div class="product-facts reveal">
-          <div><strong>6</strong><span>parallel Agent slots</span></div>
-          <div><strong>1:1</strong><span>task-to-worktree isolation</span></div>
-          <div><strong>Live</strong><span>terminal focus sync</span></div>
+          <div><strong>1 + 5</strong><span>coordinator and worker slots</span></div>
+          <div><strong>1:1</strong><span>worker task-to-worktree isolation</span></div>
+          <div><strong>1×</strong><span>safe session auto-restart</span></div>
         </div>
       </section>
 
@@ -90,12 +90,13 @@
         <div class="orchestration-layout">
           <div class="section-copy reveal">
             <p class="eyebrow">Agent Manager</p>
-            <h2>Parallel by default.<br /><span>Safe by design.</span></h2>
-            <p>Each assignment lives on its own branch and disk checkout. Agent Micro tracks changed files, commit readiness, and overlap before anything reaches main.</p>
+            <h2>Assign. Recover.<br /><span>Merge in order.</span></h2>
+            <p>Agent 1 stays on main. Agent Micro assigns the next free Worker, detects a stopped session, retries it once without looping, and holds every merge until its selected predecessor is complete.</p>
             <div class="orchestration-points">
-              <span><i>01</i> Create an isolated task</span>
-              <span><i>02</i> Review files and commits</span>
-              <span><i>03</i> Merge only when safe</span>
+              <span><i>01</i> Auto-assign the next free Worker</span>
+              <span><i>02</i> Retry a stopped session once</span>
+              <span><i>03</i> Queue merges by dependency</span>
+              <span><i>04</i> Block dirty, overlapping, or early merges</span>
             </div>
           </div>
           <div class="actual-manager-frame reveal" data-delay="1">
@@ -130,7 +131,7 @@
         <div class="section-copy centered reveal">
           <p class="eyebrow">One surface. Every move.</p>
           <h2>Control the Agent<br />you are actually in.</h2>
-          <p>Click a terminal pane and Agent Micro follows. Switch sessions, clear stale drafts, change models, approve, decline, fork, or review without losing the active target.</p>
+            <p>Click a terminal pane and Agent Micro follows. Switch sessions, clear stale drafts, change models, approve, decline, fork, or review without losing the active target. Git and Agent Manager open beside the pad without shifting it.</p>
         </div>
         <div class="control-grid">
           <article class="control-card reveal">
@@ -185,8 +186,8 @@
         <h2 class="reveal" data-delay="1">Make Codex<br /><span>feel closer.</span></h2>
         <p class="reveal" data-delay="2">Free, open source, and built for parallel Codex work on Apple silicon Macs.</p>
         <div class="reveal" data-delay="2">
-          <a class="button button-primary" id="download-button" href="https://github.com/lumpenop/agent-keyboard/releases/latest">View latest release</a>
-          <a class="github-star-link" href="https://github.com/lumpenop/agent-keyboard" target="_blank" rel="noreferrer" aria-label="Star Agent Micro on GitHub">★ Star on GitHub</a>
+          <a class="button button-primary" id="download-button" href="https://github.com/lumpenop/agent-micro/releases/latest">View latest release</a>
+          <a class="github-star-link" href="https://github.com/lumpenop/agent-micro" target="_blank" rel="noreferrer" aria-label="Star Agent Micro on GitHub">★ Star on GitHub</a>
           <span class="download-meta">macOS only · Apple silicon · Open source · MIT · Codex CLI required</span>
         </div>
       </section>
@@ -196,7 +197,7 @@
       <div class="footer-shell">
         <a class="brand" href="#top"><span class="brand-glyph" aria-hidden="true">⌁</span><span>Agent Micro</span></a>
         <p>Built for the next command.</p>
-        <p><a class="footer-github" href="https://github.com/lumpenop/agent-keyboard" target="_blank" rel="noreferrer">GitHub ↗</a> · © <span id="year"></span> Agent Micro</p>
+        <p><a class="footer-github" href="https://github.com/lumpenop/agent-micro" target="_blank" rel="noreferrer">GitHub ↗</a> · © <span id="year"></span> Agent Micro</p>
       </div>
     </footer>
     <script src="./config.js"></script>

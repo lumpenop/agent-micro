@@ -48,7 +48,10 @@ button {
 }
 
 .shell {
-  width: 100%;
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 558px;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -58,8 +61,9 @@ button {
   gap: 0;
   overflow: hidden;
 }
-/* The expanded window reserves a left rail while keeping the pad fixed. */
-.shell.git-open { align-items: center; padding: 2px 4px 8px 214px; }
+/* The shell is a fixed right-side viewport. Expanding the native window only
+   reveals the left rail, so the pad never shifts between panel states. */
+.shell.git-open { align-items: center; padding: 2px 4px 8px; }
 .shell.git-open .icon-picker { left: auto; right: 0; width: 344px; }
 .git-side-panel {
   position: fixed; left: 112px; top: 8px; bottom: 8px; width: 202px; z-index: 20;
@@ -72,6 +76,7 @@ button {
 .agent-manager-panel { overflow: hidden; }
 .agent-manager-copy { font-size: 9px; line-height: 1.45; color: #687078; }
 .agent-task-form { display: grid; gap: 6px; }
+.agent-task-routing { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
 .agent-task-form select,
 .agent-task-form textarea {
   width: 100%;
@@ -95,9 +100,13 @@ button {
 .agent-task-state { flex: 0 0 auto; padding: 2px 5px; border-radius: 999px; background: #edf1f4; color: #64707a; font-size: 7px; font-weight: 800; text-transform: uppercase; }
 .agent-task-state[data-state="working"] { background: #fff3cf; color: #8a6500; }
 .agent-task-state[data-state="ready"] { background: #dff7e8; color: #16733c; }
+.agent-task-state[data-state="restarting"] { background: #dcecff; color: #175ea8; }
+.agent-task-state[data-state="stopped"],
+.agent-task-state[data-state="attention"] { background: #ffe0db; color: #a83225; }
 .agent-task-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #788087; font-size: 8px; }
 .agent-task-files { color: #4c555d; font-size: 8px; line-height: 1.35; }
 .agent-task-conflict { color: #b83224; font-size: 8px; font-weight: 700; line-height: 1.35; }
+.agent-task-dependency { color: #775d08; font-size: 8px; font-weight: 700; line-height: 1.35; }
 .agent-task-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
 .agent-task-actions button { padding: 6px; border-radius: 8px; border: 1px solid rgba(0,0,0,.08); background: #f7f8f9; font-size: 8px; font-weight: 750; }
 .agent-task-actions button:last-child { background: #20262d; color: #fff; }

@@ -52,7 +52,7 @@ pnpm start
 
 ## 隔离式 Agent Manager
 
-Agent Manager 会为每个任务创建独立的 Git worktree 和分支。它会检测多个 Agent 修改同一文件的情况，阻止 dirty 或冲突合并，从分支恢复丢失的 worktree，并确保失败的合并不会在主工作区留下中间状态。
+Agent 1 保留为主协调器。输入任务后，Agent Manager 会从 Agent 2–6 中自动选择空闲 Worker，为其创建独立的 Git worktree 和分支，并在其中启动 Codex。也可以手动指定 Worker，或在合并队列中设置先行任务。Worker 会话消失时只会安全地自动重启一次；再次失败则停下等待检查。系统还会阻止文件重叠、dirty、冲突或顺序错误的合并，并可恢复丢失的 worktree。
 
 ## 自定义 Provider
 

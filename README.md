@@ -40,8 +40,8 @@ Agent Micro 자체는 AI 모델을 제공하지 않습니다. 실제 작업과 �
 터미널을 열고 저장소를 내려받습니다.
 
 ```bash
-git clone https://github.com/lumpenop/agent-keyboard.git
-cd agent-keyboard
+git clone https://github.com/lumpenop/agent-micro.git
+cd agent-micro
 ```
 
 이미 저장소를 받은 경우에는 `cd`로 프로젝트 폴더에 들어갑니다. 현재 폴더에 `package.json`과 `src` 폴더가 보여야 합니다.
@@ -79,7 +79,7 @@ pnpm start
 
 이 프로젝트는 MIT 라이선스로 공개된 오픈소스 소프트웨어입니다. 체험 기간, 구매 절차, 라이선스 키는 없습니다.
 
-도움이 되었다면 [GitHub에서 ⭐ Star](https://github.com/lumpenop/agent-keyboard)를 눌러주세요. 프로젝트를 계속 발전시키는 데 큰 도움이 됩니다.
+도움이 되었다면 [GitHub에서 ⭐ Star](https://github.com/lumpenop/agent-micro)를 눌러주세요. 프로젝트를 계속 발전시키는 데 큰 도움이 됩니다.
 
 ## macOS 권한 설정
 
@@ -137,8 +137,11 @@ Fork는 빈 슬롯이 있을 때만 사용할 수 있습니다. 6개 슬롯이 �
 
 ### Agent Manager와 격리 작업
 
-Agent Manager에서 작업과 슬롯을 선택하면 해당 Agent만 사용하는 Git worktree와 브랜치를 만들고, 그 폴더에서 Codex CLI를 실행합니다.
+Agent 1은 메인 조정용으로 유지합니다. Agent Manager에 작업을 입력하면 Agent 2–6 중 빈 Worker를 자동 선택하고, 해당 Agent만 사용하는 Git worktree와 브랜치를 만든 뒤 Codex CLI를 실행합니다.
 
+- 필요하면 특정 Worker를 직접 고르거나 다른 작업을 선행 병합 조건으로 지정할 수 있습니다.
+- 병합 큐가 의존성과 생성 순서를 표시하고, 선행 작업이 끝나기 전 병합을 차단합니다.
+- 실행 중인 Worker 창이 사라지면 감지 후 한 번만 자동 재실행하며, 반복 실패는 사용자 확인 상태로 전환합니다.
 - 동시에 만드는 작업도 프로젝트별로 직렬화해 Git 메타데이터 충돌을 막습니다.
 - 둘 이상의 Agent가 같은 파일을 수정하면 병합 전에 표시하고 차단합니다.
 - dirty worktree와 dirty 메인 작업공간은 병합하지 않습니다.

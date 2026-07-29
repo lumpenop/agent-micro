@@ -1,6 +1,6 @@
 {
   "name": "agent-micro",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Agent Micro — floating macropad for AI agent control",
   "main": "src/main.js",
   "packageManager": "pnpm@11.8.0",
@@ -47,10 +47,8 @@
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
-      "identity": null,
-      "extendInfo": {
-        "NSMicrophoneUsageDescription": "Agent Micro uses the microphone for local speech-to-text commands."
-      }
+      "icon": "assets/icon.icns",
+      "identity": null
     }
   },
   "devDependencies": {
