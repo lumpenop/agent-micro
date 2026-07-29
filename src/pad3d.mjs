@@ -952,6 +952,7 @@ export function createPad3D(container, handlers = {}) {
   let joyTz = 0;
   let joyCx = 0;
   let joyCz = 0;
+  let bodyDragging = false;
   let raf = 0;
 
   function applyJoyPose(x, z) {
@@ -1002,6 +1003,9 @@ export function createPad3D(container, handlers = {}) {
     }
     joyDragging = false;
     dialDragging = false;
+    if (bodyDragging) handlers.onBodyDrag?.('end', { x: 0, y: 0 });
+    bodyDragging = false;
+    renderer.domElement.style.cursor = 'default';
     if (pressed) {
       pressVisual(pressed, false);
       pressed = null;
@@ -1098,7 +1102,14 @@ export function createPad3D(container, handlers = {}) {
 
   renderer.domElement.addEventListener('pointerdown', (e) => {
     const obj = pick(e);
-    if (!obj) return;
+    if (!obj) {
+      bodyDragging = true;
+      renderer.domElement.style.cursor = 'grabbing';
+      renderer.domElement.setPointerCapture(e.pointerId);
+      handlers.onBodyDrag?.('start', { x: e.screenX, y: e.screenY });
+      e.preventDefault();
+      return;
+    }
     if (obj.userData?.disabled) return;
     pressed = obj;
     renderer.domElement.setPointerCapture(e.pointerId);
@@ -1122,6 +1133,11 @@ export function createPad3D(container, handlers = {}) {
   });
 
   renderer.domElement.addEventListener('pointermove', (e) => {
+    if (bodyDragging) {
+      handlers.onBodyDrag?.('move', { x: e.screenX, y: e.screenY });
+      e.preventDefault();
+      return;
+    }
     if (dialDragging) {
       const a = pointerAngle(e);
       // cw > 0 = clockwise on screen; rotation.y decreases for clockwise (top-down Y-up)
@@ -1159,9 +1175,16 @@ export function createPad3D(container, handlers = {}) {
       e.preventDefault();
       return;
     }
+    if (!pressed) renderer.domElement.style.cursor = pick(e) ? 'default' : 'grab';
   });
 
   renderer.domElement.addEventListener('pointerup', (e) => {
+    if (bodyDragging) {
+      bodyDragging = false;
+      renderer.domElement.style.cursor = 'default';
+      handlers.onBodyDrag?.('end', { x: e.screenX, y: e.screenY });
+      return;
+    }
     if (dialDragging) {
       playKeyUp('dial', 'dial');
       dialDragging = false;
@@ -1195,7 +1218,10 @@ export function createPad3D(container, handlers = {}) {
     pressed = null;
   });
 
-  renderer.domElement.addEventListener('pointercancel', () => {
+  renderer.domElement.addEventListener('pointercancel', (e) => {
+    if (bodyDragging) handlers.onBodyDrag?.('end', { x: e.screenX, y: e.screenY });
+    bodyDragging = false;
+    renderer.domElement.style.cursor = 'default';
     if (pressed) pressVisual(pressed, false);
     pressed = null;
     dialDragging = false;

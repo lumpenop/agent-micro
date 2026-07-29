@@ -1666,9 +1666,17 @@ const setMaxThreads = document.getElementById('set-max-threads');
 const setMaxDepth = document.getElementById('set-max-depth');
 const setInterruptMessage = document.getElementById('set-interrupt-message');
 const setResourcePreset = document.getElementById('set-resource-preset');
+const setInteractionMode = document.getElementById('set-interaction-mode');
+const setAutoRoutingMode = document.getElementById('set-auto-routing-mode');
+const setRoutingSmallModel = document.getElementById('set-routing-small-model');
+const setRoutingLargeModel = document.getElementById('set-routing-large-model');
+const setRoutingWarningPercent = document.getElementById('set-routing-warning-percent');
+const setRoutingConfirmOverage = document.getElementById('set-routing-confirm-overage');
 const setRolloutBudget = document.getElementById('set-rollout-budget');
 const setRolloutLimit = document.getElementById('set-rollout-limit');
 const setRolloutReminder = document.getElementById('set-rollout-reminder');
+const setDailyUsageLimit = document.getElementById('set-daily-usage-limit');
+const setDailyUsagePercent = document.getElementById('set-daily-usage-percent');
 const setCompactLimit = document.getElementById('set-compact-limit');
 const setToolOutputLimit = document.getElementById('set-tool-output-limit');
 const setRamWarning = document.getElementById('set-ram-warning');
@@ -1678,6 +1686,14 @@ const usageTodayEl = document.getElementById('usage-today');
 const usageMonthEl = document.getElementById('usage-month');
 const usageContextEl = document.getElementById('usage-context');
 const usageRateEl = document.getElementById('usage-rate');
+const usagePacingEl = document.getElementById('usage-pacing');
+const usageWindowEl = document.getElementById('usage-window');
+const usageDailyFillEl = document.getElementById('usage-daily-fill');
+const usageTodayPercentEl = document.getElementById('usage-today-percent');
+const usageTodayRemainingEl = document.getElementById('usage-today-remaining');
+const usageQuotaRemainingEl = document.getElementById('usage-quota-remaining');
+const usageRecommendedEl = document.getElementById('usage-recommended');
+const usageAdviceEl = document.getElementById('usage-advice');
 const usageMetaEl = document.getElementById('usage-meta');
 const setGlobalAgentRules = document.getElementById('set-global-agent-rules');
 const setProjectAgentRules = document.getElementById('set-project-agent-rules');
@@ -1762,9 +1778,17 @@ function readSettingsForm() {
     max_depth: Number.isFinite(Number(setMaxDepth?.value)) ? Number(setMaxDepth.value) : 1,
     interrupt_message: !!setInterruptMessage?.checked,
     resource_preset: setResourcePreset?.value || 'balanced',
+    interaction_mode: setInteractionMode?.value || 'default',
+    auto_routing_mode: setAutoRoutingMode?.value || 'balanced',
+    routing_small_model: setRoutingSmallModel?.value?.trim() || 'gpt-5.6-terra',
+    routing_large_model: setRoutingLargeModel?.value?.trim() || 'gpt-5.6-sol',
+    routing_warning_percent: Number(setRoutingWarningPercent?.value) || 80,
+    routing_confirm_daily_overage: !!setRoutingConfirmOverage?.checked,
     rollout_budget_enabled: !!setRolloutBudget?.checked,
     rollout_limit_tokens: Number(setRolloutLimit?.value) || 100000,
     rollout_reminder_tokens: Number(setRolloutReminder?.value) || 10000,
+    daily_usage_limit_enabled: !!setDailyUsageLimit?.checked,
+    daily_usage_limit_percent: Number(setDailyUsagePercent?.value) || 15,
     model_auto_compact_token_limit: Number(setCompactLimit?.value) || 0,
     tool_output_token_limit: Number(setToolOutputLimit?.value) || 0,
     ram_warning_mb: Number(setRamWarning?.value) || 2048,
@@ -1806,9 +1830,17 @@ function fillSettingsForm(s = {}) {
   if (setMaxDepth) setMaxDepth.value = String(s.max_depth ?? 1);
   if (setInterruptMessage) setInterruptMessage.checked = s.interrupt_message !== false;
   if (setResourcePreset) setResourcePreset.value = s.resource_preset || 'balanced';
+  if (setInteractionMode) setInteractionMode.value = s.interaction_mode || 'default';
+  if (setAutoRoutingMode) setAutoRoutingMode.value = s.auto_routing_mode || 'balanced';
+  if (setRoutingSmallModel) setRoutingSmallModel.value = s.routing_small_model || 'gpt-5.6-terra';
+  if (setRoutingLargeModel) setRoutingLargeModel.value = s.routing_large_model || 'gpt-5.6-sol';
+  if (setRoutingWarningPercent) setRoutingWarningPercent.value = String(s.routing_warning_percent ?? 80);
+  if (setRoutingConfirmOverage) setRoutingConfirmOverage.checked = s.routing_confirm_daily_overage !== false;
   if (setRolloutBudget) setRolloutBudget.checked = !!s.rollout_budget_enabled;
   if (setRolloutLimit) setRolloutLimit.value = String(s.rollout_limit_tokens ?? 100000);
   if (setRolloutReminder) setRolloutReminder.value = String(s.rollout_reminder_tokens ?? 10000);
+  if (setDailyUsageLimit) setDailyUsageLimit.checked = !!s.daily_usage_limit_enabled;
+  if (setDailyUsagePercent) setDailyUsagePercent.value = String(s.daily_usage_limit_percent ?? 15);
   if (setCompactLimit) setCompactLimit.value = String(s.model_auto_compact_token_limit ?? 0);
   if (setToolOutputLimit) setToolOutputLimit.value = String(s.tool_output_token_limit ?? 0);
   if (setRamWarning) setRamWarning.value = String(s.ram_warning_mb ?? 2048);
@@ -2046,6 +2078,49 @@ function formatRateLimitSummary(rate) {
   });
 }
 
+function formatPercent(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '—';
+  return `${number.toFixed(number % 1 ? 1 : 0)}%`;
+}
+
+function renderUsagePlan(plan) {
+  if (!usagePacingEl) return;
+  usagePacingEl.hidden = !plan?.available;
+  if (!plan?.available) return;
+
+  const dailyLimit = Number(plan.limitPercent) || 100;
+  const todayUsed = Number(plan.todayUsedPercent);
+  const fill = Number.isFinite(todayUsed)
+    ? Math.min(100, Math.max(0, (todayUsed / dailyLimit) * 100))
+    : 0;
+  usagePacingEl.classList.toggle('is-over', !!plan.overDailyLimit);
+  if (usageDailyFillEl) usageDailyFillEl.style.width = `${fill}%`;
+  if (usageWindowEl) {
+    const windowName = Number(plan.windowMinutes) >= 1440 || plan.window === 'secondary'
+      ? t('settings.usage.longWindow')
+      : t('settings.usage.shortWindow');
+    usageWindowEl.textContent = `${windowName} · ${formatUsageDate(plan.resetsAt)} · ${formatResetCountdown(plan.resetsAt)}`;
+  }
+  if (usageTodayPercentEl) usageTodayPercentEl.textContent = formatPercent(plan.todayUsedPercent);
+  if (usageTodayRemainingEl) {
+    usageTodayRemainingEl.textContent = plan.enabled
+      ? `${formatPercent(plan.todayRemainingPercent)} / ${formatPercent(plan.limitPercent)}`
+      : t('settings.usage.targetOff');
+  }
+  if (usageQuotaRemainingEl) usageQuotaRemainingEl.textContent = formatPercent(plan.remainingPercent);
+  if (usageRecommendedEl) usageRecommendedEl.textContent = formatPercent(plan.recommendedTodayPercent);
+  if (usageAdviceEl) {
+    usageAdviceEl.textContent = plan.overDailyLimit
+      ? t('settings.usage.overLimit', { limit: plan.limitPercent })
+      : t('settings.usage.advice', {
+        recommended: formatPercent(plan.recommendedTodayPercent),
+        days: plan.pacingDays || 1,
+        remaining: formatPercent(plan.remainingPercent),
+      });
+  }
+}
+
 async function refreshCodexUsage() {
   const result = await api?.getCodexUsage?.();
   if (!result?.ok) return;
@@ -2076,6 +2151,7 @@ async function refreshCodexUsage() {
   if (usageMonthEl) usageMonthEl.textContent = formatTokens(result.monthTokens);
   if (usageContextEl) usageContextEl.textContent = current.contextWindow ? formatTokens(current.contextWindow) : '—';
   if (usageRateEl) usageRateEl.textContent = formatRateLimitSummary(rate);
+  renderUsagePlan(result.usagePlan);
   if (usageMetaEl) usageMetaEl.textContent = t('settings.usage.checked', { date: new Date(result.checkedAt || Date.now()).toLocaleTimeString(state.locale === 'ko' ? 'ko-KR' : undefined), sessions: result.sessions || 0 });
 }
 
@@ -2447,6 +2523,7 @@ document.getElementById('settings-save')?.addEventListener('click', async () => 
     const prefs = await api?.setPadPrefs?.(readAutoContinuePrefs());
     fillAutoContinuePrefs(prefs || readAutoContinuePrefs());
     fillSettingsForm(r.settings);
+    await refreshCodexUsage();
     flashAction(projectResult?.ok ? t('flash.settingsSaved') : projectResult?.error || t('settings.projectRules.saveFail'));
     if (settingsHint) {
       settingsHint.textContent = !projectResult?.ok
@@ -2739,7 +2816,7 @@ async function sendManualContinue() {
   cancelAutoContinue(index);
   state.autoContinueCounts[index] = 0;
   state.autoContinueIssued[index] = false;
-  const result = await api?.send?.('Continue.');
+  const result = await api?.send?.('Continue.', { source: 'continuation' });
   flashAction(result?.ok ? t('flash.continue') : result?.error || t('flash.continueFail'));
 }
 
@@ -2754,7 +2831,7 @@ function scheduleAutoContinue(index) {
     if (!current.enabled || index !== state.selected || !['idle', 'complete'].includes(agent?.status)) return;
     state.autoContinueCounts[index] += 1;
     state.autoContinueIssued[index] = true;
-    const result = await api?.send?.('Continue.');
+    const result = await api?.send?.('Continue.', { source: 'automatic' });
     flashAction(result?.ok
       ? t('flash.autoContinue', { count: state.autoContinueCounts[index], max: current.max })
       : result?.error || t('flash.continueFail'));
@@ -2955,6 +3032,7 @@ try {
     onIconPick: openIconPicker,
     onDialDelta,
     onJoy,
+    onBodyDrag: (phase, point) => api?.bodyDrag?.(phase, point?.x, point?.y),
     onTouch: () => {
       if (padBlocks()) return;
       state.layer = (state.layer + 1) % LAYERS.length;
@@ -3022,6 +3100,23 @@ document.getElementById('btn-reconnect')?.addEventListener('click', () => {
 });
 
 api?.onState?.(applyBridgeState);
+api?.onRoutingDecision?.((decision) => {
+  if (!decision?.estimate) return;
+  const estimate = decision.estimate || {};
+  const vars = {
+    model: decision.route.model || '—',
+    reasoning: decision.route.reasoning || 'auto',
+    score: decision.analysis?.score ?? '—',
+    low: Number(estimate.lowTokens || 0).toLocaleString(),
+    high: Number(estimate.highTokens || 0).toLocaleString(),
+  };
+  const key = !decision.route?.enabled
+    ? 'flash.usageEstimate'
+    : decision.applied?.modelApplied === false
+      ? 'flash.routingRecommended'
+      : 'flash.routingDecision';
+  flashAction(t(key, vars));
+});
 api?.onLog?.((m) => {
   if (m) console.log('[agent]', m);
 });

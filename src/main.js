@@ -14,6 +14,8 @@ const whisperModel = require('./whisper-model');
 const toolInstaller = require('./tool-installer');
 const agentRules = require('./agent-rules');
 const agentCoordinator = require('./agent-coordinator');
+const promptRouting = require('./prompt-routing');
+const { SKILLS } = require('./providers/base-bridge');
 const { detectDevCommand } = require('./dev-runner');
 const { findCodexNative } = require('./providers/codex-bridge');
 
@@ -27,6 +29,8 @@ let statusTrayUsage = null;
 let coordinatorHealthTimer = null;
 let coordinatorHealthBusy = false;
 const devServers = new Map();
+const routingModelLocks = Array.from({ length: 6 }, () => false);
+let bodyDragState = null;
 
 function trayResetText(epochSeconds) {
   if (!epochSeconds) return 'reset time unavailable';
@@ -98,13 +102,14 @@ function updateStatusTrayMenu(usage = null) {
   if (!statusTray) return;
   const settings = codexSettings.load();
   const rate = usage?.rateLimit;
+  const pacing = usage?.usagePlan;
   const used = rate?.usedPercent != null ? `${rate.usedPercent}% used` : 'Usage unavailable';
   const reset = trayResetText(rate?.resetsAt);
   const title = trayUsageTitle(rate);
   const saveTraySetting = (partial) => {
     try {
       codexSettings.save(partial);
-      updateStatusTrayMenu(usage);
+      refreshStatusTray();
     } catch {
       // The full settings window can show validation errors; keep the tray usable.
     }
@@ -163,17 +168,41 @@ function updateStatusTrayMenu(usage = null) {
     format: trayTokenLabel,
     onSelect: (value) => saveTraySetting({ tool_output_token_limit: value }),
   });
+  const dailyUsageItems = traySettingItems({
+    values: [5, 10, 15, 20, 25, 50, 100],
+    current: settings.daily_usage_limit_percent,
+    format: (value) => `${value}% per day`,
+    onSelect: (value) => saveTraySetting({ daily_usage_limit_percent: value }),
+  });
   const webSearchItems = ['', 'cached', 'indexed', 'live', 'disabled'].map((value) => ({
     label: value ? value[0].toUpperCase() + value.slice(1) : 'Auto',
     type: 'radio',
     checked: settings.web_search === value,
     click: () => saveTraySetting({ web_search: value }),
   }));
+  const routingItems = [
+    ['off', 'Off'],
+    ['saver', 'Saver'],
+    ['balanced', 'Balanced'],
+    ['performance', 'Performance'],
+  ].map(([value, label]) => ({
+    label,
+    type: 'radio',
+    checked: settings.auto_routing_mode === value,
+    click: () => saveTraySetting({ auto_routing_mode: value }),
+  }));
   statusTray.setTitle(title);
   statusTray.setToolTip(`Codex · ${title}`);
   statusTray.setContextMenu(Menu.buildFromTemplate([
     { label: `Codex · ${used}`, enabled: false },
     { label: reset, enabled: false },
+    ...(pacing?.available ? [
+      {
+        label: `Today ${pacing.todayUsedPercent ?? '—'}% · recommended ${pacing.recommendedTodayPercent ?? '—'}% more`,
+        enabled: false,
+      },
+      { label: `Plan remaining ${pacing.remainingPercent}%`, enabled: false },
+    ] : []),
     { type: 'separator' },
     { label: 'Open Agent Micro', click: showMainWindow },
     { label: 'Refresh usage', click: () => refreshStatusTray() },
@@ -208,11 +237,27 @@ function updateStatusTrayMenu(usage = null) {
             { label: 'Auto-compact context', submenu: compactItems },
             { label: 'Tool output limit', submenu: outputItems },
             { label: `Token rollout budget · ${settings.rollout_budget_enabled ? 'On' : 'Off'}`, type: 'checkbox', checked: !!settings.rollout_budget_enabled, click: (item) => saveTraySetting({ rollout_budget_enabled: item.checked }) },
+            trayToggleItem('Daily usage target', settings.daily_usage_limit_enabled, (value) => saveTraySetting({ daily_usage_limit_enabled: value })),
+            { label: `Daily target · ${settings.daily_usage_limit_percent}%`, submenu: dailyUsageItems },
           ],
         },
         {
           label: 'Behavior',
           submenu: [
+            {
+              label: 'Default mode · work and edit',
+              type: 'radio',
+              checked: settings.interaction_mode !== 'ask',
+              click: () => saveTraySetting({ interaction_mode: 'default' }),
+            },
+            {
+              label: 'Ask mode · read only',
+              type: 'radio',
+              checked: settings.interaction_mode === 'ask',
+              click: () => saveTraySetting({ interaction_mode: 'ask' }),
+            },
+            { type: 'separator' },
+            { label: 'Automatic model routing', submenu: routingItems },
             trayToggleItem('Interrupt message', settings.interrupt_message, (value) => saveTraySetting({ interrupt_message: value })),
             trayToggleItem('Prevent idle sleep', settings.prevent_idle_sleep, (value) => saveTraySetting({ prevent_idle_sleep: value })),
             { label: 'Web search', submenu: webSearchItems },
@@ -232,7 +277,12 @@ async function refreshStatusTray() {
   statusTrayRefreshing = true;
   try {
     const rateLimitSnapshot = await bridge?.readRateLimits?.();
-    const usage = codexUsage.getUsage({ rateLimitSnapshot });
+    const settings = codexSettings.load();
+    const usage = codexUsage.getUsage({
+      rateLimitSnapshot,
+      dailyLimitEnabled: settings.daily_usage_limit_enabled,
+      dailyLimitPercent: settings.daily_usage_limit_percent,
+    });
     statusTrayUsage = usage;
     updateStatusTrayMenu(usage);
   } catch {
@@ -1239,6 +1289,30 @@ ipcMain.handle('window:suspendPadHotkeys', (_e, suspended) => {
   }
   return true;
 });
+ipcMain.on('window:bodyDrag', (event, payload = {}) => {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return;
+  const phase = payload.phase;
+  const pointerX = Number(payload.x);
+  const pointerY = Number(payload.y);
+  if (phase === 'end' || !Number.isFinite(pointerX) || !Number.isFinite(pointerY)) {
+    bodyDragState = null;
+    return;
+  }
+  if (phase === 'start') {
+    const [windowX, windowY] = mainWindow.getPosition();
+    bodyDragState = { pointerX, pointerY, windowX, windowY };
+    return;
+  }
+  if (phase !== 'move' || !bodyDragState) return;
+  const dx = pointerX - bodyDragState.pointerX;
+  const dy = pointerY - bodyDragState.pointerY;
+  if (Math.abs(dx) > 10000 || Math.abs(dy) > 10000) return;
+  mainWindow.setPosition(
+    Math.round(bodyDragState.windowX + dx),
+    Math.round(bodyDragState.windowY + dy),
+    false
+  );
+});
 
 ipcMain.handle('codexSettings:get', () => {
   if (trialLocked()) return { settings: null, meta: null, trialExpired: true };
@@ -1315,7 +1389,13 @@ ipcMain.handle('resources:getUsage', () => {
 ipcMain.handle('codex:usage', async () => {
   const current = bridge?.agents?.[bridge?.selected]?.rolloutPath || null;
   const rateLimitSnapshot = await bridge?.readRateLimits?.();
-  return codexUsage.getUsage({ currentRolloutPath: current, rateLimitSnapshot });
+  const settings = codexSettings.load();
+  return codexUsage.getUsage({
+    currentRolloutPath: current,
+    rateLimitSnapshot,
+    dailyLimitEnabled: settings.daily_usage_limit_enabled,
+    dailyLimitPercent: settings.daily_usage_limit_percent,
+  });
 });
 ipcMain.handle('mcp:list', async () => {
   if (trialLocked()) return trialDenied();
@@ -1559,8 +1639,10 @@ ipcMain.handle('voice:transcribeAudio', async (_e, bytes, mimeType) => {
       return { ok: false, code: 'NO_SPEECH', error: '인식된 음성이 없습니다' };
     }
     if (!text) return { ok: false, code: 'EMPTY_TRANSCRIPT', error: '인식된 음성이 없습니다' };
+    const prepared = await preparePrompt(text, { source: 'voice' });
+    if (!prepared.ok) return prepared;
     const sent = await bridge?.submitVoiceText?.(text);
-    return { ...(sent || { ok: false }), text };
+    return { ...(sent || { ok: false }), text, preflight: prepared.preflight };
   } catch (e) {
     return { ok: false, code: 'TRANSCRIBE', error: e.message };
   } finally {
@@ -1574,13 +1656,15 @@ ipcMain.handle('voice:endDictation', async () => {
 });
 ipcMain.handle('voice:submitText', async (_e, text) => {
   if (trialLocked()) return trialDenied();
+  const prepared = await preparePrompt(text, { source: 'voice' });
+  if (!prepared.ok) return prepared;
   let r = { ok: false };
   try {
     r = (await bridge?.submitVoiceText?.(text)) || { ok: false };
   } finally {
     refocusPad(380);
   }
-  return r;
+  return { ...r, preflight: prepared.preflight };
 });
 
 ipcMain.handle('codex:getState', async () => {
@@ -1613,6 +1697,129 @@ async function withCliFocus(run) {
   }
 }
 
+async function readCurrentUsage(settings = codexSettings.load()) {
+  const rateLimitSnapshot = await bridge?.readRateLimits?.();
+  return codexUsage.getUsage({
+    currentRolloutPath: bridge?.agents?.[bridge?.selected]?.rolloutPath || null,
+    rateLimitSnapshot,
+    dailyLimitEnabled: settings.daily_usage_limit_enabled,
+    dailyLimitPercent: settings.daily_usage_limit_percent,
+  });
+}
+
+function routingWarningDetail(preflight, usage) {
+  const locale = padPrefs.getLocale();
+  const ko = locale === 'ko';
+  const estimate = preflight.estimate;
+  const warning = preflight.warning;
+  const plan = usage.usagePlan || {};
+  const lines = [
+    ko
+      ? `복잡도 ${preflight.analysis.score}/100 · ${preflight.route.model || '현재 모델'} · 추론 ${preflight.route.reasoning || '자동'}`
+      : `Complexity ${preflight.analysis.score}/100 · ${preflight.route.model || 'current model'} · reasoning ${preflight.route.reasoning || 'auto'}`,
+    ko
+      ? `예상 토큰 ${estimate.lowTokens.toLocaleString()}–${estimate.highTokens.toLocaleString()}`
+      : `Estimated tokens ${estimate.lowTokens.toLocaleString()}–${estimate.highTokens.toLocaleString()}`,
+  ];
+  if (estimate.highPercent != null) {
+    lines.push(ko
+      ? `예상 플랜 사용 증가 ${estimate.lowPercent}–${estimate.highPercent}%`
+      : `Estimated plan usage increase ${estimate.lowPercent}–${estimate.highPercent}%`);
+  }
+  if (warning.dailyWarning) {
+    lines.push(ko
+      ? `오늘 예상 사용량 ${warning.projectedToday}% · 설정 목표 ${plan.limitPercent}%`
+      : `Projected today ${warning.projectedToday}% · target ${plan.limitPercent}%`);
+  }
+  if (warning.planWarning) {
+    lines.push(ko
+      ? `요청 후 플랜 사용량 최대 약 ${warning.projectedPlan}%`
+      : `Projected plan usage up to about ${warning.projectedPlan}%`);
+  }
+  lines.push(ko
+    ? `최근 실제 요청 ${estimate.learnedSamples}개를 기준으로 한 범위 추정입니다.`
+    : `Range estimate learned from ${estimate.learnedSamples} recent request(s).`);
+  return lines.join('\n');
+}
+
+async function preparePrompt(text, { source = 'prompt' } = {}) {
+  const settings = codexSettings.load();
+  let usage;
+  try {
+    usage = await readCurrentUsage(settings);
+  } catch {
+    usage = { current: {}, usagePlan: {}, usageStats: {}, todayTokens: 0 };
+  }
+  if (settings.daily_usage_limit_enabled && usage.usagePlan?.overDailyLimit) {
+    const ko = padPrefs.getLocale() === 'ko';
+    return {
+      ok: false,
+      code: 'DAILY_USAGE_LIMIT',
+      error: ko
+        ? `일일 사용량 목표(${settings.daily_usage_limit_percent}%)에 도달했습니다. 계속하려면 설정에서 목표를 끄거나 높이세요.`
+        : `Daily usage target reached (${settings.daily_usage_limit_percent}%). Disable or raise it in Settings to continue from Agent Micro.`,
+      usagePlan: usage.usagePlan,
+    };
+  }
+  const slot = Math.max(0, Math.min(5, Number(bridge?.selected) || 0));
+  const activeModel = String(bridge?.agents?.[slot]?.model || '').trim();
+  const providerPinnedModel = settings.api_base_url && settings.api_model
+    ? settings.api_model
+    : '';
+  const baseRoutingSettings = providerPinnedModel
+    ? { ...settings, model: providerPinnedModel }
+    : settings;
+  const continuation = source === 'automatic' || source === 'continuation';
+  const routingSettings = continuation
+    ? {
+      ...baseRoutingSettings,
+      auto_routing_mode: 'off',
+      model: activeModel || baseRoutingSettings.model,
+      model_reasoning_effort: bridge?.agents?.[slot]?.reasoning || baseRoutingSettings.model_reasoning_effort,
+    }
+    : routingModelLocks[slot] && activeModel
+    ? { ...baseRoutingSettings, model: activeModel }
+    : baseRoutingSettings;
+  const preflight = promptRouting.preflightPrompt(text, routingSettings, usage);
+  if (preflight.warning.required && source !== 'automatic') {
+    const ko = padPrefs.getLocale() === 'ko';
+    const { response } = await dialog.showMessageBox(mainWindow, {
+      type: 'warning',
+      buttons: [ko ? '취소' : 'Cancel', ko ? '그래도 전송' : 'Send anyway'],
+      defaultId: 0,
+      cancelId: 0,
+      title: ko ? '사용량 한계 임박' : 'Usage limit approaching',
+      message: ko
+        ? '이 요청은 설정한 사용량 목표를 넘을 가능성이 있습니다.'
+        : 'This request may exceed your configured usage target.',
+      detail: routingWarningDetail(preflight, usage),
+    });
+    if (response !== 1) return { ok: false, canceled: true, code: 'ROUTING_WARNING_CANCELED', preflight };
+  } else if (preflight.warning.required && source === 'automatic') {
+    return {
+      ok: false,
+      code: 'ROUTING_WARNING',
+      error: padPrefs.getLocale() === 'ko'
+        ? '예상 사용량이 목표를 넘을 수 있어 자동 Continue를 멈췄습니다.'
+        : 'Automatic Continue stopped because projected usage may exceed the target.',
+      preflight,
+    };
+  }
+
+  let applied = null;
+  if (preflight.route.enabled) {
+    applied = await bridge?.applyRouting?.({
+      model: preflight.route.model,
+      reasoning: preflight.route.reasoning,
+    });
+  }
+  const decision = { ...preflight, applied, source };
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('routing:decision', decision);
+  }
+  return { ok: true, preflight: decision };
+}
+
 ipcMain.handle('codex:approve', async () => {
   if (trialLocked()) return trialDenied();
   return withCliFocus(() => bridge?.approve());
@@ -1625,9 +1832,18 @@ ipcMain.handle('codex:fork', async () => {
   if (trialLocked()) return trialDenied();
   return withCliFocus(() => bridge?.fork());
 });
-ipcMain.handle('codex:send', async (_e, text) => {
+ipcMain.handle('codex:send', async (_e, text, options = {}) => {
   if (trialLocked()) return trialDenied();
-  return withCliFocus(() => bridge?.send(text));
+  const prepared = await preparePrompt(text, {
+    source: options?.source === 'automatic'
+      ? 'automatic'
+      : options?.source === 'continuation'
+        ? 'continuation'
+        : 'prompt',
+  });
+  if (!prepared.ok) return prepared;
+  const result = await withCliFocus(() => bridge?.send(text));
+  return { ...(result || { ok: false }), preflight: prepared.preflight };
 });
 ipcMain.handle('codex:clearInput', async () => {
   if (trialLocked()) return trialDenied();
@@ -1652,10 +1868,14 @@ ipcMain.handle('codex:togglePlan', () => {
 });
 ipcMain.handle('codex:modelPicker', () => {
   if (trialLocked()) return trialDenied();
+  const slot = Math.max(0, Math.min(5, Number(bridge?.selected) || 0));
+  routingModelLocks[slot] = true;
   return bridge?.openModelPicker();
 });
 ipcMain.handle('codex:switchModel', (_e, model) => {
   if (trialLocked()) return trialDenied();
+  const slot = Math.max(0, Math.min(5, Number(bridge?.selected) || 0));
+  routingModelLocks[slot] = true;
   return bridge?.switchModel(model);
 });
 ipcMain.handle('devServer:toggle', () => {
@@ -1684,12 +1904,19 @@ ipcMain.handle('devServer:status', () => {
 });
 ipcMain.handle('codex:skill', async (_e, name) => {
   if (trialLocked()) return trialDenied();
+  const prepared = await preparePrompt(SKILLS[name] || SKILLS.continue, {
+    source: name === 'continue' ? 'continuation' : 'skill',
+  });
+  if (!prepared.ok) return prepared;
   // skill → send() into CLI; must steal pad focus like Send
-  return withCliFocus(() => bridge?.skill(name));
+  const result = await withCliFocus(() => bridge?.skill(name));
+  return { ...(result || { ok: true }), preflight: prepared.preflight };
 });
 ipcMain.handle('codex:newChat', async () => {
   if (trialLocked()) return trialDenied();
-  return withCliFocus(() => bridge?.newChat());
+  const result = await withCliFocus(() => bridge?.newChat());
+  if (result?.ok && Number.isInteger(result.slot)) routingModelLocks[result.slot] = false;
+  return result;
 });
 ipcMain.handle('codex:desktop', async (_e, action) => {
   if (trialLocked()) return trialDenied();
@@ -1698,11 +1925,14 @@ ipcMain.handle('codex:desktop', async (_e, action) => {
 });
 ipcMain.handle('codex:voice', async (_e, text) => {
   if (trialLocked()) return trialDenied();
+  const prepared = await preparePrompt(text, { source: 'voice' });
+  if (!prepared.ok) return prepared;
   if (!bridge?.voiceToCodex) {
     await bridge?.send?.(text);
-    return { ok: true, mode: 'send-only' };
+    return { ok: true, mode: 'send-only', preflight: prepared.preflight };
   }
-  return bridge.voiceToCodex(text);
+  const result = await bridge.voiceToCodex(text);
+  return { ...(result || { ok: false }), preflight: prepared.preflight };
 });
 ipcMain.handle('codex:focusApp', () => {
   if (trialLocked()) return false;

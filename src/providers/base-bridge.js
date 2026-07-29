@@ -127,8 +127,9 @@ class BaseBridge extends EventEmitter {
 
   async skill(name) {
     const text = SKILLS[name] || SKILLS.continue;
-    await this.send(text);
+    const result = await this.send(text);
     this.emitState(`skill · ${name}`);
+    return result;
   }
 
   async approve() {

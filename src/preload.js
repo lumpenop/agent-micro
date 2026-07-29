@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('agentI18n', {
 contextBridge.exposeInMainWorld('codexDesktop', {
   minimize: () => ipcRenderer.invoke('window:minimize'),
   close: () => ipcRenderer.invoke('window:close'),
+  bodyDrag: (phase, x, y) => ipcRenderer.send('window:bodyDrag', { phase, x, y }),
   suspendPadHotkeys: (suspended) => ipcRenderer.invoke('window:suspendPadHotkeys', suspended),
   setGitPanel: (open) => ipcRenderer.invoke('window:setGitPanel', open),
   setMousePassthrough: (passthrough) => ipcRenderer.invoke('window:setMousePassthrough', passthrough),
@@ -31,7 +32,7 @@ contextBridge.exposeInMainWorld('codexDesktop', {
   approve: () => ipcRenderer.invoke('codex:approve'),
   decline: () => ipcRenderer.invoke('codex:decline'),
   fork: () => ipcRenderer.invoke('codex:fork'),
-  send: (text) => ipcRenderer.invoke('codex:send', text),
+  send: (text, options) => ipcRenderer.invoke('codex:send', text, options),
   clearSelectedAgentInput: () => ipcRenderer.invoke('codex:clearInput'),
   setReasoning: (index) => ipcRenderer.invoke('codex:setReasoning', index),
   toggleFast: () => ipcRenderer.invoke('codex:toggleFast'),
@@ -117,5 +118,10 @@ contextBridge.exposeInMainWorld('codexDesktop', {
     const handler = (_e, panel) => cb(panel);
     ipcRenderer.on('app:openPanel', handler);
     return () => ipcRenderer.removeListener('app:openPanel', handler);
+  },
+  onRoutingDecision: (cb) => {
+    const handler = (_e, decision) => cb(decision);
+    ipcRenderer.on('routing:decision', handler);
+    return () => ipcRenderer.removeListener('routing:decision', handler);
   },
 });

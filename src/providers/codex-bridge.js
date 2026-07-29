@@ -210,6 +210,7 @@ class CodexBridge extends EventEmitter {
     this._rolloutWatchers = new Map();
     this._rolloutWatchTimers = new Map();
     this._modelPickerPending = null;
+    this._pendingRouting = new Map();
     this._refreshThreadsPending = null;
     this._refreshContextsPending = null;
   }
@@ -1193,10 +1194,11 @@ class CodexBridge extends EventEmitter {
       const { withCliFlags, load, tomlString } = require('../codex-settings');
       const settings = load();
       const launch = require('../agent-rules').resolve(settings, slot);
+      const pendingRouting = this._pendingRouting.get(slot) || {};
       const merged = {
         ...settings,
-        model: launch.model,
-        model_reasoning_effort: launch.reasoning,
+        model: pendingRouting.model || launch.model,
+        model_reasoning_effort: pendingRouting.reasoning || launch.reasoning,
         sandbox_mode: launch.sandbox,
         approval_policy: launch.approval,
       };
@@ -1204,6 +1206,7 @@ class CodexBridge extends EventEmitter {
         ? [`developer_instructions=${tomlString(launch.instructions)}`]
         : [];
       cmd = withCliFlags(base, merged, extra);
+      this._pendingRouting.delete(slot);
       workingDirectory = launch.cwd;
     } catch {
       /* keep base */
@@ -1360,6 +1363,68 @@ class CodexBridge extends EventEmitter {
     return { ok: true, value, applied: true, ...updated };
   }
 
+  async applyRouting({ model = '', reasoning = '' } = {}) {
+    const targetModel = String(model || '').trim();
+    const targetReasoning = REASONING.includes(reasoning) ? reasoning : '';
+    const agent = this.agents[this.selected];
+    if (!agent || agent.status === 'off') {
+      this._pendingRouting.set(this.selected, {
+        model: targetModel,
+        reasoning: targetReasoning,
+      });
+      return {
+        ok: true,
+        applied: true,
+        modelApplied: !!targetModel,
+        reasoningApplied: !!targetReasoning,
+        mode: 'next-launch',
+      };
+    }
+    const changes = {};
+    if (targetModel && targetModel !== agent?.model) changes.model = targetModel;
+    if (targetReasoning && targetReasoning !== agent?.reasoning) changes.effort = targetReasoning;
+    if (!Object.keys(changes).length) {
+      return {
+        ok: true,
+        applied: true,
+        unchanged: true,
+        modelApplied: !!targetModel,
+        reasoningApplied: !!targetReasoning,
+      };
+    }
+
+    const updated = await this._updateSelectedThreadSettings(changes);
+    if (updated.ok) {
+      if (targetReasoning) {
+        const index = REASONING.indexOf(targetReasoning);
+        this.reasoningIndex = index;
+        this.fastMode = targetReasoning === 'minimal';
+      }
+      this.emitState(`auto route · ${targetModel || agent?.model || 'model'} · ${targetReasoning || agent?.reasoning || 'auto'}`);
+      return {
+        ok: true,
+        applied: true,
+        modelApplied: !targetModel || agent?.model === targetModel,
+        reasoningApplied: !targetReasoning || agent?.reasoning === targetReasoning,
+        mode: 'thread',
+        ...updated,
+      };
+    }
+
+    let reasoningResult = null;
+    if (targetReasoning) {
+      reasoningResult = await this.setReasoning(REASONING.indexOf(targetReasoning));
+    }
+    return {
+      ok: !!reasoningResult?.ok,
+      applied: !!reasoningResult?.ok,
+      modelApplied: !targetModel || agent?.model === targetModel,
+      reasoningApplied: !targetReasoning || !!reasoningResult?.ok,
+      mode: reasoningResult?.mode || 'recommendation',
+      error: updated.error,
+    };
+  }
+
   async toggleFast() {
     const agent = this.agents[this.selected];
     const nextFastMode = !this.fastMode;
@@ -1436,8 +1501,9 @@ class CodexBridge extends EventEmitter {
 
   async skill(name) {
     const text = SKILLS[name] || SKILLS.continue;
-    await this.send(text);
+    const result = await this.send(text);
     this.emitState(lt('bridge.skill', { name }));
+    return result;
   }
 
   async newChat() {

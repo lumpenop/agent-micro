@@ -47,6 +47,13 @@ try {
   assert.ok(settingsModule.safetyWarnings({ ...settings, agent_slots: settings.agent_slots.map((slot, index) => index === 2 ? { ...slot, approval_policy: 'never' } : slot) }).some((warning) => warning.includes('Agent 3')));
   assert.throws(() => settingsModule.validateAgentSlots(settings.agent_slots.map((slot, index) => index === 0 ? { ...slot, working_directory: 'relative/path' } : slot)), /must be absolute/);
 
+  const askSettings = settingsModule.normalize({ ...settings, interaction_mode: 'ask' });
+  const askResolved = agentRules.resolve(askSettings, 0);
+  assert.equal(askResolved.interactionMode, 'ask');
+  assert.equal(askResolved.sandbox, 'read-only');
+  assert.ok(askResolved.instructions.includes('Ask mode'));
+  assert.ok(askResolved.instructions.includes('Do not edit files'));
+
   const originalLoad = settingsModule.load;
   settingsModule.load = () => settings;
   try {

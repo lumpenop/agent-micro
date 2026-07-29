@@ -124,7 +124,92 @@ function normalizeRateLimits(raw) {
   };
 }
 
-function getUsage({ currentRolloutPath = null, rateLimitSnapshot = null } = {}) {
+function rateSnapshot(event, key) {
+  const window = event?.payload?.rate_limits?.[key];
+  const usedPercent = Number(window?.used_percent);
+  if (!Number.isFinite(usedPercent)) return null;
+  const timestamp = new Date(event?.timestamp).getTime();
+  if (!Number.isFinite(timestamp)) return null;
+  return { timestamp, usedPercent: Math.max(0, Math.min(100, usedPercent)) };
+}
+
+function percentUsedSinceDayStart(histories, key, now = new Date()) {
+  const dayKey = localDateKey(now);
+  const snapshots = histories
+    .flatMap(({ events }) => events.map((event) => rateSnapshot(event, key)).filter(Boolean))
+    .sort((a, b) => a.timestamp - b.timestamp);
+  if (!snapshots.length) return null;
+
+  let previous = null;
+  let used = 0;
+  for (const snapshot of snapshots) {
+    const isToday = localDateKey(snapshot.timestamp) === dayKey;
+    if (!isToday) {
+      if (snapshot.timestamp < now.getTime()) previous = snapshot.usedPercent;
+      continue;
+    }
+    if (previous != null) {
+      used += snapshot.usedPercent >= previous
+        ? snapshot.usedPercent - previous
+        : snapshot.usedPercent;
+    }
+    previous = snapshot.usedPercent;
+  }
+  return Math.max(0, Math.min(100, Math.round(used * 10) / 10));
+}
+
+function usagePlan(rateLimit, histories, { enabled = false, limitPercent = 15 } = {}) {
+  const limit = Math.max(1, Math.min(100, Math.round(Number(limitPercent) || 15)));
+  const window = rateLimit?.secondary?.usedPercent != null ? rateLimit.secondary : rateLimit;
+  const windowKey = window === rateLimit?.secondary ? 'secondary' : 'primary';
+  if (!window || window.usedPercent == null) {
+    return { enabled, limitPercent: limit, available: false };
+  }
+
+  const usedPercent = Math.max(0, Math.min(100, Number(window.usedPercent) || 0));
+  const remainingPercent = Math.max(0, Math.round((100 - usedPercent) * 10) / 10);
+  const todayUsedPercent = percentUsedSinceDayStart(histories, windowKey);
+  const todayRemainingPercent = enabled && todayUsedPercent != null
+    ? Math.max(0, Math.round((limit - todayUsedPercent) * 10) / 10)
+    : null;
+  const secondsRemaining = window.resetsAt
+    ? Math.max(0, Number(window.resetsAt) - Math.floor(Date.now() / 1000))
+    : null;
+  const pacingDays = secondsRemaining == null ? null : Math.max(1, Math.ceil(secondsRemaining / 86400));
+  const evenDailyPercent = pacingDays
+    ? Math.max(0, Math.round((remainingPercent / pacingDays) * 10) / 10)
+    : null;
+  const recommendedTodayPercent = evenDailyPercent == null
+    ? todayRemainingPercent
+    : enabled && todayRemainingPercent != null
+      ? Math.min(todayRemainingPercent, evenDailyPercent)
+      : evenDailyPercent;
+
+  return {
+    enabled,
+    available: true,
+    limitPercent: limit,
+    window: windowKey,
+    windowMinutes: window.windowMinutes || null,
+    usedPercent,
+    remainingPercent,
+    todayUsedPercent,
+    todayRemainingPercent,
+    recommendedTodayPercent: recommendedTodayPercent == null
+      ? null : Math.round(recommendedTodayPercent * 10) / 10,
+    pacingDays,
+    resetsAt: window.resetsAt || null,
+    secondsRemaining,
+    overDailyLimit: enabled && todayUsedPercent != null && todayUsedPercent >= limit,
+  };
+}
+
+function getUsage({
+  currentRolloutPath = null,
+  rateLimitSnapshot = null,
+  dailyLimitEnabled = false,
+  dailyLimitPercent = 15,
+} = {}) {
   const entries = recentRollouts();
   const activeFiles = new Set(entries.map(({ file }) => file));
   if (currentRolloutPath) activeFiles.add(currentRolloutPath);
@@ -142,6 +227,7 @@ function getUsage({ currentRolloutPath = null, rateLimitSnapshot = null } = {}) 
   const month = today.slice(0, 7);
   let todayTokens = 0;
   let monthTokens = 0;
+  const recentTurnTokens = [];
   for (const { events } of histories) {
     let previousTotal = 0;
     for (const event of events) {
@@ -154,8 +240,28 @@ function getUsage({ currentRolloutPath = null, rateLimitSnapshot = null } = {}) 
       const date = localDateKey(event.timestamp);
       if (date === today) todayTokens += delta;
       if (date?.startsWith(month)) monthTokens += delta;
+      const lastTokens = Number(event?.payload?.info?.last_token_usage?.total_tokens);
+      if (Number.isFinite(lastTokens) && lastTokens > 0) {
+        recentTurnTokens.push({ timestamp: new Date(event.timestamp).getTime() || 0, tokens: lastTokens });
+      }
     }
   }
+  const turnValues = recentTurnTokens
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .slice(0, 40)
+    .map(({ tokens }) => tokens)
+    .sort((a, b) => a - b);
+  const medianTurnTokens = turnValues.length
+    ? turnValues[Math.floor(turnValues.length / 2)]
+    : null;
+  const rateLimit = liveRate || (primary ? {
+    usedPercent: primary.usedPercent,
+    windowMinutes: primary.windowMinutes,
+    resetsAt: primary.resetsAt,
+    secondary: primary.secondary,
+    credits: primary.credits,
+    planType: primary.planType,
+  } : null);
   return {
     ok: true,
     source: 'Codex rollout logs',
@@ -163,16 +269,20 @@ function getUsage({ currentRolloutPath = null, rateLimitSnapshot = null } = {}) 
     sessions: rows.length,
     todayTokens,
     monthTokens,
-    rateLimit: liveRate || (primary ? {
-      usedPercent: primary.usedPercent,
-      windowMinutes: primary.windowMinutes,
-      resetsAt: primary.resetsAt,
-      secondary: primary.secondary,
-      credits: primary.credits,
-      planType: primary.planType,
-    } : null),
+    rateLimit,
+    usagePlan: usagePlan(rateLimit, histories, {
+      enabled: dailyLimitEnabled,
+      limitPercent: dailyLimitPercent,
+    }),
+    usageStats: {
+      sampleCount: turnValues.length,
+      medianTurnTokens,
+      averageTurnTokens: turnValues.length
+        ? Math.round(turnValues.reduce((sum, value) => sum + value, 0) / turnValues.length)
+        : null,
+    },
     checkedAt: Date.now(),
   };
 }
 
-module.exports = { getUsage };
+module.exports = { getUsage, percentUsedSinceDayStart, usagePlan };

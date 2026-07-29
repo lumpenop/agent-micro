@@ -34,6 +34,12 @@ const DEFAULTS = {
   working_directory: '',
   model: '',
   model_reasoning_effort: '',
+  interaction_mode: 'default',
+  auto_routing_mode: 'balanced',
+  routing_small_model: 'gpt-5.6-terra',
+  routing_large_model: 'gpt-5.6-sol',
+  routing_warning_percent: 80,
+  routing_confirm_daily_overage: true,
   personality: '',
   web_search: '',
   sandbox_mode: 'workspace-write',
@@ -47,6 +53,8 @@ const DEFAULTS = {
   rollout_budget_enabled: false,
   rollout_limit_tokens: 100000,
   rollout_reminder_tokens: 10000,
+  daily_usage_limit_enabled: false,
+  daily_usage_limit_percent: 15,
   model_auto_compact_token_limit: 0,
   tool_output_token_limit: 0,
   ram_warning_mb: 2048,
@@ -208,6 +216,16 @@ function normalize(raw = {}) {
     model: typeof raw.model === 'string' ? raw.model.trim().slice(0, 120) : '',
     model_reasoning_effort: REASONING_EFFORTS.includes(raw.model_reasoning_effort)
       ? raw.model_reasoning_effort : '',
+    interaction_mode: ['default', 'ask'].includes(raw.interaction_mode)
+      ? raw.interaction_mode : DEFAULTS.interaction_mode,
+    auto_routing_mode: ['off', 'saver', 'balanced', 'performance'].includes(raw.auto_routing_mode)
+      ? raw.auto_routing_mode : DEFAULTS.auto_routing_mode,
+    routing_small_model: typeof raw.routing_small_model === 'string'
+      ? raw.routing_small_model.trim().slice(0, 120) : DEFAULTS.routing_small_model,
+    routing_large_model: typeof raw.routing_large_model === 'string'
+      ? raw.routing_large_model.trim().slice(0, 120) : DEFAULTS.routing_large_model,
+    routing_warning_percent: clampInt(raw.routing_warning_percent, 1, 100, DEFAULTS.routing_warning_percent),
+    routing_confirm_daily_overage: raw.routing_confirm_daily_overage !== false,
     personality: PERSONALITIES.includes(raw.personality) ? raw.personality : '',
     web_search: WEB_SEARCH_MODES.includes(raw.web_search) ? raw.web_search : '',
     sandbox_mode: sandbox,
@@ -225,6 +243,8 @@ function normalize(raw = {}) {
     rollout_budget_enabled: !!raw.rollout_budget_enabled,
     rollout_limit_tokens: clampInt(raw.rollout_limit_tokens, 10000, 2000000, 100000),
     rollout_reminder_tokens: clampInt(raw.rollout_reminder_tokens, 1000, 500000, 10000),
+    daily_usage_limit_enabled: !!raw.daily_usage_limit_enabled,
+    daily_usage_limit_percent: clampInt(raw.daily_usage_limit_percent, 1, 100, DEFAULTS.daily_usage_limit_percent),
     model_auto_compact_token_limit: clampInt(raw.model_auto_compact_token_limit, 0, 2000000, 0),
     tool_output_token_limit: clampInt(raw.tool_output_token_limit, 0, 1000000, 0),
     ram_warning_mb: clampInt(raw.ram_warning_mb, 256, 65536, 2048),

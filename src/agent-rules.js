@@ -75,11 +75,14 @@ function resolve(settings, slot) {
   const project = loadProject(cwd);
   const role = (settings?.agent_roles || []).find((item) => item.id === profile.role_id && item.enabled !== false);
   const sections = [
+    settings?.interaction_mode === 'ask'
+      ? ['Ask mode', 'Answer questions, explain, and inspect using read-only operations only. Do not edit files, run mutating commands, or change external state. If the user requests a change, ask them to switch Agent Micro to Default mode first.']
+      : null,
     ['Global rules', settings?.global_agent_rules],
     ['Project rules', project.rules],
     [role?.name ? `Role · ${role.name}` : 'Role', role?.developer_instructions],
     [`Agent ${Number(slot) + 1} rules`, profile.rules],
-  ].filter(([, rules]) => cleanRules(rules));
+  ].filter((entry) => entry && cleanRules(entry[1]));
   if (profile.preferred_skills?.length) {
     sections.push(['Preferred skills', `Prefer these skills when relevant: ${profile.preferred_skills.join(', ')}`]);
   }
@@ -91,8 +94,11 @@ function resolve(settings, slot) {
     instructions: sections.map(([title, rules]) => `## ${title}\n${cleanRules(rules)}`).join('\n\n'),
     model: profile.model || role?.model || settings?.model || '',
     reasoning: profile.model_reasoning_effort || role?.model_reasoning_effort || settings?.model_reasoning_effort || '',
-    sandbox: profile.sandbox_mode || settings?.sandbox_mode || 'workspace-write',
+    sandbox: settings?.interaction_mode === 'ask'
+      ? 'read-only'
+      : profile.sandbox_mode || settings?.sandbox_mode || 'workspace-write',
     approval: profile.approval_policy || settings?.approval_policy || 'on-request',
+    interactionMode: settings?.interaction_mode === 'ask' ? 'ask' : 'default',
   };
 }
 

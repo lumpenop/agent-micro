@@ -254,6 +254,21 @@
                 <div class="usage-card"><span data-i18n="settings.usage.month">This month</span><strong id="usage-month">—</strong></div>
                 <div class="usage-card"><span data-i18n="settings.usage.context">Context window</span><strong id="usage-context">—</strong></div>
               </div>
+              <div class="usage-rate" id="usage-rate">—</div>
+              <div class="usage-pacing" id="usage-pacing" hidden>
+                <div class="usage-pacing-head">
+                  <strong data-i18n="settings.usage.pacing">Daily pacing</strong>
+                  <span id="usage-window">—</span>
+                </div>
+                <div class="usage-progress"><i id="usage-daily-fill"></i></div>
+                <div class="usage-pacing-grid">
+                  <span><small data-i18n="settings.usage.todayPercent">Used today</small><strong id="usage-today-percent">—</strong></span>
+                  <span><small data-i18n="settings.usage.todayRemaining">Daily limit left</small><strong id="usage-today-remaining">—</strong></span>
+                  <span><small data-i18n="settings.usage.quotaRemaining">Plan quota left</small><strong id="usage-quota-remaining">—</strong></span>
+                  <span><small data-i18n="settings.usage.recommended">Recommended today</small><strong id="usage-recommended">—</strong></span>
+                </div>
+                <p class="settings-desc usage-advice" id="usage-advice">—</p>
+              </div>
               <p class="settings-desc usage-meta" id="usage-meta">—</p>
             </div>
 
@@ -289,6 +304,46 @@
 
             <div class="settings-section">
               <p class="settings-section-title" data-i18n="settings.core">Model &amp; response</p>
+              <div class="settings-field">
+                <label class="voice-label" for="set-interaction-mode" data-i18n="settings.interactionMode">Session mode</label>
+                <select id="set-interaction-mode" class="voice-input settings-select">
+                  <option value="default" data-i18n="settings.interactionMode.default">Default · work and make changes</option>
+                  <option value="ask" data-i18n="settings.interactionMode.ask">Ask · answer and inspect only</option>
+                </select>
+                <p class="settings-desc" data-i18n="settings.interactionMode.desc">Ask mode starts new Agents read-only and prevents file or external-state changes.</p>
+              </div>
+              <div class="settings-field">
+                <label class="voice-label" for="set-auto-routing-mode" data-i18n="settings.routing.mode">Automatic model routing</label>
+                <select id="set-auto-routing-mode" class="voice-input settings-select">
+                  <option value="off" data-i18n="settings.routing.off">Off</option>
+                  <option value="saver" data-i18n="settings.routing.saver">Saver · prefer the small model</option>
+                  <option value="balanced" data-i18n="settings.routing.balanced">Balanced</option>
+                  <option value="performance" data-i18n="settings.routing.performance">Performance · prefer the large model</option>
+                </select>
+                <p class="settings-desc" data-i18n="settings.routing.desc">Scores each Agent Micro prompt before sending. A pinned or manually selected model stays locked until a new chat.</p>
+              </div>
+              <div class="settings-row">
+                <div class="settings-field">
+                  <label class="voice-label" for="set-routing-small-model" data-i18n="settings.routing.smallModel">Small model</label>
+                  <input id="set-routing-small-model" class="voice-input" type="text" value="gpt-5.6-terra" />
+                </div>
+                <div class="settings-field">
+                  <label class="voice-label" for="set-routing-large-model" data-i18n="settings.routing.largeModel">Large model</label>
+                  <input id="set-routing-large-model" class="voice-input" type="text" value="gpt-5.6-sol" />
+                </div>
+              </div>
+              <div class="settings-row">
+                <div class="settings-field">
+                  <label class="voice-label" for="set-routing-warning-percent" data-i18n="settings.routing.warningPercent">Warn at plan usage (%)</label>
+                  <input id="set-routing-warning-percent" class="voice-input" type="number" min="1" max="100" step="1" value="80" />
+                </div>
+                <div class="settings-field">
+                  <label class="settings-check" for="set-routing-confirm-overage">
+                    <input id="set-routing-confirm-overage" type="checkbox" />
+                    <span data-i18n="settings.routing.confirmOverage">Confirm predicted daily overage</span>
+                  </label>
+                </div>
+              </div>
               <div class="settings-field">
                 <label class="voice-label" for="set-model" data-i18n="settings.model">model · Model</label>
                 <input id="set-model" class="voice-input" type="text" autocomplete="off" spellcheck="false"
@@ -491,6 +546,17 @@
             <div class="settings-section">
               <p class="settings-section-title" data-i18n="settings.resources">Resource management</p>
               <div class="settings-field">
+                <label class="settings-check" for="set-daily-usage-limit">
+                  <input id="set-daily-usage-limit" type="checkbox" />
+                  <span data-i18n="settings.dailyUsageLimit">Daily plan-usage target</span>
+                </label>
+                <p class="settings-desc" data-i18n="settings.dailyUsageLimit.desc">A local pacing target based on Codex plan usage percent. It warns and recommends; it cannot stop billing or server requests.</p>
+              </div>
+              <div class="settings-field">
+                <label class="voice-label" for="set-daily-usage-percent" data-i18n="settings.dailyUsagePercent">Maximum per day (%)</label>
+                <input id="set-daily-usage-percent" class="voice-input" type="number" min="1" max="100" step="1" value="15" />
+              </div>
+              <div class="settings-field">
                 <label class="voice-label" for="set-resource-preset" data-i18n="settings.resourcePreset">Preset</label>
                 <select id="set-resource-preset" class="voice-input settings-select">
                   <option value="saver" data-i18n="settings.resourcePreset.saver">Saver</option>
@@ -566,7 +632,7 @@
             <p class="settings-hint" id="settings-hint" data-i18n="settings.hint">Saves to ~/.codex · applies to new CLI windows</p>
           </div>
           </div>
-          <div class="voice-actions">
+          <div class="voice-actions settings-footer">
             <button type="button" class="voice-btn primary" id="settings-save" data-i18n="settings.save">Save</button>
             <select id="settings-backup-select" class="voice-input settings-select settings-backup-select"></select>
             <button type="button" class="voice-btn" id="settings-restore" data-i18n="settings.restore">Restore</button>
