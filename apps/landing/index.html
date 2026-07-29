@@ -3,35 +3,36 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Run up to six Codex agents from one compact Mac surface. Agent Micro isolates parallel tasks with Git worktrees, detects overlap, and keeps every session in sync." />
-    <meta name="theme-color" content="#f5f5f7" />
-    <meta property="og:title" content="Agent Micro — Six agents. No collisions." />
-    <meta property="og:description" content="A compact macOS control surface for running parallel Codex agents in isolated Git worktrees." />
+    <meta name="description" content="Run six Codex agents while keeping main clean. Agent Micro auto-assigns isolated workers, recovers stopped sessions, and queues safe merges." />
+    <meta name="theme-color" content="#eef3f8" />
+    <meta property="og:title" content="Agent Micro — Run six agents. Keep main clean." />
+    <meta property="og:description" content="A human-in-the-loop macOS harness for parallel Codex work." />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="./assets/og.png" />
+    <meta property="og:image" content="https://agent-micro.vercel.app/assets/og.png" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Agent Micro — Six agents. No collisions." />
-    <meta name="twitter:description" content="Run parallel Codex agents in isolated Git worktrees from one compact Mac surface." />
-    <meta name="twitter:image" content="./assets/og.png" />
-    <title>Agent Micro — Six agents. No collisions.</title>
+    <meta name="twitter:title" content="Agent Micro — Run six agents. Keep main clean." />
+    <meta name="twitter:description" content="A human-in-the-loop macOS harness for parallel Codex work." />
+    <meta name="twitter:image" content="https://agent-micro.vercel.app/assets/og.png" />
+    <title>Agent Micro — Run six agents. Keep main clean.</title>
+    <link rel="icon" href="./assets/app-icon.png" type="image/png" />
     <link rel="preload" href="./assets/agent-micro-ui.png" as="image" fetchpriority="high" />
     <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./quality.css" />
   </head>
   <body>
     <header class="site-header">
       <div class="nav-shell">
         <a class="brand" href="#top" aria-label="Agent Micro home">
-          <span class="brand-glyph" aria-hidden="true">⌁</span>
+          <span class="brand-glyph" aria-hidden="true"><img src="./assets/app-icon.png" alt="" /></span>
           <span>Agent Micro</span>
+          <small>PUBLIC BETA</small>
         </a>
         <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">
           <span></span><span></span><span class="sr-only">Open menu</span>
         </button>
         <nav id="site-nav" class="site-nav" aria-label="Main navigation">
-          <a href="#how">How it works</a>
-          <a href="#orchestration">Agent Manager</a>
-          <a href="#menubar">Menu bar</a>
-          <a href="#control">Controls</a>
+          <a href="#product">Product</a>
+          <a href="#orchestration">Workflow</a>
           <a href="#privacy">Safety</a>
           <a href="https://github.com/lumpenop/agent-micro" target="_blank" rel="noreferrer">GitHub</a>
           <a class="nav-buy" href="#download">Download</a>
@@ -42,21 +43,30 @@
     <main id="top">
       <section class="hero">
         <div class="hero-copy reveal">
-          <p class="eyebrow">A control plane for parallel Codex work.</p>
-          <h1>Six agents.<br /><span>No collisions.</span></h1>
-          <p class="hero-lede">Keep one main workspace for coordination, then let Agent Micro assign parallel tasks to isolated Codex workers, recover a stopped session once, and merge them in dependency order.</p>
+          <a class="release-chip" href="https://github.com/lumpenop/agent-micro/releases/tag/v1.1.0" target="_blank" rel="noreferrer"><i></i> v1.1.0 · Public beta <span>↗</span></a>
+          <p class="eyebrow">A human-in-the-loop harness for Codex.</p>
+          <h1>Run six agents.<br /><span>Keep main clean.</span></h1>
+          <p class="hero-lede">Agent Micro turns parallel Codex sessions into a visible workflow: one coordinator, five isolated workers, one dependency-aware path back to main.</p>
           <div class="hero-actions">
-            <a class="button button-primary" href="#download">Download for macOS</a>
-            <a class="inline-link" href="#how">See how it works <span aria-hidden="true">›</span></a>
+            <a class="button button-primary" href="https://github.com/lumpenop/agent-micro/releases/latest">Download v1.1.0</a>
+            <a class="button button-secondary" href="#orchestration">See the workflow <span aria-hidden="true">↓</span></a>
           </div>
           <div class="hero-pills" aria-label="Compatibility">
-            <span>1 coordinator + 5 workers</span><span>Dependency merge queue</span><span>Safe auto-restart</span>
+            <span>Apple silicon</span><span>Codex CLI</span><span>Open source · MIT</span>
           </div>
         </div>
         <div class="hero-visual actual-ui-hero reveal" data-delay="1">
           <div class="hero-halo" aria-hidden="true"></div>
           <img src="./assets/agent-micro-ui.png" alt="The actual Agent Micro app showing its six Agent keys, command controls, and live telemetry" width="558" height="596" fetchpriority="high" />
-          <span class="actual-badge">Actual app · no mockup</span>
+          <span class="actual-badge"><i></i> Actual app · no mockup</span>
+          <div class="hero-callout hero-callout-auto"><span>WORKER</span><strong>Auto-assigned</strong><small>Agent 2 · isolated</small></div>
+          <div class="hero-callout hero-callout-safe"><span>MAIN</span><strong>Protected</strong><small>merge queue ready</small></div>
+        </div>
+        <div class="hero-proof reveal" data-delay="2" aria-label="Core capabilities">
+          <div><strong>1 + 5</strong><span>Coordinator + workers</span></div>
+          <div><strong>1:1</strong><span>Task to worktree</span></div>
+          <div><strong>1×</strong><span>Safe auto-restart</span></div>
+          <div><strong>0px</strong><span>Panel layout shift</span></div>
         </div>
       </section>
 
@@ -75,7 +85,7 @@
 
       <section class="product-intro section" id="product">
         <div class="section-copy centered reveal">
-          <p class="eyebrow">Built around attention</p>
+          <p class="eyebrow">The whole run, at a glance</p>
           <h2>Every Agent visible.<br /><span>Nothing tangled.</span></h2>
           <p>The floating pad shows which Agent is active, follows the terminal pane you click, and keeps model, status, approvals, and common commands close.</p>
         </div>
@@ -112,7 +122,7 @@
             <p class="eyebrow">macOS menu bar</p>
             <h2>See the important bits.<br /><span>Without opening the app.</span></h2>
             <p>Agent Micro keeps the current usage snapshot in your Mac menu bar, so the status is visible while you work in another app.</p>
-            <p class="korean-copy">메뉴바에서 현재 사용량과 다음 리셋까지 남은 시간을 바로 확인할 수 있어요. 앱을 열지 않아도 지금 여유가 있는지 한눈에 보입니다.</p>
+            <div class="korean-note"><span>한국어 안내</span><p>메뉴바에서 현재 사용량과 다음 리셋까지 남은 시간을 확인할 수 있어요. 앱을 열지 않아도 남은 여유가 한눈에 보입니다.</p></div>
             <div class="menubar-points">
               <span><i>01</i> Five-step usage graph</span>
               <span><i>02</i> Reset time at a glance</span>
@@ -181,21 +191,22 @@
       </section>
 
       <section class="download section" id="download">
-        <div class="download-orb" aria-hidden="true">⌁</div>
-        <p class="eyebrow reveal">Ready for your next task?</p>
-        <h2 class="reveal" data-delay="1">Make Codex<br /><span>feel closer.</span></h2>
+        <div class="download-orb" aria-hidden="true"><img src="./assets/app-icon.png" alt="" /></div>
+        <p class="eyebrow reveal">Agent Micro v1.1.0 · Public beta</p>
+        <h2 class="reveal" data-delay="1">Your agents.<br /><span>In reach.</span></h2>
         <p class="reveal" data-delay="2">Free, open source, and built for parallel Codex work on Apple silicon Macs.</p>
         <div class="reveal" data-delay="2">
           <a class="button button-primary" id="download-button" href="https://github.com/lumpenop/agent-micro/releases/latest">View latest release</a>
           <a class="github-star-link" href="https://github.com/lumpenop/agent-micro" target="_blank" rel="noreferrer" aria-label="Star Agent Micro on GitHub">★ Star on GitHub</a>
-          <span class="download-meta">macOS only · Apple silicon · Open source · MIT · Codex CLI required</span>
+          <span class="download-meta">macOS · Apple silicon · Open source · MIT · Codex CLI required</span>
+          <span class="download-warning">Unsigned public beta — macOS may ask you to confirm the first launch.</span>
         </div>
       </section>
     </main>
 
     <footer class="site-footer">
       <div class="footer-shell">
-        <a class="brand" href="#top"><span class="brand-glyph" aria-hidden="true">⌁</span><span>Agent Micro</span></a>
+        <a class="brand" href="#top"><span class="brand-glyph" aria-hidden="true"><img src="./assets/app-icon.png" alt="" /></span><span>Agent Micro</span></a>
         <p>Built for the next command.</p>
         <p><a class="footer-github" href="https://github.com/lumpenop/agent-micro" target="_blank" rel="noreferrer">GitHub ↗</a> · © <span id="year"></span> Agent Micro</p>
       </div>

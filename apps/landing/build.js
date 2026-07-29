@@ -7,7 +7,7 @@ const assets = path.join(out, 'assets');
 
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(assets, { recursive: true });
-for (const name of ['index.html', 'styles.css', 'script.js']) {
+for (const name of ['index.html', 'styles.css', 'quality.css', 'script.js']) {
   fs.copyFileSync(path.join(root, name), path.join(out, name));
 }
 const downloadUrl = String(process.env.AGENT_MICRO_DOWNLOAD_URL || '').trim();
