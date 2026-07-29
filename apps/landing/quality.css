@@ -16,6 +16,16 @@ body {
     #fff;
 }
 
+html[lang="ko"] body {
+  word-break: keep-all;
+}
+
+html[lang="ko"] h1,
+html[lang="ko"] h2,
+html[lang="ko"] h3 {
+  letter-spacing: -.045em;
+}
+
 ::selection {
   color: #fff;
   background: #1677ff;

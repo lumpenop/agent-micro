@@ -43,15 +43,15 @@ const downloadUrl = String(window.AGENT_MICRO_DOWNLOAD_URL || '').trim();
 if (downloadButton && downloadUrl) {
   downloadButton.href = downloadUrl;
   downloadButton.removeAttribute('aria-disabled');
-  downloadButton.textContent = 'Download Agent Micro';
+  downloadButton.textContent = 'Agent Micro 다운로드';
   downloadButton.target = '_blank';
   downloadButton.rel = 'noreferrer';
 } else {
   // Keep the page useful before a custom DMG URL is configured.
   if (downloadButton) {
-    downloadButton.href = 'https://github.com/lumpenop/agent-micro/releases/latest';
+    downloadButton.href = 'https://github.com/lumpenop/agent-micro/releases/download/v1.1.0/Agent.Micro-1.1.0-arm64.dmg';
     downloadButton.target = '_blank';
     downloadButton.rel = 'noreferrer';
-    downloadButton.textContent = 'View latest release';
+    downloadButton.textContent = 'macOS용 다운로드';
   }
 }

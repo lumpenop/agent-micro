@@ -1,31 +1,31 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Run six Codex agents while keeping main clean. Agent Micro auto-assigns isolated workers, recovers stopped sessions, and queues safe merges." />
+    <meta name="description" content="최대 6개의 Codex 에이전트를 병렬로 실행하세요. Agent Micro가 작업별 Git worktree 격리, 중단 세션 복구, 안전한 병합 순서를 관리합니다." />
     <meta name="author" content="Agent Micro" />
     <meta name="robots" content="index, follow, max-image-preview:large" />
-    <meta name="keywords" content="Codex, Codex CLI, AI agents, parallel coding agents, git worktree, macOS developer tools, Agent Micro" />
+    <meta name="keywords" content="Codex, Codex CLI, AI 에이전트, 병렬 코딩 에이전트, Git worktree, macOS 개발 도구, Agent Micro" />
     <meta name="theme-color" content="#eef3f8" />
     <link rel="canonical" href="https://agent-micro.vercel.app/" />
-    <meta property="og:title" content="Agent Micro — Run six agents. Keep main clean." />
-    <meta property="og:description" content="A human-in-the-loop macOS harness for parallel Codex work." />
+    <meta property="og:title" content="Agent Micro — 여섯 에이전트는 병렬로, main은 안전하게." />
+    <meta property="og:description" content="여러 Codex 에이전트를 격리하고 복구하며 순서대로 병합하는 macOS용 에이전트 하네스." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://agent-micro.vercel.app/" />
     <meta property="og:site_name" content="Agent Micro" />
-    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale" content="ko_KR" />
     <meta property="og:image" content="https://agent-micro.vercel.app/assets/og.png" />
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="Agent Micro product interface with Agent Manager and six-agent control pad" />
+    <meta property="og:image:alt" content="Agent Manager와 6개 에이전트 제어 패드가 표시된 Agent Micro 실제 제품 화면" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Agent Micro — Run six agents. Keep main clean." />
-    <meta name="twitter:description" content="A human-in-the-loop macOS harness for parallel Codex work." />
+    <meta name="twitter:title" content="Agent Micro — 여섯 에이전트는 병렬로, main은 안전하게." />
+    <meta name="twitter:description" content="여러 Codex 에이전트를 격리하고 복구하며 순서대로 병합하는 macOS용 에이전트 하네스." />
     <meta name="twitter:image" content="https://agent-micro.vercel.app/assets/og.png" />
-    <meta name="twitter:image:alt" content="Agent Micro product interface with Agent Manager and six-agent control pad" />
-    <title>Agent Micro — Run six agents. Keep main clean.</title>
+    <meta name="twitter:image:alt" content="Agent Manager와 6개 에이전트 제어 패드가 표시된 Agent Micro 실제 제품 화면" />
+    <title>Agent Micro — 여섯 에이전트는 병렬로, main은 안전하게.</title>
     <link rel="icon" href="./assets/app-icon.png" type="image/png" />
     <link rel="preload" href="./assets/agent-micro-ui.png" as="image" fetchpriority="high" />
     <link rel="stylesheet" href="./styles.css" />
@@ -40,28 +40,29 @@
         "codeRepository": "https://github.com/lumpenop/agent-micro",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "macOS",
+        "inLanguage": "ko-KR",
         "license": "https://opensource.org/licenses/MIT",
-        "description": "A human-in-the-loop macOS harness for running parallel Codex agents in isolated Git worktrees."
+        "description": "여러 Codex 에이전트를 독립된 Git worktree에서 병렬 실행하고 안전하게 병합하도록 돕는 macOS용 에이전트 하네스."
       }
     </script>
   </head>
   <body>
     <header class="site-header">
       <div class="nav-shell">
-        <a class="brand" href="#top" aria-label="Agent Micro home">
+        <a class="brand" href="#top" aria-label="Agent Micro 홈">
           <span class="brand-glyph" aria-hidden="true"><img src="./assets/app-icon.png" alt="" /></span>
           <span>Agent Micro</span>
-          <small>PUBLIC BETA</small>
+          <small>공개 베타</small>
         </a>
         <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">
-          <span></span><span></span><span class="sr-only">Open menu</span>
+          <span></span><span></span><span class="sr-only">메뉴 열기</span>
         </button>
-        <nav id="site-nav" class="site-nav" aria-label="Main navigation">
-          <a href="#product">Product</a>
-          <a href="#orchestration">Workflow</a>
-          <a href="#privacy">Safety</a>
+        <nav id="site-nav" class="site-nav" aria-label="주요 메뉴">
+          <a href="#product">제품</a>
+          <a href="#orchestration">워크플로</a>
+          <a href="#privacy">안전성</a>
           <a href="https://github.com/lumpenop/agent-micro" target="_blank" rel="noreferrer">GitHub</a>
-          <a class="nav-buy" href="#download">Download</a>
+          <a class="nav-buy" href="#download">다운로드</a>
         </nav>
       </div>
     </header>
@@ -69,56 +70,56 @@
     <main id="top">
       <section class="hero">
         <div class="hero-copy reveal">
-          <a class="release-chip" href="https://github.com/lumpenop/agent-micro/releases/tag/v1.1.0" target="_blank" rel="noreferrer"><i></i> v1.1.0 · Public beta <span>↗</span></a>
-          <p class="eyebrow">A human-in-the-loop harness for Codex.</p>
-          <h1>Run six agents.<br /><span>Keep main clean.</span></h1>
-          <p class="hero-lede">Agent Micro turns parallel Codex sessions into a visible workflow: one coordinator, five isolated workers, one dependency-aware path back to main.</p>
+          <a class="release-chip" href="https://github.com/lumpenop/agent-micro/releases/tag/v1.1.0" target="_blank" rel="noreferrer"><i></i> v1.1.0 · 공개 베타 <span>↗</span></a>
+          <p class="eyebrow">Codex를 위한 사람 중심의 에이전트 하네스</p>
+          <h1>여섯 에이전트.<br /><span>main은 안전하게.</span></h1>
+          <p class="hero-lede">하나의 조정 에이전트와 다섯 개의 격리된 작업 에이전트. Agent Micro가 배정부터 복구, 병합 순서까지 한눈에 관리합니다.</p>
           <div class="hero-actions">
-            <a class="button button-primary" href="https://github.com/lumpenop/agent-micro/releases/latest">Download v1.1.0</a>
-            <a class="button button-secondary" href="#orchestration">See the workflow <span aria-hidden="true">↓</span></a>
+            <a class="button button-primary" href="https://github.com/lumpenop/agent-micro/releases/download/v1.1.0/Agent.Micro-1.1.0-arm64.dmg">macOS용 다운로드</a>
+            <a class="button button-secondary" href="#orchestration">작동 방식 보기 <span aria-hidden="true">↓</span></a>
           </div>
-          <div class="hero-pills" aria-label="Compatibility">
-            <span>Apple silicon</span><span>Codex CLI</span><span>Open source · MIT</span>
+          <div class="hero-pills" aria-label="호환 환경">
+            <span>Apple silicon</span><span>Codex CLI</span><span>오픈소스 · MIT</span>
           </div>
         </div>
         <div class="hero-visual actual-ui-hero reveal" data-delay="1">
           <div class="hero-halo" aria-hidden="true"></div>
-          <img src="./assets/agent-micro-ui.png" alt="The actual Agent Micro app showing its six Agent keys, command controls, and live telemetry" width="558" height="596" fetchpriority="high" />
-          <span class="actual-badge"><i></i> Actual app · no mockup</span>
-          <div class="hero-callout hero-callout-auto"><span>WORKER</span><strong>Auto-assigned</strong><small>Agent 2 · isolated</small></div>
-          <div class="hero-callout hero-callout-safe"><span>MAIN</span><strong>Protected</strong><small>merge queue ready</small></div>
+          <img src="./assets/agent-micro-ui.png" alt="6개 에이전트 키와 명령 버튼, 실시간 상태가 표시된 Agent Micro 실제 앱 화면" width="558" height="596" fetchpriority="high" />
+          <span class="actual-badge"><i></i> 실제 앱 화면</span>
+          <div class="hero-callout hero-callout-auto"><span>WORKER</span><strong>자동 배정</strong><small>Agent 2 · 격리됨</small></div>
+          <div class="hero-callout hero-callout-safe"><span>MAIN</span><strong>보호됨</strong><small>병합 큐 준비</small></div>
         </div>
-        <div class="hero-proof reveal" data-delay="2" aria-label="Core capabilities">
-          <div><strong>1 + 5</strong><span>Coordinator + workers</span></div>
-          <div><strong>1:1</strong><span>Task to worktree</span></div>
-          <div><strong>1×</strong><span>Safe auto-restart</span></div>
-          <div><strong>0px</strong><span>Panel layout shift</span></div>
+        <div class="hero-proof reveal" data-delay="2" aria-label="핵심 기능">
+          <div><strong>1 + 5</strong><span>조정 에이전트 + 작업 에이전트</span></div>
+          <div><strong>1:1</strong><span>작업별 독립 worktree</span></div>
+          <div><strong>1×</strong><span>중단 세션 안전 재시작</span></div>
+          <div><strong>0px</strong><span>패널을 열어도 위치 고정</span></div>
         </div>
       </section>
 
       <section class="how section" id="how">
         <div class="section-copy centered reveal">
-          <p class="eyebrow">Start in three steps</p>
-          <h2>From one project<br /><span>to parallel work.</span></h2>
-          <p>Connect your existing Codex CLI, choose a repository, then hand separate tasks to separate Agents.</p>
+          <p class="eyebrow">세 단계로 시작</p>
+          <h2>프로젝트 하나에서<br /><span>병렬 작업까지.</span></h2>
+          <p>기존 Codex CLI를 연결하고 저장소를 고른 다음, 서로 다른 작업을 각 에이전트에 맡기세요.</p>
         </div>
         <div class="steps-grid">
-          <article class="step-card reveal"><span class="step-number">01</span><div><h3>Connect Codex</h3><p>Sign in with ChatGPT once. If Codex is already signed in on your Mac, this step can complete automatically.</p></div></article>
-          <article class="step-card reveal" data-delay="1"><span class="step-number">02</span><div><h3>Choose a repository</h3><p>Pick the project once. Agent Micro reads its Git state and keeps your main workspace explicit.</p></div></article>
-          <article class="step-card reveal" data-delay="2"><span class="step-number">03</span><div><h3>Describe the task</h3><p>Agent Micro picks the next free Worker, creates its worktree and branch, and launches Codex automatically.</p></div></article>
+          <article class="step-card reveal"><span class="step-number">01</span><div><h3>Codex 연결</h3><p>ChatGPT로 한 번 로그인하세요. Mac에서 Codex에 이미 로그인했다면 자동으로 연결됩니다.</p></div></article>
+          <article class="step-card reveal" data-delay="1"><span class="step-number">02</span><div><h3>저장소 선택</h3><p>프로젝트를 한 번 선택하면 Agent Micro가 Git 상태를 읽고 main 작업 공간을 명확히 구분합니다.</p></div></article>
+          <article class="step-card reveal" data-delay="2"><span class="step-number">03</span><div><h3>작업 설명</h3><p>할 일을 입력하면 비어 있는 Worker를 찾아 worktree와 브랜치를 만들고 Codex를 자동 실행합니다.</p></div></article>
         </div>
       </section>
 
       <section class="product-intro section" id="product">
         <div class="section-copy centered reveal">
-          <p class="eyebrow">The whole run, at a glance</p>
-          <h2>Every Agent visible.<br /><span>Nothing tangled.</span></h2>
-          <p>The floating pad shows which Agent is active, follows the terminal pane you click, and keeps model, status, approvals, and common commands close.</p>
+          <p class="eyebrow">전체 실행을 한눈에</p>
+          <h2>모든 에이전트는 보이고.<br /><span>작업은 섞이지 않게.</span></h2>
+          <p>플로팅 패드가 현재 에이전트를 표시하고 클릭한 터미널 창을 따라갑니다. 모델, 상태, 승인과 자주 쓰는 명령을 가까이 두세요.</p>
         </div>
         <div class="product-facts reveal">
-          <div><strong>1 + 5</strong><span>coordinator and worker slots</span></div>
-          <div><strong>1:1</strong><span>worker task-to-worktree isolation</span></div>
-          <div><strong>1×</strong><span>safe session auto-restart</span></div>
+          <div><strong>1 + 5</strong><span>조정 에이전트와 Worker 슬롯</span></div>
+          <div><strong>1:1</strong><span>작업과 worktree를 일대일 격리</span></div>
+          <div><strong>1×</strong><span>중단 세션을 한 번 안전하게 복구</span></div>
         </div>
       </section>
 
@@ -126,18 +127,18 @@
         <div class="orchestration-layout">
           <div class="section-copy reveal">
             <p class="eyebrow">Agent Manager</p>
-            <h2>Assign. Recover.<br /><span>Merge in order.</span></h2>
-            <p>Agent 1 stays on main. Agent Micro assigns the next free Worker, detects a stopped session, retries it once without looping, and holds every merge until its selected predecessor is complete.</p>
+            <h2>배정하고 복구하고.<br /><span>순서대로 병합하세요.</span></h2>
+            <p>Agent 1은 main을 지킵니다. Agent Micro는 다음 Worker를 자동 배정하고, 중단된 세션은 반복 없이 한 번 복구하며, 선행 작업이 끝날 때까지 병합을 대기시킵니다.</p>
             <div class="orchestration-points">
-              <span><i>01</i> Auto-assign the next free Worker</span>
-              <span><i>02</i> Retry a stopped session once</span>
-              <span><i>03</i> Queue merges by dependency</span>
-              <span><i>04</i> Block dirty, overlapping, or early merges</span>
+              <span><i>01</i> 비어 있는 Worker 자동 배정</span>
+              <span><i>02</i> 중단된 세션 한 번만 재시도</span>
+              <span><i>03</i> 작업 의존성에 따라 병합 대기</span>
+              <span><i>04</i> 변경 중·파일 중복·이른 병합 차단</span>
             </div>
           </div>
           <div class="actual-manager-frame reveal" data-delay="1">
-            <img src="./assets/agent-manager-ui.png" alt="The actual Agent Micro Agent Manager open beside the six-key control pad" width="768" height="596" loading="lazy" />
-            <span class="actual-badge">Actual Agent Manager</span>
+            <img src="./assets/agent-manager-ui.png" alt="6개 에이전트 제어 패드 옆에 열린 Agent Micro의 실제 Agent Manager 화면" width="768" height="596" loading="lazy" />
+            <span class="actual-badge">실제 Agent Manager</span>
           </div>
         </div>
       </section>
@@ -145,19 +146,19 @@
       <section class="menubar section" id="menubar">
         <div class="menubar-layout">
           <div class="section-copy reveal">
-            <p class="eyebrow">macOS menu bar</p>
-            <h2>See the important bits.<br /><span>Without opening the app.</span></h2>
-            <p>Agent Micro keeps the current usage snapshot in your Mac menu bar, so the status is visible while you work in another app.</p>
-            <div class="korean-note"><span>한국어 안내</span><p>메뉴바에서 현재 사용량과 다음 리셋까지 남은 시간을 확인할 수 있어요. 앱을 열지 않아도 남은 여유가 한눈에 보입니다.</p></div>
+            <p class="eyebrow">macOS 메뉴 막대</p>
+            <h2>필요한 상태만.<br /><span>앱을 열지 않고.</span></h2>
+            <p>다른 앱에서 작업하는 동안에도 메뉴 막대에서 현재 사용량과 다음 리셋까지 남은 시간을 확인할 수 있습니다.</p>
+            <div class="korean-note"><span>항상 보이는 상태</span><p>다섯 칸 그래프로 사용량을 빠르게 읽고, 클릭하면 바로 Agent Micro로 돌아갑니다.</p></div>
             <div class="menubar-points">
-              <span><i>01</i> Five-step usage graph</span>
-              <span><i>02</i> Reset time at a glance</span>
-              <span><i>03</i> Click to return to Agent Micro</span>
+              <span><i>01</i> 다섯 칸 사용량 그래프</span>
+              <span><i>02</i> 다음 리셋까지 남은 시간</span>
+              <span><i>03</i> 클릭해서 Agent Micro로 이동</span>
             </div>
           </div>
           <figure class="menubar-shot reveal" data-delay="1">
-            <div class="menubar-shot-bar"><span>Agent Micro · menu bar status</span><span>macOS</span></div>
-            <img src="./assets/agent-micro-menubar.png" alt="Agent Micro usage and reset status in the macOS menu bar" width="500" height="40" loading="lazy" />
+            <div class="menubar-shot-bar"><span>Agent Micro · 메뉴 막대 상태</span><span>macOS</span></div>
+            <img src="./assets/agent-micro-menubar.png" alt="macOS 메뉴 막대에 표시된 Agent Micro 사용량과 리셋 상태" width="500" height="40" loading="lazy" />
             <figcaption>실제 앱의 메뉴바 상태 표시</figcaption>
           </figure>
         </div>
@@ -165,18 +166,18 @@
 
       <section class="control section-dark" id="control">
         <div class="section-copy centered reveal">
-          <p class="eyebrow">One surface. Every move.</p>
-          <h2>Control the Agent<br />you are actually in.</h2>
-            <p>Click a terminal pane and Agent Micro follows. Switch sessions, clear stale drafts, change models, approve, decline, fork, or review without losing the active target. Git and Agent Manager open beside the pad without shifting it.</p>
+          <p class="eyebrow">하나의 패드로 모든 조작</p>
+          <h2>지금 보고 있는 에이전트만.<br />정확하게 제어하세요.</h2>
+            <p>터미널 창을 클릭하면 Agent Micro가 따라갑니다. 활성 대상을 놓치지 않고 세션 전환, 입력 지우기, 모델 변경, 승인, 거절, 포크와 리뷰를 실행하세요. Git과 Agent Manager를 열어도 패드는 밀리지 않습니다.</p>
         </div>
         <div class="control-grid">
           <article class="control-card reveal">
             <div class="agent-grid" aria-hidden="true"><i></i><i class="active"></i><i></i><i></i><i></i><i></i></div>
-            <div><p class="card-kicker">Focus sync</p><h3>Click a pane.<br />The pad follows.</h3><p>The selected 1–6 key, model, and status update when you focus a tracked Terminal or Ghostty session.</p></div>
+            <div><p class="card-kicker">포커스 동기화</p><h3>터미널을 클릭하면.<br />패드가 따라갑니다.</h3><p>추적 중인 Terminal 또는 Ghostty 세션을 선택하면 1–6 키와 모델, 상태가 함께 바뀝니다.</p></div>
           </article>
           <article class="control-card command-card reveal" data-delay="1">
             <div class="command-row" aria-hidden="true"><kbd>✓</kbd><kbd>×</kbd><kbd>↗</kbd></div>
-            <div><p class="card-kicker">Clean commands</p><h3>Clear. Execute.<br />Keep moving.</h3><p>Command buttons clear stale CLI input before running their assigned action, so a forgotten draft never contaminates the next command.</p></div>
+            <div><p class="card-kicker">깨끗한 명령 실행</p><h3>입력은 지우고.<br />명령만 실행합니다.</h3><p>명령 버튼은 남아 있는 CLI 입력을 먼저 지웁니다. 작성 중이던 문장이 다음 명령과 섞이지 않습니다.</p></div>
           </article>
         </div>
       </section>
@@ -184,18 +185,18 @@
       <section class="rules section" id="rules">
         <div class="rules-layout">
           <div class="section-copy reveal">
-            <p class="eyebrow">A role for every agent</p>
-            <h2>Set the rules.<br /><span>Once.</span></h2>
-            <p>Give each slot its own role, model, workspace, tools, and instructions. Use Codex CLI or an OpenAI-compatible custom API without exposing advanced controls in the everyday view.</p>
-          <a class="inline-link" href="#download">Get Agent Micro <span aria-hidden="true">›</span></a>
+            <p class="eyebrow">에이전트마다 역할 하나</p>
+            <h2>규칙은 한 번만.<br /><span>설정하세요.</span></h2>
+            <p>각 슬롯에 역할, 모델, 작업 공간, 도구와 지시사항을 지정하세요. 일상 화면은 단순하게 유지하면서 Codex CLI 또는 OpenAI 호환 커스텀 API를 사용할 수 있습니다.</p>
+          <a class="inline-link" href="#download">Agent Micro 받기 <span aria-hidden="true">›</span></a>
           </div>
-          <div class="rules-panel reveal" data-delay="1" aria-label="Agent rules configuration preview">
-            <div class="panel-top"><span>Agent profiles</span><span>3 active</span></div>
+          <div class="rules-panel reveal" data-delay="1" aria-label="에이전트 규칙 설정 미리보기">
+            <div class="panel-top"><span>에이전트 프로필</span><span>3개 활성</span></div>
             <div class="agent-tabs"><button class="selected">01</button><button>02</button><button>03</button><button>04</button><button>05</button><button>06</button></div>
-            <div class="rule-field"><span>Role</span><strong>Product engineer</strong></div>
-            <div class="rule-field"><span>Workspace</span><strong>agent-micro / app</strong></div>
-            <div class="rule-field large"><span>Instructions</span><p>Keep changes focused. Verify the interface at every breakpoint. Preserve local-first behavior.</p></div>
-            <div class="rule-tags"><span>Codex</span><span>on-request</span><span>workspace-write</span></div>
+            <div class="rule-field"><span>역할</span><strong>제품 엔지니어</strong></div>
+            <div class="rule-field"><span>작업 공간</span><strong>agent-micro / app</strong></div>
+            <div class="rule-field large"><span>지시사항</span><p>변경 범위를 작게 유지합니다. 모든 화면 크기에서 UI를 확인하고 로컬 우선 동작을 지킵니다.</p></div>
+            <div class="rule-tags"><span>Codex</span><span>요청 시 승인</span><span>작업 공간 쓰기</span></div>
           </div>
         </div>
       </section>
@@ -204,28 +205,28 @@
         <div class="privacy-card reveal">
           <div class="privacy-icon" aria-hidden="true"><span></span></div>
           <div class="privacy-copy">
-            <p class="eyebrow">Git-native safety</p>
-            <h2>Your main workspace<br /><span>stays out of the crossfire.</span></h2>
-            <p>Parallel tasks start from an explicit commit, run in separate worktrees, and cannot merge while dirty or overlapping another Agent’s files.</p>
+            <p class="eyebrow">Git 기반 안전장치</p>
+            <h2>main 작업 공간은.<br /><span>충돌에서 지킵니다.</span></h2>
+            <p>병렬 작업은 명시된 커밋에서 시작해 서로 다른 worktree에서 실행됩니다. 변경 중이거나 다른 에이전트와 파일이 겹치면 병합할 수 없습니다.</p>
           </div>
           <ul class="privacy-list">
-            <li><span>01</span>Dirty Agent work is blocked from merge</li>
-            <li><span>02</span>Shared-file overlap is surfaced early</li>
-            <li><span>03</span>Completed worktrees clean up safely</li>
+            <li><span>01</span>커밋되지 않은 작업은 병합 차단</li>
+            <li><span>02</span>겹치는 파일을 병합 전에 표시</li>
+            <li><span>03</span>완료된 worktree는 안전하게 정리</li>
           </ul>
         </div>
       </section>
 
       <section class="download section" id="download">
         <div class="download-orb" aria-hidden="true"><img src="./assets/app-icon.png" alt="" /></div>
-        <p class="eyebrow reveal">Agent Micro v1.1.0 · Public beta</p>
-        <h2 class="reveal" data-delay="1">Your agents.<br /><span>In reach.</span></h2>
-        <p class="reveal" data-delay="2">Free, open source, and built for parallel Codex work on Apple silicon Macs.</p>
+        <p class="eyebrow reveal">Agent Micro v1.1.0 · 공개 베타</p>
+        <h2 class="reveal" data-delay="1">여섯 에이전트를.<br /><span>손 닿는 곳에.</span></h2>
+        <p class="reveal" data-delay="2">Apple silicon Mac에서 병렬 Codex 작업을 관리하는 무료 오픈소스 도구입니다.</p>
         <div class="reveal" data-delay="2">
-          <a class="button button-primary" id="download-button" href="https://github.com/lumpenop/agent-micro/releases/latest">View latest release</a>
-          <a class="github-star-link" href="https://github.com/lumpenop/agent-micro" target="_blank" rel="noreferrer" aria-label="Star Agent Micro on GitHub">★ Star on GitHub</a>
-          <span class="download-meta">macOS · Apple silicon · Open source · MIT · Codex CLI required</span>
-          <span class="download-warning">Unsigned public beta — macOS may ask you to confirm the first launch.</span>
+          <a class="button button-primary" id="download-button" href="https://github.com/lumpenop/agent-micro/releases/download/v1.1.0/Agent.Micro-1.1.0-arm64.dmg">macOS용 다운로드</a>
+          <a class="github-star-link" href="https://github.com/lumpenop/agent-micro" target="_blank" rel="noreferrer" aria-label="GitHub에서 Agent Micro에 스타 남기기">★ GitHub에서 스타</a>
+          <span class="download-meta">macOS · Apple silicon · 오픈소스 · MIT · Codex CLI 필요</span>
+          <span class="download-warning">서명되지 않은 공개 베타입니다. 처음 실행할 때 macOS가 확인을 요청할 수 있습니다.</span>
         </div>
       </section>
     </main>
@@ -233,7 +234,7 @@
     <footer class="site-footer">
       <div class="footer-shell">
         <a class="brand" href="#top"><span class="brand-glyph" aria-hidden="true"><img src="./assets/app-icon.png" alt="" /></span><span>Agent Micro</span></a>
-        <p>Built for the next command.</p>
+        <p>다음 명령을 더 빠르게.</p>
         <p><a class="footer-github" href="https://github.com/lumpenop/agent-micro" target="_blank" rel="noreferrer">GitHub ↗</a> · © <span id="year"></span> Agent Micro</p>
       </div>
     </footer>

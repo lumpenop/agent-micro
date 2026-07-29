@@ -83,17 +83,17 @@ let titleAttributes: [NSAttributedString.Key: Any] = [
 )
 
 let taglineAttributes: [NSAttributedString.Key: Any] = [
-    .font: NSFont.systemFont(ofSize: 37, weight: .medium),
+    .font: NSFont.systemFont(ofSize: 35, weight: .semibold),
     .foregroundColor: NSColor(calibratedRed: 0.18, green: 0.23, blue: 0.28, alpha: 1),
     .paragraphStyle: paragraph,
     .kern: -0.8
 ]
-("Run six agents.\nKeep main clean." as NSString).draw(
+("여섯 에이전트는 병렬로.\nmain은 안전하게." as NSString).draw(
     in: NSRect(x: 72, y: 208, width: 420, height: 104),
     withAttributes: taglineAttributes
 )
 
-let badgeRect = NSRect(x: 72, y: 128, width: 239, height: 43)
+let badgeRect = NSRect(x: 72, y: 128, width: 221, height: 43)
 NSColor(calibratedRed: 0.05, green: 0.075, blue: 0.095, alpha: 1).setFill()
 NSBezierPath(roundedRect: badgeRect, xRadius: 21.5, yRadius: 21.5).fill()
 let badgeAttributes: [NSAttributedString.Key: Any] = [
@@ -101,8 +101,8 @@ let badgeAttributes: [NSAttributedString.Key: Any] = [
     .foregroundColor: NSColor.white,
     .kern: 0.3
 ]
-("OPEN SOURCE · macOS" as NSString).draw(
-    in: NSRect(x: 92, y: 140, width: 207, height: 22),
+("오픈소스 · macOS" as NSString).draw(
+    in: NSRect(x: 92, y: 140, width: 185, height: 22),
     withAttributes: badgeAttributes
 )
 
