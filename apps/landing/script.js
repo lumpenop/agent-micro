@@ -33,7 +33,7 @@ if ('IntersectionObserver' in window && !window.matchMedia('(prefers-reduced-mot
 const downloadButton = document.querySelector('#download-button');
 const downloadUrl = String(window.AGENT_MICRO_DOWNLOAD_URL || '').trim();
 if (downloadButton) {
-  downloadButton.href = downloadUrl || 'https://github.com/lumpenop/agent-micro/releases/download/v1.2.0/Agent.Micro-1.2.0-arm64.dmg';
+  downloadButton.href = downloadUrl || 'https://github.com/lumpenop/agent-micro/releases/download/v1.2.1/Agent.Micro-1.2.1-arm64.dmg';
   downloadButton.target = '_blank';
   downloadButton.rel = 'noreferrer';
 }
@@ -57,7 +57,7 @@ function applyLanguage(language) {
     ? 'Agent Micro — Complex Codex controls, within reach.'
     : 'Agent Micro — Codex를 더 쉽고 빠르게.';
 
-  setCopy('.site-nav > a', ['Controls', 'Settings', 'Usage', 'Git', 'Agents', 'Download'], english);
+  setCopy('.site-nav > a', ['Controls', 'Settings', 'Usage', 'Git', 'Agents', '<span aria-hidden="true">★</span> GitHub', 'Download'], english);
   setCopy('.product-hero-copy > .eyebrow', ['CODEX CONTROL SURFACE FOR macOS'], english);
   setCopy('.product-hero-copy > h1', ['Complex Codex controls.<br /><span>Right under your fingers.</span>'], english);
   setCopy('.product-hero-copy > .hero-lede', ['Change models, toggle Fast mode, approve or decline, fork conversations, select agents, use Git, and manage usage and resources. Click a button or press a shortcut instead of memorizing commands.'], english);
@@ -117,20 +117,20 @@ function applyLanguage(language) {
     'Set the maximum wait for each tool call',
   ], english);
 
-  setCopy('.setup-step strong', ['Prepare Git', 'Connect Codex', 'Choose a project', 'Start your first Agent'], english);
+  setCopy('.setup-step strong', ['Connect Codex', 'Connect GitHub <em>Optional</em>', 'Choose a project', 'Start your first Agent'], english);
   setCopy('.setup-step small', [
-    'git version 2.50.1 · Ready',
-    'Sign in with your ChatGPT account',
+    'Signed in with your ChatGPT account',
+    'Quick browser sign-in',
     'Pick the folder Codex should work in',
     'Open a ready-to-use session',
   ], english);
   setCopy('.setup-step button', ['Connect', 'Choose', 'Start'], english);
-  setCopy('.setup-card > p', ['If Git is missing, start Homebrew or the macOS installer with one button.'], english);
+  setCopy('.setup-card > p', ['GitHub is optional. Skip it and local Git and Codex still work as usual.'], english);
   setCopy('.git-panel-card > p', ['✦ Read the changes and generate a commit message'], english);
-  setCopy('#git .section-copy > h2', ['From installing Git.<br /><span>To commits and merges.</span>'], english);
-  setCopy('#git .section-copy > p:last-of-type', ['Agent Micro checks Git on first launch and helps install it when missing. During work, manage changed files, staging, Pull, Push, commits, and generated messages inside the app.'], english);
+  setCopy('#git .section-copy > h2', ['Local Git, ready now.<br /><span>GitHub when you need it.</span>'], english);
+  setCopy('#git .section-copy > p:last-of-type', ['Use local Git immediately, then optionally connect GitHub during first run or later in Settings. Manage changed files, staging, Pull, Push, commits, and generated messages inside the app.'], english);
   setCopy('#git .check-list li', [
-    '<i>01</i> Detect Git and start installation on first run',
+    '<i>01</i> Detect an existing GitHub login on first run',
     '<i>02</i> See branch, changed files, and staged state',
     '<i>03</i> Stage or unstage files individually or all at once',
     '<i>04</i> Pull, Push, and generate commit messages',

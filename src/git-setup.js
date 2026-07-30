@@ -102,4 +102,93 @@ async function installGit({ openExternal } = {}) {
   return { ok: true, installed: false, installMethod: 'manual', launched: true };
 }
 
-module.exports = { detectGit, installGit };
+async function detectGitHub() {
+  const git = await detectGit();
+  const gh = await findWorkingBinary('gh', ['--version']);
+  if (!gh) {
+    return {
+      ok: true,
+      connected: false,
+      clientInstalled: false,
+      gitInstalled: git.installed,
+      installMethod: process.platform === 'darwin' ? 'homebrew-or-manual' : 'manual',
+    };
+  }
+
+  try {
+    await run(gh.path, ['auth', 'status', '--hostname', 'github.com'], { timeout: 10000 });
+    let account = '';
+    try {
+      account = await run(gh.path, ['api', 'user', '--jq', '.login'], { timeout: 10000 });
+    } catch {
+      // Authentication is valid even if account lookup is unavailable.
+    }
+    return {
+      ok: true,
+      connected: true,
+      clientInstalled: true,
+      gitInstalled: git.installed,
+      path: gh.path,
+      version: gh.output.split(/\r?\n/, 1)[0],
+      account: account.trim(),
+    };
+  } catch (error) {
+    return {
+      ok: true,
+      connected: false,
+      clientInstalled: true,
+      gitInstalled: git.installed,
+      path: gh.path,
+      version: gh.output.split(/\r?\n/, 1)[0],
+      error: error.output || error.message,
+    };
+  }
+}
+
+async function connectGitHub({ openExternal } = {}) {
+  const current = await detectGitHub();
+  if (current.connected) return current;
+
+  let gh = await findWorkingBinary('gh', ['--version']);
+  if (!gh && process.platform === 'darwin') {
+    const brew = await findWorkingBinary('brew', ['--version']);
+    if (brew) {
+      try {
+        await run(brew.path, ['install', 'gh'], { timeout: 20 * 60 * 1000 });
+        gh = await findWorkingBinary('gh', ['--version']);
+      } catch (error) {
+        return { ok: false, connected: false, error: error.output || error.message };
+      }
+    }
+  }
+
+  if (!gh) {
+    await openExternal?.('https://cli.github.com/');
+    return {
+      ok: true,
+      connected: false,
+      clientInstalled: false,
+      launched: true,
+      installMethod: 'manual',
+    };
+  }
+
+  try {
+    await run(
+      gh.path,
+      ['auth', 'login', '--hostname', 'github.com', '--git-protocol', 'https', '--web', '--clipboard'],
+      { timeout: 5 * 60 * 1000 }
+    );
+    return await detectGitHub();
+  } catch (error) {
+    const status = await detectGitHub();
+    if (status.connected) return status;
+    return {
+      ...status,
+      ok: false,
+      error: error.output || error.message,
+    };
+  }
+}
+
+module.exports = { detectGit, installGit, detectGitHub, connectGitHub };

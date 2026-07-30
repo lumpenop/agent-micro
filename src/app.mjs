@@ -729,25 +729,25 @@ const loginGateLeadEl = document.getElementById('login-gate-lead');
 const loginProviderGrid = document.getElementById('login-provider-grid');
 let _pendingLoginProvider = 'codex';
 const ONBOARDING_KEY = 'agent-micro-onboarding-complete-v1';
-const ONBOARDING_GIT_SKIP_KEY = 'agent-micro-onboarding-git-skipped-v1';
+const ONBOARDING_GITHUB_SKIP_KEY = 'agent-micro-onboarding-github-skipped-v1';
 let onboardingDirectory = '';
-let onboardingGitStatus = { checked: false, installed: false, installMethod: 'manual' };
-let onboardingGitBusy = false;
-let onboardingGitSkipped = localStorage.getItem(ONBOARDING_GIT_SKIP_KEY) === '1';
+let onboardingGitHubStatus = { checked: false, connected: false, clientInstalled: false };
+let onboardingGitHubBusy = false;
+let onboardingGitHubSkipped = localStorage.getItem(ONBOARDING_GITHUB_SKIP_KEY) === '1';
 
 function onboardingComplete() {
   return localStorage.getItem(ONBOARDING_KEY) === '1';
 }
 
 function updateOnboardingUI() {
-  const gitReady = !!onboardingGitStatus.installed;
-  const gitSettled = gitReady || onboardingGitSkipped;
+  const githubReady = !!onboardingGitHubStatus.connected;
+  const githubSettled = githubReady || onboardingGitHubSkipped;
   const connected = !!state.connected;
   const folder = String(onboardingDirectory || '').trim();
-  const ready = connected && gitSettled && !!folder;
+  const ready = connected && githubSettled && !!folder;
   const steps = [
     [document.getElementById('onboarding-step-connect'), connected],
-    [document.getElementById('onboarding-step-git'), connected && gitSettled],
+    [document.getElementById('onboarding-step-github'), connected && githubSettled],
     [document.getElementById('onboarding-step-folder'), connected && !!folder],
     [document.getElementById('onboarding-step-start'), false],
   ];
@@ -761,60 +761,62 @@ function updateOnboardingUI() {
   }
   const folderLabel = document.getElementById('onboarding-folder-label');
   if (folderLabel) folderLabel.textContent = folder ? folder.split(/[\\/]+/).filter(Boolean).pop() : t('onboarding.folder.desc');
-  const gitLabel = document.getElementById('onboarding-git-label');
-  const gitBtn = document.getElementById('onboarding-git-btn');
-  const gitSkipBtn = document.getElementById('onboarding-git-skip-btn');
+  const githubLabel = document.getElementById('onboarding-github-label');
+  const githubBtn = document.getElementById('onboarding-github-btn');
+  const githubSkipBtn = document.getElementById('onboarding-github-skip-btn');
   const folderBtn = document.getElementById('onboarding-folder-btn');
   const startBtn = document.getElementById('onboarding-start-btn');
-  if (gitLabel) {
-    gitLabel.textContent = gitReady
-      ? onboardingGitStatus.version || t('onboarding.git.readyDesc')
-      : onboardingGitSkipped
-        ? t('onboarding.git.skippedDesc')
-      : onboardingGitStatus.launched
-        ? t('onboarding.git.opened')
-        : t('onboarding.git.desc');
+  if (githubLabel) {
+    githubLabel.textContent = githubReady
+      ? onboardingGitHubStatus.account
+        ? t('onboarding.github.readyDesc', { account: onboardingGitHubStatus.account })
+        : t('onboarding.github.readyNoAccount')
+      : onboardingGitHubSkipped
+        ? t('onboarding.github.skippedDesc')
+      : onboardingGitHubStatus.launched
+        ? t('onboarding.github.opened')
+        : t('onboarding.github.desc');
   }
-  if (gitBtn) {
-    gitBtn.disabled = !connected || onboardingGitBusy || gitReady || onboardingGitSkipped;
-    gitBtn.textContent = onboardingGitBusy
-      ? t('onboarding.git.installing')
-      : gitReady
-        ? t('onboarding.git.ready')
-        : onboardingGitStatus.checked && !onboardingGitStatus.launched
-          ? t('onboarding.git.install')
-          : t('onboarding.git.check');
+  if (githubBtn) {
+    githubBtn.disabled = !connected || onboardingGitHubBusy || githubReady || onboardingGitHubSkipped;
+    githubBtn.textContent = onboardingGitHubBusy
+      ? t('onboarding.github.connecting')
+      : githubReady
+        ? t('onboarding.github.ready')
+        : t('onboarding.github.connect');
   }
-  if (gitSkipBtn) {
-    gitSkipBtn.disabled = !connected || onboardingGitBusy || gitReady || onboardingGitSkipped;
-    gitSkipBtn.textContent = onboardingGitSkipped ? t('onboarding.git.skipped') : t('onboarding.git.skip');
+  if (githubSkipBtn) {
+    githubSkipBtn.disabled = !connected || onboardingGitHubBusy || githubReady || onboardingGitHubSkipped;
+    githubSkipBtn.textContent = onboardingGitHubSkipped ? t('onboarding.github.skipped') : t('onboarding.github.skip');
   }
-  if (folderBtn) folderBtn.disabled = !connected || !gitSettled;
+  if (folderBtn) folderBtn.disabled = !connected || !githubSettled;
   if (startBtn) startBtn.disabled = !ready;
   if (loginGateBtn) loginGateBtn.disabled = connected;
   if (loginGateBtn) loginGateBtn.textContent = connected ? t('onboarding.done') : t('onboarding.connect.button');
 }
 
-async function refreshOnboardingGitStatus() {
-  if (onboardingGitBusy) return onboardingGitStatus;
+async function refreshOnboardingGitHubStatus() {
+  if (onboardingGitHubBusy) return onboardingGitHubStatus;
   try {
-    const status = await api?.getGitSetupStatus?.();
-    onboardingGitStatus = {
+    const status = await api?.getGitHubStatus?.();
+    onboardingGitHubStatus = {
       checked: true,
-      installed: !!status?.installed,
+      connected: !!status?.connected,
+      clientInstalled: !!status?.clientInstalled,
       path: status?.path || '',
       version: status?.version || '',
-      installMethod: status?.installMethod || 'manual',
+      account: status?.account || '',
+      installMethod: status?.installMethod || '',
     };
-    if (onboardingGitStatus.installed) {
-      onboardingGitSkipped = false;
-      localStorage.removeItem(ONBOARDING_GIT_SKIP_KEY);
+    if (onboardingGitHubStatus.connected) {
+      onboardingGitHubSkipped = false;
+      localStorage.removeItem(ONBOARDING_GITHUB_SKIP_KEY);
     }
   } catch (error) {
-    onboardingGitStatus = { checked: true, installed: false, installMethod: 'manual', error: error.message };
+    onboardingGitHubStatus = { checked: true, connected: false, clientInstalled: false, error: error.message };
   }
   updateOnboardingUI();
-  return onboardingGitStatus;
+  return onboardingGitHubStatus;
 }
 
 function showOnboardingGate() {
@@ -823,7 +825,7 @@ function showOnboardingGate() {
   closeGuide(); closeKeymap(); closeSettings(); closeIconPicker();
   loginGateEl?.removeAttribute('hidden');
   updateOnboardingUI();
-  if (!onboardingGitStatus.checked) refreshOnboardingGitStatus();
+  if (!onboardingGitHubStatus.checked) refreshOnboardingGitHubStatus();
 }
 
 function updateLoginGateUI() {
@@ -2306,34 +2308,36 @@ async function openSettings() {
   updateSettingsProviderUI();
   flashAction(t('flash.settings'));
   refreshAccountStatus();
-  refreshSettingsGitStatus();
+  refreshSettingsGitHubStatus();
   refreshRamUsage();
   refreshBackups();
 }
 
-async function refreshSettingsGitStatus() {
-  const statusEl = document.getElementById('settings-git-status');
-  const button = document.getElementById('settings-git-setup');
+async function refreshSettingsGitHubStatus() {
+  const statusEl = document.getElementById('settings-github-status');
+  const button = document.getElementById('settings-github-connect');
   if (!statusEl || !button) return;
   button.disabled = true;
-  statusEl.textContent = t('settings.gitSetup.checking');
+  statusEl.textContent = t('settings.github.checking');
   try {
-    const status = await api?.getGitSetupStatus?.();
-    if (status?.installed) {
-      statusEl.textContent = status.version || t('settings.gitSetup.ready');
+    const status = await api?.getGitHubStatus?.();
+    if (status?.connected) {
+      statusEl.textContent = status.account
+        ? t('settings.github.ready', { account: status.account })
+        : t('settings.github.readyNoAccount');
       setStatusTone(statusEl, 'ok');
-      button.textContent = t('settings.gitSetup.ready');
+      button.textContent = t('onboarding.github.ready');
     } else {
-      statusEl.textContent = t('settings.gitSetup.missing');
+      statusEl.textContent = t('settings.github.missing');
       setStatusTone(statusEl, 'bad');
-      button.textContent = t('settings.gitSetup.button');
+      button.textContent = t('settings.github.button');
       button.disabled = false;
       return;
     }
   } catch {
-    statusEl.textContent = t('settings.gitSetup.missing');
+    statusEl.textContent = t('settings.github.missing');
     setStatusTone(statusEl, 'bad');
-    button.textContent = t('settings.gitSetup.button');
+    button.textContent = t('settings.github.button');
     button.disabled = false;
     return;
   }
@@ -2551,25 +2555,27 @@ document.getElementById('agent-rules-edit')?.addEventListener('click', () => {
   setSlotRules?.focus();
 });
 document.getElementById('settings-usage-refresh')?.addEventListener('click', refreshCodexUsage);
-document.getElementById('settings-git-setup')?.addEventListener('click', async () => {
-  const button = document.getElementById('settings-git-setup');
+document.getElementById('settings-github-connect')?.addEventListener('click', async () => {
+  const button = document.getElementById('settings-github-connect');
   if (!button || button.disabled) return;
   button.disabled = true;
-  button.textContent = t('onboarding.git.installing');
+  button.textContent = t('onboarding.github.connecting');
   try {
-    const result = await api?.installGit?.();
-    if (result?.installed) {
-      onboardingGitSkipped = false;
-      localStorage.removeItem(ONBOARDING_GIT_SKIP_KEY);
-      onboardingGitStatus = { checked: true, ...result };
-      flashAction(t('onboarding.git.readyDesc'));
+    const result = await api?.connectGitHub?.();
+    if (result?.connected) {
+      onboardingGitHubSkipped = false;
+      localStorage.removeItem(ONBOARDING_GITHUB_SKIP_KEY);
+      onboardingGitHubStatus = { checked: true, ...result };
+      flashAction(result.account
+        ? t('onboarding.github.readyDesc', { account: result.account })
+        : t('onboarding.github.readyNoAccount'));
     } else if (result?.launched) {
-      flashAction(t('onboarding.git.opened'));
+      flashAction(t('onboarding.github.opened'));
     } else {
-      flashAction(result?.error || t('onboarding.git.failed'));
+      flashAction(result?.error || t('onboarding.github.failed'));
     }
   } finally {
-    await refreshSettingsGitStatus();
+    await refreshSettingsGitHubStatus();
   }
 });
 document.getElementById('btn-mcp')?.addEventListener('click', openMcp);
@@ -3416,44 +3422,42 @@ document.getElementById('onboarding-folder-btn')?.addEventListener('click', asyn
   flashAction(t('onboarding.folder.saved'));
 });
 
-document.getElementById('onboarding-git-btn')?.addEventListener('click', async () => {
-  if (onboardingGitBusy) return;
-  if (!onboardingGitStatus.checked || onboardingGitStatus.launched) {
-    onboardingGitStatus = { ...onboardingGitStatus, launched: false };
-    await refreshOnboardingGitStatus();
-    return;
-  }
-  if (onboardingGitStatus.installed) return;
-  onboardingGitBusy = true;
+document.getElementById('onboarding-github-btn')?.addEventListener('click', async () => {
+  if (onboardingGitHubBusy || onboardingGitHubStatus.connected) return;
+  onboardingGitHubBusy = true;
   updateOnboardingUI();
   try {
-    const result = await api?.installGit?.();
-    if (result?.installed) {
-      onboardingGitStatus = { checked: true, ...result };
-      flashAction(t('onboarding.git.readyDesc'));
+    const result = await api?.connectGitHub?.();
+    if (result?.connected) {
+      onboardingGitHubStatus = { checked: true, ...result };
+      onboardingGitHubSkipped = false;
+      localStorage.removeItem(ONBOARDING_GITHUB_SKIP_KEY);
+      flashAction(result.account
+        ? t('onboarding.github.readyDesc', { account: result.account })
+        : t('onboarding.github.readyNoAccount'));
     } else if (result?.launched) {
-      onboardingGitStatus = { checked: true, installed: false, ...result };
-      flashAction(t('onboarding.git.opened'));
+      onboardingGitHubStatus = { checked: true, connected: false, ...result };
+      flashAction(t('onboarding.github.opened'));
     } else {
-      onboardingGitStatus = { checked: true, installed: false, installMethod: result?.installMethod || 'manual' };
-      flashAction(result?.error || t('onboarding.git.failed'));
+      onboardingGitHubStatus = { checked: true, connected: false, clientInstalled: !!result?.clientInstalled };
+      flashAction(result?.error || t('onboarding.github.failed'));
     }
   } finally {
-    onboardingGitBusy = false;
+    onboardingGitHubBusy = false;
     updateOnboardingUI();
   }
 });
 
-document.getElementById('onboarding-git-skip-btn')?.addEventListener('click', () => {
-  if (!state.connected || onboardingGitBusy || onboardingGitStatus.installed) return;
-  onboardingGitSkipped = true;
-  localStorage.setItem(ONBOARDING_GIT_SKIP_KEY, '1');
+document.getElementById('onboarding-github-skip-btn')?.addEventListener('click', () => {
+  if (!state.connected || onboardingGitHubBusy || onboardingGitHubStatus.connected) return;
+  onboardingGitHubSkipped = true;
+  localStorage.setItem(ONBOARDING_GITHUB_SKIP_KEY, '1');
   updateOnboardingUI();
-  flashAction(t('onboarding.git.skippedDesc'));
+  flashAction(t('onboarding.github.skippedDesc'));
 });
 
 document.getElementById('onboarding-start-btn')?.addEventListener('click', async () => {
-  if ((!onboardingGitStatus.installed && !onboardingGitSkipped) || !state.connected || !onboardingDirectory) return;
+  if ((!onboardingGitHubStatus.connected && !onboardingGitHubSkipped) || !state.connected || !onboardingDirectory) return;
   const result = await api?.select?.(0, false);
   if (result?.ok === false) { flashAction(result.error || t('flash.connectFail')); return; }
   localStorage.setItem(ONBOARDING_KEY, '1');

@@ -1623,6 +1623,20 @@ ipcMain.handle('git:install', async () => {
     return { ok: false, installed: false, error: error.message };
   }
 });
+ipcMain.handle('github:status', async () => {
+  try {
+    return await gitSetup.detectGitHub();
+  } catch (error) {
+    return { ok: false, connected: false, error: error.message };
+  }
+});
+ipcMain.handle('github:connect', async () => {
+  try {
+    return await gitSetup.connectGitHub({ openExternal: (url) => shell.openExternal(url) });
+  } catch (error) {
+    return { ok: false, connected: false, error: error.message };
+  }
+});
 ipcMain.handle('voice:transcribeAudio', async (_e, bytes, mimeType) => {
   if (trialLocked()) return trialDenied();
   const data = Buffer.from(bytes || []);

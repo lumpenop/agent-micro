@@ -46,6 +46,7 @@
           <a href="#usage">사용량</a>
           <a href="#git">Git</a>
           <a href="#agents">에이전트</a>
+          <a class="nav-github-star" href="https://github.com/lumpenop/agent-micro" target="_blank" rel="noreferrer" aria-label="GitHub에서 Agent Micro에 스타 주기"><span aria-hidden="true">★</span> GitHub</a>
           <button class="nav-language" type="button" id="language-switch" aria-label="Switch page language to English">English</button>
           <a class="nav-buy" href="#download">다운로드</a>
         </nav>
@@ -55,7 +56,7 @@
     <main id="top">
       <section class="product-hero">
         <div class="product-hero-copy reveal">
-          <a class="release-chip" href="https://github.com/lumpenop/agent-micro/releases/tag/v1.2.0" target="_blank" rel="noreferrer"><i></i> v1.2.0 · PUBLIC BETA <span>↗</span></a>
+          <a class="release-chip" href="https://github.com/lumpenop/agent-micro/releases/tag/v1.2.1" target="_blank" rel="noreferrer"><i></i> v1.2.1 · PUBLIC BETA <span>↗</span></a>
           <p class="eyebrow">CODEX CONTROL SURFACE FOR macOS</p>
           <h1>Codex를 더 쉽게.<br /><span>필요한 기능은 바로.</span></h1>
           <p class="hero-lede">모델을 바꾸고, Fast 모드를 켜고, 승인 요청에 답하는 일까지. 자주 쓰는 기능을 버튼과 단축키에 모아 작업 흐름을 끊지 않습니다.</p>
@@ -227,11 +228,11 @@
           <div class="git-visual reveal">
             <div class="setup-card">
               <div class="setup-head"><span>FIRST RUN SETUP</span><strong>1 / 4</strong></div>
-              <div class="setup-step done"><b>1</b><span><strong>Git 준비</strong><small>git version 2.50.1 · Ready</small></span><em>✓</em></div>
-              <div class="setup-step active"><b>2</b><span><strong>Codex 연결</strong><small>ChatGPT 계정으로 로그인</small></span><button>연결</button></div>
+              <div class="setup-step done"><b>1</b><span><strong>Codex 연결</strong><small>ChatGPT 계정으로 로그인됨</small></span><em>✓</em></div>
+              <div class="setup-step active"><b>2</b><span><strong>GitHub 연결 <em>선택</em></strong><small>브라우저에서 간편 로그인</small></span><button>연결</button></div>
               <div class="setup-step"><b>3</b><span><strong>프로젝트 선택</strong><small>Codex가 작업할 폴더</small></span><button>선택</button></div>
               <div class="setup-step"><b>4</b><span><strong>첫 Agent 시작</strong><small>바로 쓸 수 있는 세션 열기</small></span><button>시작</button></div>
-              <p>Git이 없으면 Homebrew 또는 macOS 설치 화면을 버튼 하나로 시작합니다.</p>
+              <p>GitHub는 선택 사항입니다. 건너뛰어도 로컬 Git과 Codex는 그대로 사용할 수 있습니다.</p>
             </div>
             <div class="git-panel-card">
               <div><span>main</span><strong>3 changes</strong></div>
@@ -242,11 +243,11 @@
           </div>
 
           <div class="section-copy reveal" data-delay="1">
-            <p class="eyebrow">GIT FROM FIRST RUN TO MERGE</p>
-            <h2>처음 설치하는 순간부터<br /><span>커밋하고 병합할 때까지.</span></h2>
-            <p>첫 실행에서 Git 설치 여부를 확인하고, 없다면 설치 과정까지 안내합니다. 작업을 시작한 뒤에는 변경 파일 확인부터 스테이징, Pull·Push, 커밋까지 앱 안에서 처리하세요.</p>
+            <p class="eyebrow">LOCAL GIT · OPTIONAL GITHUB</p>
+            <h2>로컬 Git은 바로.<br /><span>GitHub는 필요할 때 연결.</span></h2>
+            <p>Mac의 로컬 Git은 곧바로 사용하고, GitHub는 첫 실행이나 Settings에서 선택적으로 연결하세요. 작업 중에는 변경 파일 확인부터 스테이징, Pull·Push, 커밋까지 앱 안에서 처리할 수 있습니다.</p>
             <ul class="check-list">
-              <li><i>01</i> 첫 실행에서 Git 확인 및 설치 안내</li>
+              <li><i>01</i> 첫 실행에서 기존 GitHub 로그인 자동 확인</li>
               <li><i>02</i> 브랜치와 변경 파일, 스테이징 상태 확인</li>
               <li><i>03</i> 파일별 또는 전체 스테이징과 되돌리기</li>
               <li><i>04</i> Pull·Push와 커밋 메시지 자동 생성</li>
@@ -293,11 +294,11 @@
 
       <section class="download section" id="download">
         <div class="download-orb" aria-hidden="true"><img src="./assets/app-icon.png" alt="" /></div>
-        <p class="eyebrow reveal">Agent Micro v1.2.0 · PUBLIC BETA</p>
+        <p class="eyebrow reveal">Agent Micro v1.2.1 · PUBLIC BETA</p>
         <h2 class="reveal" data-delay="1">Codex는 그대로.<br /><span>쓰는 방법은 더 편하게.</span></h2>
         <p class="reveal" data-delay="2">반복되는 조작은 Agent Micro에 맡기고, 지금 해야 할 일에 집중하세요.</p>
         <div class="reveal" data-delay="2">
-          <a class="button button-primary" id="download-button" href="https://github.com/lumpenop/agent-micro/releases/download/v1.2.0/Agent.Micro-1.2.0-arm64.dmg">macOS용 다운로드</a>
+          <a class="button button-primary" id="download-button" href="https://github.com/lumpenop/agent-micro/releases/download/v1.2.1/Agent.Micro-1.2.1-arm64.dmg">macOS용 다운로드</a>
           <a class="github-star-link" href="https://github.com/lumpenop/agent-micro" target="_blank" rel="noreferrer">★ GitHub에서 스타</a>
           <span class="download-meta">macOS · Apple silicon · 오픈소스 · MIT · Codex CLI</span>
           <span class="download-warning">서명되지 않은 공개 베타입니다. 처음 실행할 때 macOS가 확인을 요청할 수 있습니다.</span>

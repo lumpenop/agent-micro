@@ -1334,6 +1334,54 @@
   }
 }
 
+/* Header actions: GitHub is the community action; Download stays primary. */
+.product-page .nav-github-star {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 11px;
+  color: #f7f8fa !important;
+  border: 1px solid rgba(16, 19, 25, .12);
+  border-radius: 999px;
+  background: #171a1f;
+  box-shadow: 0 7px 18px rgba(16, 19, 25, .14);
+  font-weight: 680;
+}
+
+.product-page .nav-github-star span {
+  color: #ffd866;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.product-page .nav-github-star:hover {
+  color: #fff !important;
+  background: #2b3038;
+  transform: translateY(-1px);
+}
+
+.setup-step strong em {
+  margin-left: 4px;
+  padding: 2px 5px;
+  color: #5e6772;
+  border: 1px solid rgba(16, 19, 25, .1);
+  border-radius: 999px;
+  background: #fff;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 700;
+  vertical-align: 2px;
+}
+
+@media (max-width: 700px) {
+  .product-page .nav-github-star,
+  .product-page .nav-buy {
+    width: 100%;
+    justify-content: center;
+    padding: 11px;
+  }
+}
+
 /* Richer color + larger product imagery. */
 .product-page {
   --ref-pink: #c95f87;

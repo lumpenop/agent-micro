@@ -1,6 +1,6 @@
 {
   "name": "agent-micro",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Agent Micro — floating macropad for AI agent control",
   "main": "src/main.js",
   "packageManager": "pnpm@11.8.0",
@@ -21,6 +21,7 @@
     "test:controls": "node scripts/test-control-reliability.js",
     "test:providers": "node scripts/test-provider-compatibility.js",
     "test:providers:codex": "node scripts/test-codex-provider-probe.js",
+    "test:connection": "node scripts/test-codex-connection.js",
     "ensure:whisper": "node scripts/ensure-whisper.js",
     "dist:mac": "electron-builder --mac dir --arm64",
     "dist:dmg": "electron-builder --mac dmg --arm64",

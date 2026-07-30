@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('codexDesktop', {
   getGitStatus: () => ipcRenderer.invoke('git:status'),
   getGitSetupStatus: () => ipcRenderer.invoke('git:setupStatus'),
   installGit: () => ipcRenderer.invoke('git:install'),
+  getGitHubStatus: () => ipcRenderer.invoke('github:status'),
+  connectGitHub: () => ipcRenderer.invoke('github:connect'),
   syncGit: (action, context) => ipcRenderer.invoke('git:sync', action, context),
   stageGitFile: (file, staged) => ipcRenderer.invoke('git:stageFile', file, staged),
   stageAllGit: () => ipcRenderer.invoke('git:stageAll'),

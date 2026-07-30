@@ -241,11 +241,11 @@
                 </div>
               </div>
               <div class="settings-field">
-                <label class="voice-label" data-i18n="settings.gitSetup">Git setup</label>
-                <p class="settings-status" id="settings-git-status" data-i18n="settings.gitSetup.checking">Checking…</p>
-                <p class="settings-desc" data-i18n="settings.gitSetup.desc">Git enables status, staging, commits, Pull, Push, and safe Agent merges.</p>
+                <label class="voice-label" data-i18n="settings.github">GitHub</label>
+                <p class="settings-status" id="settings-github-status" data-i18n="settings.github.checking">Checking…</p>
+                <p class="settings-desc" data-i18n="settings.github.desc">GitHub connection is optional and enables authenticated Pull, Push, and repository workflows.</p>
                 <div class="voice-actions settings-inline-actions">
-                  <button type="button" class="voice-btn" id="settings-git-setup" data-i18n="settings.gitSetup.button">Check / Set up Git</button>
+                  <button type="button" class="voice-btn" id="settings-github-connect" data-i18n="settings.github.button">Connect GitHub</button>
                 </div>
               </div>
             </div>
@@ -704,19 +704,19 @@
               <span class="guide-title" data-i18n="onboarding.title">Let’s get you set up</span>
             </div>
           </div>
-          <p class="onboarding-lead" data-i18n="onboarding.lead">Connect Codex, then choose whether to set up Git.</p>
+          <p class="onboarding-lead" data-i18n="onboarding.lead">Connect Codex, then optionally connect GitHub.</p>
           <div class="onboarding-steps" id="onboarding-steps">
             <div class="onboarding-step is-active" id="onboarding-step-connect">
               <div class="onboarding-step-number">1</div>
               <div class="onboarding-step-copy"><strong data-i18n="onboarding.connect.title">Connect Codex</strong><span data-i18n="onboarding.connect.desc">Sign in with your ChatGPT account.</span></div>
               <button type="button" class="voice-btn primary onboarding-step-action" id="login-gate-btn" data-i18n="onboarding.connect.button">Connect</button>
             </div>
-            <div class="onboarding-step" id="onboarding-step-git">
+            <div class="onboarding-step" id="onboarding-step-github">
               <div class="onboarding-step-number">2</div>
-              <div class="onboarding-step-copy"><strong data-i18n="onboarding.git.title">Set up Git <em data-i18n="onboarding.optional">Optional</em></strong><span id="onboarding-git-label" data-i18n="onboarding.git.desc">Use Git features now, or skip and set them up later.</span></div>
+              <div class="onboarding-step-copy"><strong data-i18n="onboarding.github.title">Connect GitHub <em data-i18n="onboarding.optional">Optional</em></strong><span id="onboarding-github-label" data-i18n="onboarding.github.desc">Connect in your browser, or skip and do it later.</span></div>
               <div class="onboarding-step-actions">
-                <button type="button" class="voice-btn primary onboarding-step-action" id="onboarding-git-btn" data-i18n="onboarding.git.check">Set up</button>
-                <button type="button" class="voice-btn onboarding-step-action onboarding-skip-action" id="onboarding-git-skip-btn" data-i18n="onboarding.git.skip">Skip</button>
+                <button type="button" class="voice-btn primary onboarding-step-action" id="onboarding-github-btn" data-i18n="onboarding.github.connect">Connect</button>
+                <button type="button" class="voice-btn onboarding-step-action onboarding-skip-action" id="onboarding-github-skip-btn" data-i18n="onboarding.github.skip">Skip</button>
               </div>
             </div>
             <div class="onboarding-step" id="onboarding-step-folder">

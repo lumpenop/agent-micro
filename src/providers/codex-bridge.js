@@ -10,6 +10,10 @@ const { t } = require('../i18n');
 const padPrefs = require('../pad-prefs');
 const { detectActiveProject, detectProjectFromRollout } = require('../agent-project-context');
 
+const HEARTBEAT_FAILURE_LIMIT = 3;
+const HEARTBEAT_REQUEST_TIMEOUT_MS = 5000;
+const RECONNECT_DELAYS_MS = [1000, 2000, 5000, 10000, 30000];
+
 function lt(key, vars) {
   return t(padPrefs.getLocale(), key, vars);
 }
@@ -187,7 +191,11 @@ function spawnCodex(bin, args, opts = {}) {
 }
 
 class CodexBridge extends EventEmitter {
-  constructor({ customProvider = false } = {}) {
+  constructor({
+    customProvider = false,
+    heartbeatFailureLimit = HEARTBEAT_FAILURE_LIMIT,
+    reconnectDelays = RECONNECT_DELAYS_MS,
+  } = {}) {
     super();
     this.customProvider = !!customProvider;
     this.provider = this.customProvider ? 'api' : 'codex';
@@ -213,6 +221,15 @@ class CodexBridge extends EventEmitter {
     this._pendingRouting = new Map();
     this._refreshThreadsPending = null;
     this._refreshContextsPending = null;
+    this._heartbeatFailures = 0;
+    this._heartbeatFailureLimit = Math.max(1, Number(heartbeatFailureLimit) || HEARTBEAT_FAILURE_LIMIT);
+    this._reconnectDelays = Array.isArray(reconnectDelays) && reconnectDelays.length
+      ? reconnectDelays.map((delay) => Math.max(0, Number(delay) || 0))
+      : [...RECONNECT_DELAYS_MS];
+    this._reconnectAttempt = 0;
+    this._reconnectTimer = null;
+    this._reconnectEnabled = false;
+    this._reconnecting = false;
   }
 
   getState() {
@@ -609,9 +626,11 @@ class CodexBridge extends EventEmitter {
     });
   }
 
-  async start() {
+  async start({ reconnecting = false } = {}) {
+    this._reconnectEnabled = true;
     const bin = findCodexNative();
     if (!bin) {
+      this._reconnectEnabled = false;
       this._seedDemo();
       this.emitState(lt('bridge.notFoundDemo'));
       return false;
@@ -627,13 +646,23 @@ class CodexBridge extends EventEmitter {
         this.emit('log', `proxy failed: ${err2.message}`);
         this.connected = false;
         this.mode = 'offline';
-        this._seedDemo();
-        this.emitState(lt('bridge.offlineDemo'));
+        if (!reconnecting) this._seedDemo();
+        this.emitState(reconnecting
+          ? lt('bridge.disconnected', { code: 'retry' })
+          : lt('bridge.offlineDemo'));
+        this._scheduleReconnect();
         return false;
       }
     }
 
     this.connected = true;
+    this._heartbeatFailures = 0;
+    this._reconnectAttempt = 0;
+    this._reconnecting = false;
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer);
+      this._reconnectTimer = null;
+    }
     // Clear demo placeholders only — keep live CLI agents across soft reconnect
     this.agents = this.agents.map((a) =>
       !a || a.status === 'off' || String(a.threadId || '').startsWith('demo')
@@ -649,7 +678,10 @@ class CodexBridge extends EventEmitter {
     // App-server notifications are the primary path; this reconciles external
     // terminal window lifecycle and historical thread state as a fallback.
     this._poll = setInterval(() => {
-      this.refreshThreads().catch(() => {});
+      if (this._refreshThreadsPending) return;
+      this.refreshThreads()
+        .then(() => this._recordHeartbeatSuccess())
+        .catch((error) => this._recordHeartbeatFailure(error));
     }, 1000);
     // The visible CLI can change model/effort without producing an app-server
     // notification. Rollout files are the authoritative per-agent source for
@@ -692,6 +724,18 @@ class CodexBridge extends EventEmitter {
   }
 
   stop() {
+    this._reconnectEnabled = false;
+    this._reconnecting = false;
+    this._reconnectAttempt = 0;
+    this._heartbeatFailures = 0;
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer);
+      this._reconnectTimer = null;
+    }
+    this._disposeConnection();
+  }
+
+  _disposeConnection() {
     if (this._poll) {
       clearInterval(this._poll);
       this._poll = null;
@@ -715,6 +759,11 @@ class CodexBridge extends EventEmitter {
     const prev = this.proc;
     this.proc = null;
     this.connected = false;
+    this.mode = 'offline';
+    for (const [id, pending] of this.pending) {
+      pending.reject(new Error('Codex connection closed'));
+      this.pending.delete(id);
+    }
     if (prev) {
       prev.removeAllListeners('exit');
       try {
@@ -723,16 +772,60 @@ class CodexBridge extends EventEmitter {
     }
   }
 
+  _markDisconnected(action) {
+    if (!this.connected && !this.proc) return;
+    this._disposeConnection();
+    this.emitState(action || lt('bridge.disconnected', { code: 'timeout' }));
+    this._scheduleReconnect();
+  }
+
+  _recordHeartbeatSuccess() {
+    this._heartbeatFailures = 0;
+  }
+
+  _recordHeartbeatFailure(error) {
+    if (!this.connected) return;
+    this._heartbeatFailures += 1;
+    this.emit('log', `Codex heartbeat failed (${this._heartbeatFailures}/${this._heartbeatFailureLimit}): ${error?.message || error}`);
+    if (this._heartbeatFailures >= this._heartbeatFailureLimit) {
+      this._markDisconnected(lt('bridge.disconnected', { code: 'timeout' }));
+    }
+  }
+
+  _scheduleReconnect() {
+    if (!this._reconnectEnabled || this.connected || this._reconnectTimer || this._reconnecting) return;
+    const index = Math.min(this._reconnectAttempt, this._reconnectDelays.length - 1);
+    const delay = this._reconnectDelays[index];
+    this._reconnectAttempt += 1;
+    this._reconnectTimer = setTimeout(async () => {
+      this._reconnectTimer = null;
+      if (!this._reconnectEnabled || this.connected) return;
+      this._reconnecting = true;
+      this.emitState(lt('bridge.reconnecting'));
+      let started = false;
+      try {
+        started = await this.start({ reconnecting: true });
+      } catch (error) {
+        this.emit('log', `Codex reconnect failed: ${error?.message || error}`);
+      } finally {
+        this._reconnecting = false;
+      }
+      if (!started) this._scheduleReconnect();
+    }, delay);
+  }
+
   _attachIO() {
     const proc = this.proc;
     this.rl = readline.createInterface({ input: proc.stdout });
     this.rl.on('line', (line) => this._onLine(line));
     proc.on('exit', (code) => {
       if (this.proc !== proc) return; // superseded by reconnect
-      this.connected = false;
-      this.mode = 'offline';
-      this.proc = null;
-      this.emitState(lt('bridge.disconnected', { code }));
+      if (this.connected) {
+        this._markDisconnected(lt('bridge.disconnected', { code }));
+      } else {
+        this.proc = null;
+        this.mode = 'offline';
+      }
     });
   }
 
@@ -836,7 +929,7 @@ class CodexBridge extends EventEmitter {
     return i >= 0 ? i : -1;
   }
 
-  request(method, params = {}) {
+  request(method, params = {}, timeoutMs = 15000) {
     if (!this.proc) return Promise.reject(new Error('not connected'));
     const id = this.nextId++;
     const payload = { jsonrpc: '2.0', method, id, params };
@@ -848,7 +941,7 @@ class CodexBridge extends EventEmitter {
           this.pending.delete(id);
           reject(new Error(`timeout: ${method}`));
         }
-      }, 15000);
+      }, timeoutMs);
     });
   }
 
@@ -864,7 +957,7 @@ class CodexBridge extends EventEmitter {
 
   async _handshake() {
     await this.request('initialize', {
-      clientInfo: { name: 'agent-micro', version: '1.2.0' },
+      clientInfo: { name: 'agent-micro', version: '1.2.1' },
       capabilities: {
         experimentalApi: true,
         optOutNotificationMethods: [
@@ -890,12 +983,13 @@ class CodexBridge extends EventEmitter {
     if (!this.connected) return;
     let result;
     try {
-      result = await this.request('thread/list', { limit: 24 });
-    } catch {
+      result = await this.request('thread/list', { limit: 24 }, HEARTBEAT_REQUEST_TIMEOUT_MS);
+    } catch (firstError) {
       try {
-        result = await this.request('thread/list', {});
-      } catch {
-        return;
+        result = await this.request('thread/list', {}, HEARTBEAT_REQUEST_TIMEOUT_MS);
+      } catch (fallbackError) {
+        fallbackError.cause = firstError;
+        throw fallbackError;
       }
     }
 
