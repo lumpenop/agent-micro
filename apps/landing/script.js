@@ -33,7 +33,7 @@ if ('IntersectionObserver' in window && !window.matchMedia('(prefers-reduced-mot
 const downloadButton = document.querySelector('#download-button');
 const downloadUrl = String(window.AGENT_MICRO_DOWNLOAD_URL || '').trim();
 if (downloadButton) {
-  downloadButton.href = downloadUrl || 'https://github.com/lumpenop/agent-micro/releases/download/v1.1.0/Agent.Micro-1.1.0-arm64.dmg';
+  downloadButton.href = downloadUrl || 'https://github.com/lumpenop/agent-micro/releases/download/v1.2.0/Agent.Micro-1.2.0-arm64.dmg';
   downloadButton.target = '_blank';
   downloadButton.rel = 'noreferrer';
 }

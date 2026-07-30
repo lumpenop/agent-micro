@@ -864,7 +864,7 @@ class CodexBridge extends EventEmitter {
 
   async _handshake() {
     await this.request('initialize', {
-      clientInfo: { name: 'agent-micro', version: '1.0.0' },
+      clientInfo: { name: 'agent-micro', version: '1.2.0' },
       capabilities: {
         experimentalApi: true,
         optOutNotificationMethods: [

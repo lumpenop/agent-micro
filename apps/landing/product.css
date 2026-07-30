@@ -2200,11 +2200,24 @@
 
 /* Tighten the hero frame around the visible UI, and widen Agent Manager. */
 .controller-stage {
-  min-height: 620px;
+  min-height: 560px;
 }
 
-.controller-stage > img {
-  transform: translateY(36px) scaleY(1.1);
+.controller-capture {
+  position: relative;
+  z-index: 2;
+  width: min(634px, 112%);
+  aspect-ratio: 558 / 452;
+  overflow: hidden;
+  transform: translateY(18px) scaleY(1.1);
+  transform-origin: center;
+}
+
+.controller-capture img {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 36px 44px rgba(0, 0, 0, .25));
 }
 
 .controller-stage > .actual-badge {
@@ -2221,11 +2234,12 @@
 
 @media (max-width: 700px) {
   .controller-stage {
-    min-height: 450px;
+    min-height: 410px;
   }
 
-  .controller-stage > img {
-    transform: translateY(24px) scaleY(1.1);
+  .controller-capture {
+    width: 88%;
+    transform: translateY(12px) scaleY(1.1);
   }
 
   .sticker-usage {
