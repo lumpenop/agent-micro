@@ -15,6 +15,7 @@
     "test:rules": "node scripts/test-agent-rules.js",
     "test:usage": "node scripts/test-codex-usage.js",
     "test:routing": "node scripts/test-prompt-routing.js",
+    "test:git-setup": "node scripts/test-git-setup.js",
     "test:coordinator": "node scripts/test-agent-coordinator.js",
     "test:coordinator:stress": "node scripts/test-agent-coordinator-stress.js",
     "test:controls": "node scripts/test-control-reliability.js",

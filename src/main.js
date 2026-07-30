@@ -12,6 +12,7 @@ const mac = require('./platform/mac');
 const skillManager = require('./skill-manager');
 const whisperModel = require('./whisper-model');
 const toolInstaller = require('./tool-installer');
+const gitSetup = require('./git-setup');
 const agentRules = require('./agent-rules');
 const agentCoordinator = require('./agent-coordinator');
 const promptRouting = require('./prompt-routing');
@@ -1606,6 +1607,20 @@ ipcMain.handle('tools:ensure', async (_event, provider) => {
     });
   } catch (error) {
     return { ok: false, code: 'TOOL_DOWNLOAD', error: error.message };
+  }
+});
+ipcMain.handle('git:setupStatus', async () => {
+  try {
+    return await gitSetup.detectGit();
+  } catch (error) {
+    return { ok: false, installed: false, error: error.message };
+  }
+});
+ipcMain.handle('git:install', async () => {
+  try {
+    return await gitSetup.installGit({ openExternal: (url) => shell.openExternal(url) });
+  } catch (error) {
+    return { ok: false, installed: false, error: error.message };
   }
 });
 ipcMain.handle('voice:transcribeAudio', async (_e, bytes, mimeType) => {

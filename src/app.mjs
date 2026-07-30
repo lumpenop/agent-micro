@@ -729,19 +729,26 @@ const loginGateLeadEl = document.getElementById('login-gate-lead');
 const loginProviderGrid = document.getElementById('login-provider-grid');
 let _pendingLoginProvider = 'codex';
 const ONBOARDING_KEY = 'agent-micro-onboarding-complete-v1';
+const ONBOARDING_GIT_SKIP_KEY = 'agent-micro-onboarding-git-skipped-v1';
 let onboardingDirectory = '';
+let onboardingGitStatus = { checked: false, installed: false, installMethod: 'manual' };
+let onboardingGitBusy = false;
+let onboardingGitSkipped = localStorage.getItem(ONBOARDING_GIT_SKIP_KEY) === '1';
 
 function onboardingComplete() {
   return localStorage.getItem(ONBOARDING_KEY) === '1';
 }
 
 function updateOnboardingUI() {
+  const gitReady = !!onboardingGitStatus.installed;
+  const gitSettled = gitReady || onboardingGitSkipped;
   const connected = !!state.connected;
   const folder = String(onboardingDirectory || '').trim();
-  const ready = connected && !!folder;
+  const ready = connected && gitSettled && !!folder;
   const steps = [
     [document.getElementById('onboarding-step-connect'), connected],
-    [document.getElementById('onboarding-step-folder'), ready],
+    [document.getElementById('onboarding-step-git'), connected && gitSettled],
+    [document.getElementById('onboarding-step-folder'), connected && !!folder],
     [document.getElementById('onboarding-step-start'), false],
   ];
   let activeFound = false;
@@ -754,12 +761,60 @@ function updateOnboardingUI() {
   }
   const folderLabel = document.getElementById('onboarding-folder-label');
   if (folderLabel) folderLabel.textContent = folder ? folder.split(/[\\/]+/).filter(Boolean).pop() : t('onboarding.folder.desc');
+  const gitLabel = document.getElementById('onboarding-git-label');
+  const gitBtn = document.getElementById('onboarding-git-btn');
+  const gitSkipBtn = document.getElementById('onboarding-git-skip-btn');
   const folderBtn = document.getElementById('onboarding-folder-btn');
   const startBtn = document.getElementById('onboarding-start-btn');
-  if (folderBtn) folderBtn.disabled = !connected;
+  if (gitLabel) {
+    gitLabel.textContent = gitReady
+      ? onboardingGitStatus.version || t('onboarding.git.readyDesc')
+      : onboardingGitSkipped
+        ? t('onboarding.git.skippedDesc')
+      : onboardingGitStatus.launched
+        ? t('onboarding.git.opened')
+        : t('onboarding.git.desc');
+  }
+  if (gitBtn) {
+    gitBtn.disabled = !connected || onboardingGitBusy || gitReady || onboardingGitSkipped;
+    gitBtn.textContent = onboardingGitBusy
+      ? t('onboarding.git.installing')
+      : gitReady
+        ? t('onboarding.git.ready')
+        : onboardingGitStatus.checked && !onboardingGitStatus.launched
+          ? t('onboarding.git.install')
+          : t('onboarding.git.check');
+  }
+  if (gitSkipBtn) {
+    gitSkipBtn.disabled = !connected || onboardingGitBusy || gitReady || onboardingGitSkipped;
+    gitSkipBtn.textContent = onboardingGitSkipped ? t('onboarding.git.skipped') : t('onboarding.git.skip');
+  }
+  if (folderBtn) folderBtn.disabled = !connected || !gitSettled;
   if (startBtn) startBtn.disabled = !ready;
   if (loginGateBtn) loginGateBtn.disabled = connected;
   if (loginGateBtn) loginGateBtn.textContent = connected ? t('onboarding.done') : t('onboarding.connect.button');
+}
+
+async function refreshOnboardingGitStatus() {
+  if (onboardingGitBusy) return onboardingGitStatus;
+  try {
+    const status = await api?.getGitSetupStatus?.();
+    onboardingGitStatus = {
+      checked: true,
+      installed: !!status?.installed,
+      path: status?.path || '',
+      version: status?.version || '',
+      installMethod: status?.installMethod || 'manual',
+    };
+    if (onboardingGitStatus.installed) {
+      onboardingGitSkipped = false;
+      localStorage.removeItem(ONBOARDING_GIT_SKIP_KEY);
+    }
+  } catch (error) {
+    onboardingGitStatus = { checked: true, installed: false, installMethod: 'manual', error: error.message };
+  }
+  updateOnboardingUI();
+  return onboardingGitStatus;
 }
 
 function showOnboardingGate() {
@@ -768,6 +823,7 @@ function showOnboardingGate() {
   closeGuide(); closeKeymap(); closeSettings(); closeIconPicker();
   loginGateEl?.removeAttribute('hidden');
   updateOnboardingUI();
+  if (!onboardingGitStatus.checked) refreshOnboardingGitStatus();
 }
 
 function updateLoginGateUI() {
@@ -2250,8 +2306,38 @@ async function openSettings() {
   updateSettingsProviderUI();
   flashAction(t('flash.settings'));
   refreshAccountStatus();
+  refreshSettingsGitStatus();
   refreshRamUsage();
   refreshBackups();
+}
+
+async function refreshSettingsGitStatus() {
+  const statusEl = document.getElementById('settings-git-status');
+  const button = document.getElementById('settings-git-setup');
+  if (!statusEl || !button) return;
+  button.disabled = true;
+  statusEl.textContent = t('settings.gitSetup.checking');
+  try {
+    const status = await api?.getGitSetupStatus?.();
+    if (status?.installed) {
+      statusEl.textContent = status.version || t('settings.gitSetup.ready');
+      setStatusTone(statusEl, 'ok');
+      button.textContent = t('settings.gitSetup.ready');
+    } else {
+      statusEl.textContent = t('settings.gitSetup.missing');
+      setStatusTone(statusEl, 'bad');
+      button.textContent = t('settings.gitSetup.button');
+      button.disabled = false;
+      return;
+    }
+  } catch {
+    statusEl.textContent = t('settings.gitSetup.missing');
+    setStatusTone(statusEl, 'bad');
+    button.textContent = t('settings.gitSetup.button');
+    button.disabled = false;
+    return;
+  }
+  button.disabled = true;
 }
 
 async function refreshBackups() {
@@ -2465,6 +2551,27 @@ document.getElementById('agent-rules-edit')?.addEventListener('click', () => {
   setSlotRules?.focus();
 });
 document.getElementById('settings-usage-refresh')?.addEventListener('click', refreshCodexUsage);
+document.getElementById('settings-git-setup')?.addEventListener('click', async () => {
+  const button = document.getElementById('settings-git-setup');
+  if (!button || button.disabled) return;
+  button.disabled = true;
+  button.textContent = t('onboarding.git.installing');
+  try {
+    const result = await api?.installGit?.();
+    if (result?.installed) {
+      onboardingGitSkipped = false;
+      localStorage.removeItem(ONBOARDING_GIT_SKIP_KEY);
+      onboardingGitStatus = { checked: true, ...result };
+      flashAction(t('onboarding.git.readyDesc'));
+    } else if (result?.launched) {
+      flashAction(t('onboarding.git.opened'));
+    } else {
+      flashAction(result?.error || t('onboarding.git.failed'));
+    }
+  } finally {
+    await refreshSettingsGitStatus();
+  }
+});
 document.getElementById('btn-mcp')?.addEventListener('click', openMcp);
 document.getElementById('btn-skills')?.addEventListener('click', openSkills);
 document.getElementById('skills-close')?.addEventListener('click', closeSkills);
@@ -3293,6 +3400,7 @@ loginGateBtn?.addEventListener('click', async () => {
     }
   } finally {
     loginGateBtn.disabled = false;
+    updateOnboardingUI();
   }
 });
 
@@ -3308,8 +3416,44 @@ document.getElementById('onboarding-folder-btn')?.addEventListener('click', asyn
   flashAction(t('onboarding.folder.saved'));
 });
 
+document.getElementById('onboarding-git-btn')?.addEventListener('click', async () => {
+  if (onboardingGitBusy) return;
+  if (!onboardingGitStatus.checked || onboardingGitStatus.launched) {
+    onboardingGitStatus = { ...onboardingGitStatus, launched: false };
+    await refreshOnboardingGitStatus();
+    return;
+  }
+  if (onboardingGitStatus.installed) return;
+  onboardingGitBusy = true;
+  updateOnboardingUI();
+  try {
+    const result = await api?.installGit?.();
+    if (result?.installed) {
+      onboardingGitStatus = { checked: true, ...result };
+      flashAction(t('onboarding.git.readyDesc'));
+    } else if (result?.launched) {
+      onboardingGitStatus = { checked: true, installed: false, ...result };
+      flashAction(t('onboarding.git.opened'));
+    } else {
+      onboardingGitStatus = { checked: true, installed: false, installMethod: result?.installMethod || 'manual' };
+      flashAction(result?.error || t('onboarding.git.failed'));
+    }
+  } finally {
+    onboardingGitBusy = false;
+    updateOnboardingUI();
+  }
+});
+
+document.getElementById('onboarding-git-skip-btn')?.addEventListener('click', () => {
+  if (!state.connected || onboardingGitBusy || onboardingGitStatus.installed) return;
+  onboardingGitSkipped = true;
+  localStorage.setItem(ONBOARDING_GIT_SKIP_KEY, '1');
+  updateOnboardingUI();
+  flashAction(t('onboarding.git.skippedDesc'));
+});
+
 document.getElementById('onboarding-start-btn')?.addEventListener('click', async () => {
-  if (!state.connected || !onboardingDirectory) return;
+  if ((!onboardingGitStatus.installed && !onboardingGitSkipped) || !state.connected || !onboardingDirectory) return;
   const result = await api?.select?.(0, false);
   if (result?.ok === false) { flashAction(result.error || t('flash.connectFail')); return; }
   localStorage.setItem(ONBOARDING_KEY, '1');

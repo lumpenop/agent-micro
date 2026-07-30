@@ -1633,8 +1633,11 @@ button {
 .onboarding-step.is-done .onboarding-step-number { color: #fff; background: #32ad70; }
 .onboarding-step-copy { display: grid; gap: 2px; min-width: 0; }
 .onboarding-step-copy strong { font-size: 11px; }
+.onboarding-step-copy strong em { margin-left: 5px; padding: 2px 5px; border-radius: 999px; color: #62808b; background: rgba(217,233,238,.78); font-size: 7px; font-style: normal; font-weight: 750; letter-spacing: .02em; vertical-align: 1px; }
 .onboarding-step-copy span { color: rgba(20,42,51,.56); font-size: 9px; line-height: 1.35; }
+.onboarding-step-actions { display: flex; align-items: center; gap: 5px; }
 .onboarding-step-action { min-width: 58px; padding: 6px 9px; font-size: 10px; }
+.onboarding-skip-action { min-width: 46px; color: #607680; border-color: rgba(35,75,88,.12); background: rgba(255,255,255,.64); }
 .onboarding-step-action:disabled { opacity: .45; cursor: default; }
 .onboarding-status { min-height: 15px; margin: 12px 2px 0; color: rgba(20,42,51,.5); font-size: 9px; line-height: 1.4; }
 
