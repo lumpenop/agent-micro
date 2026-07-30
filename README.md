@@ -4,6 +4,10 @@ Codex CLI를 키보드와 작은 플로팅 맥로패드로 조작하는 macOS �
 
 이 문서는 처음 설치하는 사람도 앱을 실행하고 기본 기능을 사용할 수 있도록 작성했습니다.
 
+[제품 랜딩 페이지](https://agent-micro.swk5373.chatgpt.site/) · [최신 릴리스](https://github.com/lumpenop/agent-micro/releases/latest)
+
+> 랜딩 페이지는 현재 소유자 전용 미리보기입니다. 접속 시 ChatGPT 로그인이 필요하며, 로그인한 계정이 사이트 소유자가 아니면 열리지 않습니다. 앱의 Codex 로그인과는 별개의 배포 접근 설정입니다.
+
 문서 언어: [English](README.en.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
 
 기여하고 싶다면 [CONTRIBUTING.md](CONTRIBUTING.md)를 먼저 확인해 주세요. 현재 작업 방향은 [ROADMAP.md](ROADMAP.md)에서 볼 수 있습니다.
@@ -17,6 +21,9 @@ Agent Micro는 Codex CLI의 명령을 대신 입력해 주는 리모컨에 가�
 - 선택한 프로젝트의 개발 서버를 시작하고 종료합니다.
 - 조이스틱과 Touch 레이어로 Plan, history, sidebar, 새 채팅 등을 실행합니다.
 - Codex의 모델·추론 강도·작업 폴더·권한 관련 설정을 앱 안에서 관리합니다.
+- 질문의 복잡도에 맞춰 작은 모델과 큰 모델을 자동으로 선택할 수 있습니다.
+- 플랜 사용량, 다음 리셋까지 남은 시간, 오늘의 권장 사용량을 함께 표시합니다.
+- Git 설치 확인부터 변경 파일, 스테이징, 커밋, Pull·Push까지 앱 안에서 처리합니다.
 - 개인 Skills/MCP 설정을 지원합니다.
 
 Agent Micro 자체는 AI 모델을 제공하지 않습니다. 실제 작업과 답변은 연결된 Codex CLI가 처리합니다.
@@ -67,15 +74,16 @@ pnpm start
 
 앱 창이 열리면 설치가 완료된 것입니다. 개발 중에는 터미널에 앱 로그가 표시될 수 있습니다.
 
-### 5. 첫 실행: 세 단계
+### 5. 첫 실행: 네 단계
 
 앱을 처음 열면 다음 순서가 표시됩니다.
 
 1. **Codex 연결**: ChatGPT 계정으로 로그인합니다.
-2. **프로젝트 선택**: Codex가 작업할 폴더를 선택합니다.
-3. **Agent 시작**: `Start`를 눌러 첫 번째 Codex 세션을 엽니다.
+2. **Git 설정(선택)**: Git을 확인하고 필요하면 설치합니다. Git 기능을 나중에 사용하려면 `건너뛰기`를 선택해도 됩니다.
+3. **프로젝트 선택**: Codex가 작업할 폴더를 선택합니다.
+4. **Agent 시작**: `시작하기`를 눌러 첫 번째 Codex 세션을 엽니다.
 
-같은 Mac에서 Codex CLI에 이미 로그인했다면 1단계가 자동으로 완료될 수 있습니다. 작업 폴더와 고급 기능은 Settings에서 바꿀 수 있습니다.
+같은 Mac에서 Codex CLI에 이미 로그인했다면 1단계가 자동으로 완료될 수 있습니다. Git을 건너뛰어도 기본 Codex 기능은 사용할 수 있으며, 나중에 **Settings → Account → Git 설정**에서 다시 확인하거나 설치할 수 있습니다. 작업 폴더와 고급 기능도 Settings에서 바꿀 수 있습니다.
 
 이 프로젝트는 MIT 라이선스로 공개된 오픈소스 소프트웨어입니다. 체험 기간, 구매 절차, 라이선스 키는 없습니다.
 
@@ -174,6 +182,7 @@ Agent 1은 메인 조정용으로 유지합니다. Agent Manager에 작업을 �
 앱의 톱니바퀴 아이콘에서 다음을 설정할 수 있습니다.
 
 - Codex 로그인 및 연결 상태
+- Git 설치 상태 확인 및 설정
 - Provider와 API 설정
 - 모델과 추론 강도
 - 새 Agent를 답변·분석 전용 읽기 모드로 여는 Ask 모드
@@ -218,7 +227,9 @@ pnpm landing:build
 AGENT_MICRO_DOWNLOAD_URL=https://example.com/Agent-Micro.dmg pnpm landing:build
 ```
 
-빌드 결과는 `apps/landing/dist`에 생성됩니다. Vercel에서는 이 폴더를 출력 디렉터리로 사용합니다.
+빌드 결과는 `apps/landing/dist`에 생성되며, 이 결과물을 호스팅 배포에 사용합니다.
+
+현재 소유자 전용 미리보기는 [agent-micro.swk5373.chatgpt.site](https://agent-micro.swk5373.chatgpt.site/)에 배포되어 있습니다. 이 주소의 ChatGPT 로그인 화면은 사이트 접근 권한을 확인하기 위한 것으로, Agent Micro 앱의 Codex 로그인과는 별개입니다.
 
 ## macOS 앱 빌드
 
