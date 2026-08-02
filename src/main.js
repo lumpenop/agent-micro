@@ -8,7 +8,7 @@ const codexSettings = require('./codex-settings');
 const codexUsage = require('./codex-usage');
 const padPrefs = require('./pad-prefs');
 const i18n = require('./i18n');
-const mac = require('./platform/mac');
+const mac = require('./platform');
 const skillManager = require('./skill-manager');
 const whisperModel = require('./whisper-model');
 const toolInstaller = require('./tool-installer');
@@ -296,7 +296,7 @@ async function refreshStatusTray() {
 }
 
 function createStatusTray() {
-  if (process.platform !== 'darwin' || statusTray) return;
+  if (statusTray) return;
   // A title-only status item keeps the menu bar legible at small sizes.
   statusTray = new Tray(nativeImage.createEmpty());
   statusTray.setTitle('—');
@@ -355,13 +355,13 @@ async function launchIsolatedAgent(slotInput, options = {}) {
   }
   await agentCoordinator.recordLaunch(cwd, slot, result, {
     automatic: !!options.automatic,
-    trackOpen: activeProvider === 'codex' && process.platform === 'darwin',
+    trackOpen: activeProvider === 'codex',
   }).catch(() => {});
   return result;
 }
 
 async function monitorCoordinatorHealth() {
-  if (coordinatorHealthBusy || !bridge || activeProvider !== 'codex' || process.platform !== 'darwin') return;
+  if (coordinatorHealthBusy || !bridge || activeProvider !== 'codex') return;
   coordinatorHealthBusy = true;
   try {
     const cwd = coordinatorWorkspace();
@@ -1205,7 +1205,7 @@ ipcMain.handle('git:sync', async (_e, action, context = {}) => {
 ipcMain.handle('coordinator:list', async () => {
   try {
     const cwd = coordinatorWorkspace();
-    const openSlots = process.platform === 'darwin' ? await mac.listOpenCodexCliSlots().catch(() => []) : [];
+    const openSlots = await mac.listOpenCodexCliSlots().catch(() => []);
     await agentCoordinator.observeRuntime(cwd, openSlots);
     return await agentCoordinator.list(cwd);
   } catch (error) {
@@ -1914,7 +1914,9 @@ ipcMain.handle('devServer:toggle', () => {
     if (stopDevServer(cwd)) return { ok: true, running: false, cwd };
     const detected = detectDevCommand(cwd);
     const command = detected.command;
-    const child = spawn('/bin/zsh', ['-lc', `exec ${command}`], { cwd, detached: true, stdio: 'ignore', env: { ...process.env, ELECTRON_RUN_AS_NODE: '' } });
+    const shell = process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh';
+    const shellArgs = process.platform === 'win32' ? ['-NoProfile', '-Command', command] : ['-lc', `exec ${command}`];
+    const child = spawn(shell, shellArgs, { cwd, detached: true, stdio: 'ignore', env: { ...process.env, ELECTRON_RUN_AS_NODE: '' } });
     child.unref();
     devServers.set(cwd, child);
     child.once('exit', () => { if (devServers.get(cwd) === child) devServers.delete(cwd); });

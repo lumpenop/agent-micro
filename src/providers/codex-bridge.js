@@ -4,7 +4,7 @@ const os = require('os');
 const path = require('path');
 const readline = require('readline');
 const EventEmitter = require('events');
-const mac = require('../platform/mac');
+const mac = require('../platform');
 const { REASONING, SKILLS, emptyAgent, demo, truncate } = require('./base-bridge');
 const { t } = require('../i18n');
 const padPrefs = require('../pad-prefs');
@@ -1319,9 +1319,6 @@ class CodexBridge extends EventEmitter {
    *        focus defaults to true; pass false for voice prep (keep pad key focus).
    */
   async ensureAgentCliWindow(slot, opts = {}) {
-    if (process.platform !== 'darwin') {
-      return { ok: false, error: 'macOS only' };
-    }
     return mac.ensureCodexCliWindow(slot, {
       focus: opts.focus !== false,
       command: opts.command || this._codexCliCommand(slot),

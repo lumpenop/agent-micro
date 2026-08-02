@@ -3,6 +3,85 @@
   background: #fffdf6;
 }
 
+/* Control-room direction: calibrated surfaces, instrument labels, one live signal. */
+.product-page .site-header {
+  height: 56px;
+  background: rgba(255, 253, 246, .86);
+  border-bottom-color: rgba(23, 19, 30, .16);
+}
+
+.product-page .nav-shell { width: min(1240px, calc(100% - 56px)); }
+.product-page .brand-glyph { border-radius: 8px; transform: rotate(-8deg); }
+.product-page .site-nav { gap: 22px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; }
+.product-page .nav-buy { border-radius: 8px; background: #17131e; box-shadow: 3px 3px 0 #ff4f9a; }
+
+.product-hero {
+  min-height: 980px;
+  padding-top: 164px;
+  background:
+    linear-gradient(rgba(23,19,30,.045) 1px, transparent 1px) 0 0 / 100% 44px,
+    radial-gradient(circle at 82% 34%, rgba(255, 79, 154, .2), transparent 25rem),
+    linear-gradient(135deg, #fffdf6 0%, #fff0f8 52%, #eeefff 100%);
+}
+
+.product-hero::after {
+  content: "CONTROL SURFACE / 001";
+  position: absolute;
+  right: max(28px, calc((100vw - 1240px) / 2));
+  top: 92px;
+  color: rgba(23, 19, 30, .5);
+  font: 800 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .16em;
+}
+
+.product-hero-copy .eyebrow,
+.section-copy .eyebrow { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; }
+.product-hero h1 { max-width: 700px; font-size: clamp(60px, 6.8vw, 100px); letter-spacing: -.09em; }
+.product-hero h1 span { text-decoration-thickness: .11em; }
+.product-hero .hero-lede { max-width: 530px; font-size: 17px; line-height: 1.7; }
+.product-hero .hero-pills span { border-radius: 7px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; letter-spacing: .03em; }
+
+.hero-command-line {
+  width: min(430px, 100%); margin-top: 30px; padding: 13px 15px; display: flex; align-items: center; gap: 9px;
+  border: 1px solid rgba(23,19,30,.22); border-radius: 8px; background: rgba(255,255,255,.52); box-shadow: 4px 4px 0 rgba(23,19,30,.14);
+  font: 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.command-prompt { color: #6558ff; }.command-text { color: #34303d; }.command-caret { width: 6px; height: 13px; background: #ff4f9a; animation: cursor-blink 1.1s steps(2,end) infinite; }
+
+.controller-stage { min-height: 710px; border-radius: 28px; box-shadow: 12px 12px 0 #17131e; }
+.controller-stage::after { content: "LIVE / 37% / READY"; position: absolute; left: 34px; bottom: 28px; color: rgba(23,19,30,.62); font: 800 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .13em; }
+.controller-capture { position: relative; z-index: 2; }
+.controller-capture::before { content: ""; position: absolute; inset: -22px; border: 1px solid rgba(23,19,30,.22); border-radius: 20px; transform: rotate(-3deg); }
+.controller-stage .actual-badge { border-radius: 7px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.controller-sticker { border-radius: 9px; box-shadow: 4px 4px 0 #17131e; }
+
+.hero-readout { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; color: rgba(23,19,30,.54); font: 800 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; }
+.hero-readout i { flex: 1; height: 1px; background: rgba(23,19,30,.24); }.hero-readout b { color: #ff4f9a; font-size: 13px; }
+
+.control-surface, .settings-story, .usage-story, .git-story { background: #fffdf6; }
+.section-copy h2 { letter-spacing: -.075em; }.section-copy > p:not(.eyebrow) { font-size: 18px; }
+.control-primary, .settings-window, .usage-dashboard, .setup-card, .git-panel-card { border-radius: 16px; }
+.feature-marquee { border-top: 1px solid rgba(23,19,30,.18); border-bottom: 1px solid rgba(23,19,30,.18); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+@keyframes cursor-blink { 50% { opacity: 0; } }
+
+@media (max-width: 700px) {
+  .product-page .site-header { height: 50px; }
+  .product-page .nav-shell { width: calc(100% - 36px); }
+  .product-hero { min-height: 0; padding-top: 122px; }
+  .product-hero::after { top: 74px; right: 20px; font-size: 8px; }
+  .product-hero h1 { font-size: clamp(52px, 16vw, 78px); }
+  .hero-readout { margin-top: 12px; font-size: 8px; }
+  .hero-readout span:first-child, .hero-readout span:nth-last-child(2) { display: none; }
+  .hero-readout i { display: block; }
+  .controller-stage { min-height: 570px; border-radius: 20px; }
+  .controller-stage::after { left: 20px; bottom: 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .command-caret { animation: none; }
+}
+
 .product-page .site-header {
   z-index: 100;
 }

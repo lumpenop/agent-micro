@@ -33,6 +33,8 @@ const key = `${process.platform}-${process.arch}`;
 const nativeMap = {
   'darwin-arm64': path.join(root, 'node_modules', '@openai', 'codex-darwin-arm64', 'vendor', 'aarch64-apple-darwin', 'bin', 'codex'),
   'darwin-x64': path.join(root, 'node_modules', '@openai', 'codex-darwin-x64', 'vendor', 'x86_64-apple-darwin', 'bin', 'codex'),
+  'win32-x64': path.join(root, 'node_modules', '@openai', 'codex-win32-x64', 'vendor', 'x86_64-pc-windows-msvc', 'bin', 'codex.exe'),
+  'win32-arm64': path.join(root, 'node_modules', '@openai', 'codex-win32-arm64', 'vendor', 'aarch64-pc-windows-msvc', 'bin', 'codex.exe'),
 };
 
 function resolveViaRequire() {

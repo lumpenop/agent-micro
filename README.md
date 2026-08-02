@@ -6,6 +6,8 @@ Codex CLI를 키보드와 작은 플로팅 맥로패드로 조작하는 macOS �
 
 [제품 랜딩 페이지](https://agent-micro.swk5373.chatgpt.site/) · [최신 릴리스](https://github.com/lumpenop/agent-micro/releases/latest)
 
+Windows 버전은 `v*` 태그가 GitHub에 푸시되면 자동으로 빌드되어 최신 릴리스에 `.exe` 설치 파일로 첨부됩니다.
+
 > 랜딩 페이지는 현재 소유자 전용 미리보기입니다. 접속 시 ChatGPT 로그인이 필요하며, 로그인한 계정이 사이트 소유자가 아니면 열리지 않습니다. 앱의 Codex 로그인과는 별개의 배포 접근 설정입니다.
 
 문서 언어: [English](README.en.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)

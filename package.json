@@ -25,6 +25,7 @@
     "ensure:whisper": "node scripts/ensure-whisper.js",
     "dist:mac": "electron-builder --mac dir --arm64",
     "dist:dmg": "electron-builder --mac dmg --arm64",
+    "dist:win": "electron-builder --win nsis",
     "postinstall": "node scripts/ensure-electron.js && node scripts/ensure-tools.js"
   },
   "keywords": [
@@ -53,6 +54,9 @@
       "category": "public.app-category.developer-tools",
       "icon": "assets/icon.icns",
       "identity": null
+    },
+    "win": {
+      "target": ["nsis", "portable"]
     }
   },
   "devDependencies": {
