@@ -33,7 +33,7 @@ if ('IntersectionObserver' in window && !window.matchMedia('(prefers-reduced-mot
 const downloadButton = document.querySelector('#download-button');
 const downloadUrl = String(window.AGENT_MICRO_DOWNLOAD_URL || '').trim();
 if (downloadButton) {
-  downloadButton.href = downloadUrl || 'https://github.com/lumpenop/agent-micro/releases/download/v1.2.1/Agent.Micro-1.2.1-arm64.dmg';
+  downloadButton.href = downloadUrl || 'https://github.com/lumpenop/agent-micro/releases/download/v1.2.2/Agent.Micro-1.2.2-arm64.dmg';
   downloadButton.target = '_blank';
   downloadButton.rel = 'noreferrer';
 }
@@ -61,7 +61,7 @@ function applyLanguage(language) {
   setCopy('.product-hero-copy > .eyebrow', ['CODEX CONTROL SURFACE FOR macOS'], english);
   setCopy('.product-hero-copy > h1', ['Complex Codex controls.<br /><span>Right under your fingers.</span>'], english);
   setCopy('.product-hero-copy > .hero-lede', ['Change models, toggle Fast mode, approve or decline, fork conversations, select agents, use Git, and manage usage and resources. Click a button or press a shortcut instead of memorizing commands.'], english);
-  setCopy('.product-hero .hero-actions .button', ['Download for macOS', 'See everything it can do <span aria-hidden="true">↓</span>'], english);
+  setCopy('.product-hero .hero-actions .button', ['Choose a download', 'See everything it can do <span aria-hidden="true">↓</span>'], english);
   setCopy('.product-hero .hero-pills span', ['Buttons + shortcuts', 'Codex CLI', 'Local first', 'Apple silicon'], english);
   setCopy('.controller-sticker > span', ['One button', 'Instant toggle', '6d 10h left'], english);
   setCopy('.controller-stage > .actual-badge', ['<i></i> LIVE APP UI'], english);
@@ -159,10 +159,11 @@ function applyLanguage(language) {
 
   setCopy('#download > h2', ['Make Codex easier.<br /><span>And more precise.</span>'], english);
   setCopy('#download > p:not(.eyebrow)', ['Let the app handle the controls and focus on the work in front of you.'], english);
-  setCopy('#download-button', ['Download for macOS'], english);
+  setCopy('#download-button', ['Download for macOS <small>Apple silicon</small>'], english);
+  setCopy('#windows-download-button', ['Download for Windows <small>.exe installer</small>'], english);
   setCopy('.github-star-link', ['★ Star on GitHub'], english);
-  setCopy('.download-meta', ['macOS · Apple silicon · Open source · MIT · Codex CLI'], english);
-  setCopy('.download-warning', ['Unsigned public beta. macOS may ask you to confirm the first launch.'], english);
+  setCopy('.download-meta', ['macOS · Windows · Open source · MIT · Codex CLI'], english);
+  setCopy('.download-warning', ['Public beta. Download the Windows installer from the GitHub Release.'], english);
   setCopy('.site-footer .footer-shell > p:first-of-type', ['Complex Codex controls, within reach.'], english);
 
   if (languageSwitch) {

@@ -14,6 +14,11 @@
 .product-page .brand-glyph { border-radius: 8px; transform: rotate(-8deg); }
 .product-page .site-nav { gap: 22px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; }
 .product-page .nav-buy { border-radius: 8px; background: #17131e; box-shadow: 3px 3px 0 #ff4f9a; }
+.download-options { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
+.download-options .button { min-width: 210px; border-radius: 9px; font-size: 13px; }
+.download-options .button small { display: block; margin-left: 8px; opacity: .62; font: 800 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .03em; }
+.download-options .button-secondary { color: #17131e; border: 1.5px solid #17131e; background: #fff; }
+.download-options .button-secondary:hover { background: #f4ff62; }
 
 .product-hero {
   min-height: 980px;
