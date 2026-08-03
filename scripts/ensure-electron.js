@@ -2,6 +2,10 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
+// Electron's installer writes the correct platform path.txt on Windows/Linux.
+// The recovery logic below is macOS-specific and must not overwrite it there.
+if (process.platform !== 'darwin') process.exit(0);
+
 const root = path.join(__dirname, '..', 'node_modules', 'electron');
 const dist = path.join(root, 'dist');
 const framework = path.join(
