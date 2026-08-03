@@ -33,7 +33,7 @@ if ('IntersectionObserver' in window && !window.matchMedia('(prefers-reduced-mot
 const downloadButton = document.querySelector('#download-button');
 const downloadUrl = String(window.AGENT_MICRO_DOWNLOAD_URL || '').trim();
 if (downloadButton) {
-  downloadButton.href = downloadUrl || 'https://github.com/lumpenop/agent-micro/releases/download/v1.2.2/Agent.Micro-1.2.2-arm64.dmg';
+  downloadButton.href = downloadUrl || 'https://github.com/lumpenop/agent-micro/releases/download/v1.2.1/Agent.Micro-1.2.1-arm64.dmg';
   downloadButton.target = '_blank';
   downloadButton.rel = 'noreferrer';
 }
@@ -160,10 +160,10 @@ function applyLanguage(language) {
   setCopy('#download > h2', ['Make Codex easier.<br /><span>And more precise.</span>'], english);
   setCopy('#download > p:not(.eyebrow)', ['Let the app handle the controls and focus on the work in front of you.'], english);
   setCopy('#download-button', ['Download for macOS <small>Apple silicon</small>'], english);
-  setCopy('#windows-download-button', ['Download for Windows <small>.exe installer</small>'], english);
+  setCopy('#windows-download-button', ['Download for Windows <small>Agent Micro Setup 1.2.4.exe</small>'], english);
   setCopy('.github-star-link', ['★ Star on GitHub'], english);
   setCopy('.download-meta', ['macOS · Windows · Open source · MIT · Codex CLI'], english);
-  setCopy('.download-warning', ['Public beta. Download the Windows installer from the GitHub Release.'], english);
+  setCopy('.download-warning', ['Public beta. Download <strong>Agent Micro Setup 1.2.4.exe</strong> from the GitHub Release.'], english);
   setCopy('.site-footer .footer-shell > p:first-of-type', ['Complex Codex controls, within reach.'], english);
 
   if (languageSwitch) {
