@@ -27,7 +27,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Build Windows installers
-        run: pnpm dist:win
+        run: pnpm dist:win -- --publish never
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
