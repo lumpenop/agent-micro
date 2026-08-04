@@ -160,7 +160,7 @@ function applyLanguage(language) {
   setCopy('#download > h2', ['Make Codex easier.<br /><span>And more precise.</span>'], english);
   setCopy('#download > p:not(.eyebrow)', ['Let the app handle the controls and focus on the work in front of you.'], english);
   setCopy('#download-button', ['Download for macOS <small>Apple silicon</small>'], english);
-  setCopy('#windows-download-button', ['Download for Windows <small>Agent.Micro.Setup.1.2.7.exe</small>'], english);
+  setCopy('#windows-download-button', ['Download for Windows <small>.exe</small>'], english);
   setCopy('.github-star-link', ['★ Star on GitHub'], english);
   setCopy('.download-meta', ['macOS · Windows · Open source · MIT · Codex CLI'], english);
   setCopy('.download-warning', ['Public beta. Download <strong>Agent.Micro.Setup.1.2.7.exe</strong>.'], english);
