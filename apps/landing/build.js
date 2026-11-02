@@ -12,7 +12,7 @@ fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(assets, { recursive: true });
 fs.mkdirSync(clientAssets, { recursive: true });
 fs.mkdirSync(server, { recursive: true });
-for (const name of ['index.html', 'styles.css', 'quality.css', 'product.css', 'script.js', 'robots.txt', 'sitemap.xml']) {
+for (const name of ['index.html', 'styles.css', 'script.js', 'robots.txt', 'sitemap.xml']) {
   fs.copyFileSync(path.join(root, name), path.join(out, name));
   fs.copyFileSync(path.join(root, name), path.join(client, name));
 }

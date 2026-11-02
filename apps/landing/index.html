@@ -1,328 +1,335 @@
 <!doctype html>
 <html lang="ko">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="모델 전환부터 Fast 모드, 승인, Git, 사용량 관리까지. Agent Micro로 Codex의 자주 쓰는 기능을 버튼과 단축키에서 바로 실행하세요." />
-    <meta name="author" content="Agent Micro" />
-    <meta name="robots" content="index, follow, max-image-preview:large" />
-    <meta name="keywords" content="Codex, Codex CLI, macOS, AI 에이전트, 모델 변경, Git, 사용량 관리, 단축키, Agent Micro" />
-    <meta name="theme-color" content="#eef3f8" />
-    <link rel="canonical" href="https://agent-micro.swk5373.chatgpt.site/" />
-    <meta property="og:title" content="Agent Micro — Codex를 더 쉽고 빠르게." />
-    <meta property="og:description" content="모델 전환, Fast 모드, 승인, Git, 사용량과 에이전트까지 하나의 플로팅 컨트롤러에서 관리하세요." />
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://agent-micro.swk5373.chatgpt.site/" />
-    <meta property="og:site_name" content="Agent Micro" />
-    <meta property="og:locale" content="ko_KR" />
-    <meta property="og:image" content="https://agent-micro.swk5373.chatgpt.site/assets/og.png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Agent Micro — Codex control, within reach." />
-    <meta name="twitter:description" content="Models, Fast mode, approvals, Git, usage, resources, and agents — without memorizing commands." />
-    <meta name="twitter:image" content="https://agent-micro.swk5373.chatgpt.site/assets/og.png" />
-    <title>Agent Micro — Codex를 더 쉽고 빠르게.</title>
-    <link rel="icon" href="./assets/app-icon.png" type="image/png" />
-    <link rel="preload" href="./assets/agent-micro-ui.png" as="image" fetchpriority="high" />
-    <link rel="stylesheet" href="./styles.css" />
-    <link rel="stylesheet" href="./quality.css" />
-    <link rel="stylesheet" href="./product.css" />
-  </head>
-  <body class="product-page">
-    <header class="site-header">
-      <div class="nav-shell">
-        <a class="brand" href="#top" aria-label="Agent Micro 홈">
-          <span class="brand-glyph" aria-hidden="true"><img src="./assets/app-icon.png" alt="" /></span>
-          <span>Agent Micro</span>
-          <small>PUBLIC BETA</small>
-        </a>
-        <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">
-          <span></span><span></span><span class="sr-only">메뉴 열기</span>
-        </button>
-        <nav id="site-nav" class="site-nav" aria-label="주요 메뉴">
-          <a href="#controls">조작</a>
-          <a href="#settings">설정</a>
-          <a href="#usage">사용량</a>
-          <a href="#git">Git</a>
-          <a href="#agents">에이전트</a>
-          <a class="nav-github-star" href="https://github.com/lumpenop/agent-micro" target="_blank" rel="noreferrer" aria-label="GitHub에서 Agent Micro에 스타 주기"><span aria-hidden="true">★</span> GitHub</a>
-          <button class="nav-language" type="button" id="language-switch" aria-label="Switch page language to English">English</button>
-          <a class="nav-buy" href="#download">다운로드</a>
-        </nav>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="모델 전환부터 Fast 모드, 승인, Git, 사용량 관리까지. Agent Micro로 Codex의 자주 쓰는 기능을 버튼과 단축키에서 바로 실행하세요." />
+  <meta name="author" content="Agent Micro" />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <meta name="keywords" content="Codex, Codex CLI, macOS, AI 에이전트, 모델 변경, Git, 사용량 관리, 단축키, Agent Micro" />
+  <meta name="theme-color" content="#101114" />
+  <link rel="canonical" href="https://agent-micro.swk5373.chatgpt.site/" />
+  <meta property="og:title" content="Agent Micro — Codex를 더 쉽고 빠르게." />
+  <meta property="og:description" content="모델 전환, Fast 모드, 승인, Git, 사용량과 에이전트까지 하나의 플로팅 컨트롤러에서 관리하세요." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://agent-micro.swk5373.chatgpt.site/" />
+  <meta property="og:site_name" content="Agent Micro" />
+  <meta property="og:locale" content="ko_KR" />
+  <meta property="og:image" content="https://agent-micro.swk5373.chatgpt.site/assets/og.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Agent Micro — Codex control, within reach." />
+  <meta name="twitter:description" content="Models, Fast mode, approvals, Git, usage, resources, and agents — without memorizing commands." />
+  <meta name="twitter:image" content="https://agent-micro.swk5373.chatgpt.site/assets/og.png" />
+  <title>Agent Micro — Codex를 더 쉽고 빠르게.</title>
+  <link rel="icon" href="./assets/app-icon.png" type="image/png" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+  <link rel="preload" href="./assets/agent-micro-pad.png" as="image" fetchpriority="high" />
+  <link rel="stylesheet" href="./styles.css" />
+  <script>document.documentElement.classList.add('js')</script>
+</head>
+<body>
+  <a class="skip" href="#main" data-en="Skip to content">본문으로 건너뛰기</a>
+
+  <header class="nav">
+    <div class="wrap nav-in">
+      <a class="brand" href="#top" aria-label="Agent Micro 홈">
+        <img src="./assets/app-icon.png" alt="" width="28" height="28" />
+        <span>Agent Micro</span>
+        <small>BETA</small>
+      </a>
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav">
+        <span></span><span></span><span class="sr" data-en="Open menu">메뉴 열기</span>
+      </button>
+      <nav id="site-nav" class="links" aria-label="주요 메뉴">
+        <a href="#controls" data-en="Controls">조작</a>
+        <a href="#settings" data-en="Settings">설정</a>
+        <a href="#usage" data-en="Usage">사용량</a>
+        <a href="#git">Git</a>
+        <a href="#agents" data-en="Agents">에이전트</a>
+        <span class="links-gap"></span>
+        <a class="pill" href="https://github.com/lumpenop/agent-micro" target="_blank" rel="noreferrer" aria-label="GitHub에서 Agent Micro에 스타 주기">★ GitHub</a>
+        <button class="pill" type="button" id="language-switch" aria-label="Switch page language to English">English</button>
+        <a class="pill pill-accent" href="#download" data-en="Download">다운로드</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- HERO -->
+    <section class="hero dark" id="top">
+      <div class="hero-bg" aria-hidden="true"></div>
+      <div class="wrap hero-grid">
+        <div class="hero-copy reveal">
+          <a class="release" href="https://github.com/lumpenop/agent-micro/releases/tag/v1.2.7" target="_blank" rel="noreferrer"><i></i> v1.2.7 · PUBLIC BETA <span>↗</span></a>
+          <h1 data-en="Complex Codex controls.<br /><em>Right under your fingers.</em>">Codex를 더 쉽게.<br /><em>필요한 기능은 바로.</em></h1>
+          <p class="lede" data-en="Change models, toggle Fast mode, approve or decline, fork conversations, select agents, use Git, and manage usage and resources. Click a button or press a shortcut instead of memorizing commands.">모델을 바꾸고, Fast 모드를 켜고, 승인 요청에 답하는 일까지. 자주 쓰는 기능을 버튼과 단축키에 모아 작업 흐름을 끊지 않습니다.</p>
+          <div class="cta">
+            <a class="btn btn-accent" href="#download" data-en="Choose a download">다운로드 선택</a>
+            <a class="btn btn-ghost" href="#controls"><span data-en="See what it can do">주요 기능 살펴보기</span> <span aria-hidden="true">↓</span></a>
+          </div>
+          <ul class="tags" aria-label="핵심 특징">
+            <li data-en="Buttons + shortcuts">버튼 + 단축키</li>
+            <li>Codex CLI</li>
+            <li data-en="Local first">로컬 우선</li>
+            <li>macOS · Windows</li>
+          </ul>
+          <div class="term" aria-label="Agent Micro 명령 예시"><b>agent@micro:~$</b> codex --session 01 <i aria-hidden="true"></i></div>
+        </div>
+
+        <div class="hero-pad reveal" data-delay="1">
+          <div class="glow" aria-hidden="true"></div>
+          <img src="./assets/agent-micro-pad.png" alt="모델, Fast, 승인, 거절, 포크와 에이전트 키가 있는 Agent Micro 앱 화면" width="360" height="476" fetchpriority="high" />
+          <div class="spec spec-a"><small>MODEL</small><strong>Change</strong><span data-en="One button">버튼 한 번</span></div>
+          <div class="spec spec-b"><small>FAST</small><strong>ON</strong><span data-en="Instant toggle">즉시 전환</span></div>
+          <div class="spec spec-c"><small>USAGE</small><strong>37%</strong><span data-en="6d 10h left">6d 10h 남음</span></div>
+          <span class="badge"><i></i> <span data-en="LIVE APP UI">실제 앱 UI</span></span>
+        </div>
       </div>
-    </header>
 
-    <main id="top">
-      <section class="product-hero">
-        <div class="product-hero-copy reveal">
-          <a class="release-chip" href="https://github.com/lumpenop/agent-micro/releases/tag/v1.2.7" target="_blank" rel="noreferrer"><i></i> v1.2.7 · PUBLIC BETA <span>↗</span></a>
-          <p class="eyebrow">CODEX CONTROL SURFACE FOR macOS</p>
-          <h1>Codex를 더 쉽게.<br /><span>필요한 기능은 바로.</span></h1>
-          <p class="hero-lede">모델을 바꾸고, Fast 모드를 켜고, 승인 요청에 답하는 일까지. 자주 쓰는 기능을 버튼과 단축키에 모아 작업 흐름을 끊지 않습니다.</p>
-          <div class="hero-actions">
-            <a class="button button-primary" href="#download">다운로드 선택</a>
-            <a class="button button-secondary" href="#controls">주요 기능 살펴보기 <span aria-hidden="true">↓</span></a>
-          </div>
-          <div class="hero-pills" aria-label="핵심 특징">
-            <span>버튼 + 단축키</span><span>Codex CLI</span><span>로컬 우선</span><span>Apple silicon</span>
-          </div>
-          <div class="hero-command-line" aria-label="Agent Micro 명령 예시">
-            <span class="command-prompt">agent@micro:~$</span>
-            <span class="command-text">codex --session 01</span>
-            <span class="command-caret" aria-hidden="true"></span>
-          </div>
+      <div class="wrap">
+        <div class="proof reveal" aria-label="제품 요약">
+          <div><strong>1–6</strong><span data-en="Instant agent switching">에이전트 즉시 전환</span></div>
+          <div><strong>1 click</strong><span data-en="Model · Fast · approvals">모델·Fast·승인 조작</span></div>
+          <div><strong>Live</strong><span data-en="Usage and reset status">사용량·리셋 표시</span></div>
+          <div><strong>Git</strong><span data-en="From install to commit">설치부터 커밋까지</span></div>
         </div>
+      </div>
+    </section>
 
-        <div class="controller-stage reveal" data-delay="1">
-          <div class="controller-sticker sticker-model"><small>MODEL</small><strong>Change</strong><span>버튼 한 번</span></div>
-          <div class="controller-sticker sticker-fast"><small>FAST</small><strong>ON</strong><span>즉시 전환</span></div>
-          <div class="controller-sticker sticker-usage"><small>USAGE</small><strong>37%</strong><span>6d 10h 남음</span></div>
-          <div class="controller-capture">
-            <img src="./assets/agent-micro-ui.png" alt="모델, Fast, 승인, 거절, 포크와 에이전트 키가 있는 Agent Micro 앱 화면" width="558" height="596" fetchpriority="high" />
-          </div>
-          <span class="actual-badge"><i></i> 실제 앱 UI</span>
-        </div>
-
-        <div class="hero-proof reveal" data-delay="2" aria-label="제품 요약">
-          <div><strong>1–6</strong><span>에이전트 즉시 전환</span></div>
-          <div><strong>1 click</strong><span>모델·Fast·승인 조작</span></div>
-          <div><strong>Live</strong><span>사용량·리셋 표시</span></div>
-          <div><strong>Git</strong><span>설치부터 커밋까지</span></div>
-        </div>
-        <div class="hero-readout" aria-hidden="true"><span>INPUT / BUTTONS + SHORTCUTS</span><i></i><span>OUTPUT / FOCUSED WORK</span><b>01—06</b></div>
-      </section>
-
-      <section class="control-surface section" id="controls">
-        <div class="section-copy centered reveal">
+    <!-- CONTROLS -->
+    <section class="sec" id="controls">
+      <div class="wrap">
+        <header class="head reveal">
           <p class="eyebrow">EVERYDAY CONTROLS</p>
-          <h2>자주 쓰는 기능은<br /><span>가까이에 둘수록 편하니까.</span></h2>
-          <p>터미널 명령과 설정 파일을 오갈 필요 없이, 플로팅 패드나 원하는 단축키로 바로 실행하세요.</p>
-        </div>
+          <h2 data-en="Everyday controls.<br /><em>Moved out into the open.</em>">자주 쓰는 기능은<br /><em>가까이에 둘수록 편하니까.</em></h2>
+          <p data-en="Run commands from the floating pad and configurable shortcuts instead of jumping between terminal commands and configuration files.">터미널 명령과 설정 파일을 오갈 필요 없이, 플로팅 패드나 원하는 단축키로 바로 실행하세요.</p>
+        </header>
 
-        <div class="control-showcase">
-          <article class="control-primary reveal">
-            <div class="control-primary-top">
-              <span class="panel-label">SELECTED AGENT · 01</span>
-              <span class="live-pill"><i></i> LIVE</span>
+        <div class="controls-grid">
+          <article class="demo reveal" id="demo">
+            <div class="demo-top"><span>SELECTED AGENT · <b id="demo-agent">01</b></span><span class="live"><i></i> LIVE</span></div>
+            <div class="seg" role="group" aria-label="에이전트 선택 예시">
+              <button type="button" aria-pressed="true">1</button><button type="button" aria-pressed="false">2</button><button type="button" aria-pressed="false">3</button><button type="button" aria-pressed="false">4</button><button type="button" aria-pressed="false">5</button><button type="button" aria-pressed="false">6</button>
             </div>
-            <div class="agent-switch-row" aria-label="에이전트 선택 예시">
-              <button class="active" aria-pressed="true">1</button><button aria-pressed="false">2</button><button aria-pressed="false">3</button><button aria-pressed="false">4</button><button aria-pressed="false">5</button><button aria-pressed="false">6</button>
+            <div class="acts">
+              <div class="act"><small>MODEL</small><strong>GPT-5.6</strong><span>Change</span></div>
+              <button type="button" class="act act-fast" id="fast" aria-pressed="true"><small>FAST MODE</small><strong id="fast-state">ON</strong><span>Toggle</span></button>
             </div>
-            <div class="big-action-row">
-              <div><small>MODEL</small><strong>GPT-5.6</strong><span>Change</span></div>
-              <div class="is-hot"><small>FAST MODE</small><strong>ON</strong><span>Toggle</span></div>
+            <div class="decide">
+              <button type="button" class="ok" data-en="✓ Approve">✓ 승인</button>
+              <button type="button" class="no" data-en="× Decline">× 거절</button>
+              <button type="button" class="fork" data-en="↗ Fork">↗ 포크</button>
             </div>
-            <div class="approval-row">
-              <button class="approve">✓ 승인</button>
-              <button class="decline">× 거절</button>
-              <button class="fork">↗ 포크</button>
-            </div>
-            <p>모든 조작은 지금 선택한 에이전트에만 전달됩니다.</p>
+            <p data-en="Every action goes only to the currently selected Agent.">모든 조작은 지금 선택한 에이전트에만 전달됩니다.</p>
           </article>
 
-          <div class="shortcut-stack reveal" data-delay="1">
-            <div class="shortcut-card"><kbd>⌥ 1–6</kbd><span><strong>에이전트 선택</strong><small>터미널 포커스와 패드 상태를 함께 전환</small></span></div>
-            <div class="shortcut-card"><kbd>⌥ ← →</kbd><span><strong>모델 전환</strong><small>모델 선택창을 열거나 바로 다음 모델로 변경</small></span></div>
-            <div class="shortcut-card"><kbd>⌥ F</kbd><span><strong>Fast 켜기 / 끄기</strong><small>필요할 때 응답 속도를 빠르게 전환</small></span></div>
-            <div class="shortcut-card"><kbd>⌥ Q W</kbd><span><strong>승인 / 거절</strong><small>승인 요청에 키보드로 바로 응답</small></span></div>
-            <div class="shortcut-card"><kbd>⌥ R</kbd><span><strong>대화 포크</strong><small>현재 대화를 비어 있는 에이전트로 분기</small></span></div>
-          </div>
+          <ul class="keys reveal" data-delay="1">
+            <li><kbd>⌥ 1–6</kbd><div><strong data-en="Select an Agent">에이전트 선택</strong><small data-en="Keep terminal focus and pad state in sync">터미널 포커스와 패드 상태를 함께 전환</small></div></li>
+            <li><kbd>⌥ ← →</kbd><div><strong data-en="Switch models">모델 전환</strong><small data-en="Open the model picker or switch immediately">모델 선택창을 열거나 바로 다음 모델로 변경</small></div></li>
+            <li><kbd>⌥ F</kbd><div><strong data-en="Fast ON / OFF">Fast 켜기 / 끄기</strong><small data-en="Change response speed and reasoning mode">필요할 때 응답 속도를 빠르게 전환</small></div></li>
+            <li><kbd>⌥ Q W</kbd><div><strong data-en="Approve / decline">승인 / 거절</strong><small data-en="Respond to approval requests from the keyboard">승인 요청에 키보드로 바로 응답</small></div></li>
+            <li><kbd>⌥ R</kbd><div><strong data-en="Fork">대화 포크</strong><small data-en="Branch the current conversation into an empty Agent slot">현재 대화를 비어 있는 에이전트로 분기</small></div></li>
+          </ul>
         </div>
 
-        <div class="feature-marquee reveal" aria-label="추가 기능">
-          <span>새 채팅</span><span>Plan 모드</span><span>입력 지우기</span><span>음성 입력</span><span>Review</span><span>Dev Server</span><span>커스텀 아이콘</span><span>숨기기 ⌘⇧M</span>
-        </div>
-      </section>
-
-      <section class="settings-story section" id="settings">
-        <div class="settings-layout">
-          <div class="section-copy reveal">
-            <p class="eyebrow">SETTINGS WITHOUT CONFIG HUNTING</p>
-            <h2>복잡한 설정도<br /><span>익숙한 화면에서 간단하게.</span></h2>
-            <p>모델과 추론 강도, 샌드박스, 승인 정책, 에이전트 규칙을 한 화면에서 관리하세요. 변경 전 설정은 자동으로 백업해 언제든 되돌릴 수 있습니다.</p>
-            <ul class="check-list">
-              <li><i>✓</i> Ask 모드와 기본 작업 모드</li>
-              <li><i>✓</i> 질문의 복잡도에 맞춘 모델 자동 선택</li>
-              <li><i>✓</i> 모델·추론 강도·응답 길이</li>
-              <li><i>✓</i> 샌드박스·승인 정책·웹 검색</li>
-              <li><i>✓</i> 전역·프로젝트·Agent별 규칙</li>
-              <li><i>✓</i> 설정 백업·복원·config.toml 열기</li>
-            </ul>
-          </div>
-
-          <div class="settings-window reveal" data-delay="1" aria-label="Agent Micro 설정창 미리보기">
-            <div class="fake-window-head"><span><i></i><i></i><i></i></span><strong>Agent Micro Settings</strong><em>⌘,</em></div>
-            <div class="fake-tabs"><button class="active">Model</button><button>Usage</button><button>Agents</button><button>Advanced</button></div>
-            <div class="fake-setting">
-              <span><small>SESSION MODE</small><strong>Ask · answer and inspect only</strong></span>
-              <b>⌄</b>
-            </div>
-            <div class="fake-setting">
-              <span><small>AUTOMATIC MODEL ROUTING</small><strong>Balanced</strong></span>
-              <b class="toggle on">ON</b>
-            </div>
-            <div class="fake-columns">
-              <div><small>SMALL MODEL</small><strong>gpt-5.6-terra</strong></div>
-              <div><small>LARGE MODEL</small><strong>gpt-5.6-sol</strong></div>
-            </div>
-            <div class="fake-columns">
-              <div><small>REASONING</small><strong>medium</strong></div>
-              <div><small>APPROVAL</small><strong>on-request</strong></div>
-            </div>
-            <div class="fake-setting accent">
-              <span><small>PLAN USAGE WARNING</small><strong>Warn before predicted overage</strong></span>
-              <b>80%</b>
-            </div>
-            <div class="fake-window-foot"><button>Restore</button><button class="save">Save settings</button></div>
-          </div>
-        </div>
-      </section>
-
-      <section class="usage-story section" id="usage">
-        <div class="section-copy centered reveal">
-          <p class="eyebrow">USAGE &amp; RESET AT A GLANCE</p>
-          <h2>쓴 만큼 확인하고,<br /><span>리셋까지 계획하세요.</span></h2>
-          <p>현재 세션과 오늘, 이번 달 사용량을 한눈에 확인하세요. 다음 리셋까지 남은 시간과 오늘 사용해도 좋은 권장량도 함께 계산해 줍니다.</p>
-        </div>
-
-        <div class="usage-dashboard reveal">
-          <div class="usage-topline">
-            <div><small>PLAN USAGE</small><strong>37%</strong><span>▰▰▱▱▱</span></div>
-            <div><small>NEXT RESET</small><strong>6d 10h</strong><span>Jul 30 · 08:51</span></div>
-            <div><small>RECOMMENDED TODAY</small><strong>4.8%</strong><span>페이스 유지 중</span></div>
-          </div>
-          <div class="usage-progress-landing"><i style="width: 37%"></i><b>오늘 목표 15%</b></div>
-          <div class="usage-bottomline">
-            <span><small>현재 세션</small><strong>18.4k</strong></span>
-            <span><small>오늘</small><strong>126k</strong></span>
-            <span><small>이번 달</small><strong>1.9M</strong></span>
-            <span><small>컨텍스트</small><strong>42%</strong></span>
-          </div>
-        </div>
-
-        <div class="menubar-inline reveal">
-          <div>
-            <span class="panel-label">LIVE macOS MENU BAR</span>
-            <h3>앱을 열지 않아도<br />사용량을 바로 확인하세요.</h3>
-            <p>다섯 칸 그래프와 리셋까지 남은 시간이 macOS 메뉴 막대에 늘 표시됩니다.</p>
-          </div>
-          <div class="menubar-capture"><img src="./assets/agent-micro-menubar.png" alt="37% 사용량과 6일 10시간 리셋 카운트다운이 표시된 실제 Agent Micro 메뉴바" width="137" height="30" /></div>
-        </div>
-      </section>
-
-      <section class="resource-story section-dark" id="resources">
-        <div class="resource-layout">
-          <div class="section-copy reveal">
-            <p class="eyebrow">RESOURCE GUARDRAILS</p>
-            <h2>오래 실행할수록<br /><span>안전 기준이 필요합니다.</span></h2>
-            <p>사용량을 직접 차단할 수는 없지만, 로컬 목표와 경고를 설정해 과도한 사용이나 끝나지 않는 작업을 일찍 알아챌 수 있습니다.</p>
-          </div>
-          <div class="resource-grid">
-            <article class="resource-card reveal"><span>RAM</span><strong>2,048 MB</strong><p>앱 메모리가 기준을 넘으면 경고</p><i style="--fill:58%"></i></article>
-            <article class="resource-card reveal" data-delay="1"><span>MAX RUNTIME</span><strong>30 min</strong><p>지정한 시간을 넘긴 에이전트 작업 경고</p><i style="--fill:42%"></i></article>
-            <article class="resource-card reveal"><span>CONCURRENCY</span><strong>6 Agents</strong><p>동시에 실행할 에이전트 수 설정</p><i style="--fill:68%"></i></article>
-            <article class="resource-card reveal" data-delay="1"><span>TOKEN BUDGET</span><strong>100k</strong><p>실험적 토큰 추적과 알림 간격</p><i style="--fill:51%"></i></article>
-            <article class="resource-card reveal"><span>AUTO COMPACT</span><strong>64k</strong><p>컨텍스트 자동 압축 기준</p><i style="--fill:64%"></i></article>
-            <article class="resource-card reveal" data-delay="1"><span>TOOL TIMEOUT</span><strong>600 sec</strong><p>도구 호출별 최대 대기 시간</p><i style="--fill:36%"></i></article>
-          </div>
-        </div>
-      </section>
-
-      <section class="git-story section" id="git">
-        <div class="git-layout">
-          <div class="git-visual reveal">
-            <div class="setup-card">
-              <div class="setup-head"><span>FIRST RUN SETUP</span><strong>1 / 4</strong></div>
-              <div class="setup-step done"><b>1</b><span><strong>Codex 연결</strong><small>ChatGPT 계정으로 로그인됨</small></span><em>✓</em></div>
-              <div class="setup-step active"><b>2</b><span><strong>GitHub 연결 <em>선택</em></strong><small>브라우저에서 간편 로그인</small></span><button>연결</button></div>
-              <div class="setup-step"><b>3</b><span><strong>프로젝트 선택</strong><small>Codex가 작업할 폴더</small></span><button>선택</button></div>
-              <div class="setup-step"><b>4</b><span><strong>첫 Agent 시작</strong><small>바로 쓸 수 있는 세션 열기</small></span><button>시작</button></div>
-              <p>GitHub는 선택 사항입니다. 건너뛰어도 로컬 Git과 Codex는 그대로 사용할 수 있습니다.</p>
-            </div>
-            <div class="git-panel-card">
-              <div><span>main</span><strong>3 changes</strong></div>
-              <ul><li><i>M</i> src/app.mjs <b>Stage</b></li><li><i>M</i> src/styles.css <b>Stage</b></li><li><i>+</i> src/git-setup.js <b>Stage</b></li></ul>
-              <p>✦ 변경 내용을 읽고 커밋 메시지 자동 생성</p>
-              <button>Commit</button>
-            </div>
-          </div>
-
-          <div class="section-copy reveal" data-delay="1">
-            <p class="eyebrow">LOCAL GIT · OPTIONAL GITHUB</p>
-            <h2>로컬 Git은 바로.<br /><span>GitHub는 필요할 때 연결.</span></h2>
-            <p>Mac의 로컬 Git은 곧바로 사용하고, GitHub는 첫 실행이나 Settings에서 선택적으로 연결하세요. 작업 중에는 변경 파일 확인부터 스테이징, Pull·Push, 커밋까지 앱 안에서 처리할 수 있습니다.</p>
-            <ul class="check-list">
-              <li><i>01</i> 첫 실행에서 기존 GitHub 로그인 자동 확인</li>
-              <li><i>02</i> 브랜치와 변경 파일, 스테이징 상태 확인</li>
-              <li><i>03</i> 파일별 또는 전체 스테이징과 되돌리기</li>
-              <li><i>04</i> Pull·Push와 커밋 메시지 자동 생성</li>
-              <li><i>05</i> 충돌하거나 겹치는 파일의 병합 방지</li>
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      <section class="agents-story section" id="agents">
-        <div class="section-copy centered reveal">
-          <p class="eyebrow">WHEN ONE AGENT ISN'T ENOUGH</p>
-          <h2>큰 작업에는 여섯 에이전트를.<br /><span>각자의 작업은 깔끔하게.</span></h2>
-          <p>혼자 처리하기 벅찬 작업은 여러 에이전트에 나눠 맡기세요. 1번 에이전트는 main을 지키고, 나머지는 서로 분리된 작업 공간에서 안전하게 실행됩니다.</p>
-        </div>
-        <div class="agents-layout">
-          <div class="actual-manager-frame reveal">
-            <img src="./assets/agent-manager-ui.png" alt="여섯 에이전트와 작업별 상태가 표시된 실제 Agent Manager" width="768" height="596" loading="lazy" />
-            <span class="manager-selected-agent"><i></i> AGENT 1 · SELECTED</span>
-            <span class="actual-badge">실제 Agent Manager</span>
-          </div>
-          <div class="agent-capabilities reveal" data-delay="1">
-            <article><b>01</b><div><strong>작업 자동 배정</strong><p>빈 슬롯에 작업과 브랜치, 작업 공간을 생성</p></div></article>
-            <article><b>02</b><div><strong>중단된 세션 복구</strong><p>실패한 작업은 한 번만 안전하게 다시 시도</p></div></article>
-            <article><b>03</b><div><strong>순서에 맞춘 병합</strong><p>앞선 작업이 끝날 때까지 기다린 뒤 병합</p></div></article>
-            <article><b>04</b><div><strong>에이전트별 설정</strong><p>역할과 모델, 규칙, 도구, 작업 폴더를 지정</p></div></article>
-          </div>
-        </div>
-      </section>
-
-      <section class="everything section">
-        <div class="section-copy centered reveal">
-          <p class="eyebrow">ONE SMALL APP, A LOT OF CONTROL</p>
-          <h2>작은 앱 하나로<br /><span>Codex를 더 편하게 다룹니다.</span></h2>
-        </div>
-        <div class="everything-grid reveal">
-          <span>모델 선택</span><span>자동 모델 라우팅</span><span>Fast 모드</span><span>Plan 모드</span>
-          <span>승인·거절</span><span>대화 포크</span><span>Agent 1–6</span><span>음성 입력</span>
-          <span>Git 연동</span><span>MCP 관리</span><span>Skills &amp; Plugins</span><span>커스텀 역할</span>
-          <span>Ask 모드</span><span>사용량·리셋</span><span>일일 목표</span><span>RAM 경고</span>
-          <span>최대 작업시간</span><span>토큰 알림</span><span>자동 Continue</span><span>절전 방지</span>
-        </div>
-      </section>
-
-      <section class="download section" id="download">
-        <div class="download-orb" aria-hidden="true"><img src="./assets/app-icon.png" alt="" /></div>
-        <p class="eyebrow reveal">Agent Micro v1.2.7 · PUBLIC BETA</p>
-        <h2 class="reveal" data-delay="1">Codex는 그대로.<br /><span>쓰는 방법은 더 편하게.</span></h2>
-        <p class="reveal" data-delay="2">반복되는 조작은 Agent Micro에 맡기고, 지금 해야 할 일에 집중하세요.</p>
-        <div class="reveal" data-delay="2">
-          <div class="download-options">
-            <a class="button button-primary" id="download-button" href="https://github.com/lumpenop/agent-micro/releases/download/v1.2.1/Agent.Micro-1.2.1-arm64.dmg">macOS용 다운로드 <small>Apple silicon</small></a>
-            <a class="button button-secondary" id="windows-download-button" href="https://github.com/lumpenop/agent-micro/releases/download/v1.2.7/Agent.Micro.Setup.1.2.7.exe">Windows용 다운로드 <small>.exe</small></a>
-          </div>
-          <a class="github-star-link" href="https://github.com/lumpenop/agent-micro" target="_blank" rel="noreferrer">★ GitHub에서 스타</a>
-          <span class="download-meta">macOS · Windows · 오픈소스 · MIT · Codex CLI</span>
-          <span class="download-warning">공개 베타입니다. Windows는 <strong>Agent.Micro.Setup.1.2.7.exe</strong>를 다운로드하세요.</span>
-        </div>
-      </section>
-    </main>
-
-    <footer class="site-footer">
-      <div class="footer-shell">
-        <a class="brand" href="#top"><span class="brand-glyph" aria-hidden="true"><img src="./assets/app-icon.png" alt="" /></span><span>Agent Micro</span></a>
-        <p>Codex를 더 쉽고 빠르게.</p>
-        <p><a class="footer-github" href="https://github.com/lumpenop/agent-micro" target="_blank" rel="noreferrer">GitHub ↗</a> · © <span id="year"></span> Agent Micro</p>
+        <ul class="chips reveal" aria-label="추가 기능">
+          <li data-en="New chat">새 채팅</li><li data-en="Plan mode">Plan 모드</li><li data-en="Clear input">입력 지우기</li><li data-en="Voice input">음성 입력</li><li>Review</li><li>Dev Server</li><li data-en="Custom icons">커스텀 아이콘</li><li data-en="Hide ⌘⇧M">숨기기 ⌘⇧M</li>
+        </ul>
       </div>
-    </footer>
-    <script src="./config.js"></script>
-    <script src="./script.js"></script>
-  </body>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="sec sec-alt" id="settings">
+      <div class="wrap split">
+        <div class="reveal">
+          <p class="eyebrow">SETTINGS WITHOUT CONFIG HUNTING</p>
+          <h2 data-en="Stop hunting for config files.<br /><em>Choose it in a window.</em>">복잡한 설정도<br /><em>익숙한 화면에서 간단하게.</em></h2>
+          <p class="sub" data-en="Manage Codex models, reasoning, sandbox, approval policies, and agent rules in a readable settings window, with backups and restore built in.">모델과 추론 강도, 샌드박스, 승인 정책, 에이전트 규칙을 한 화면에서 관리하세요. 변경 전 설정은 자동으로 백업해 언제든 되돌릴 수 있습니다.</p>
+          <ul class="ticks">
+            <li data-en="Ask mode and default work mode">Ask 모드와 기본 작업 모드</li>
+            <li data-en="Automatic model routing by prompt complexity">질문의 복잡도에 맞춘 모델 자동 선택</li>
+            <li data-en="Model, reasoning effort, and response length">모델·추론 강도·응답 길이</li>
+            <li data-en="Sandbox, approval policy, and web search">샌드박스·승인 정책·웹 검색</li>
+            <li data-en="Global, project, and per-Agent rules">전역·프로젝트·Agent별 규칙</li>
+            <li data-en="Backup, restore, and open config.toml">설정 백업·복원·config.toml 열기</li>
+          </ul>
+        </div>
+
+        <div class="win reveal" data-delay="1" aria-label="Agent Micro 설정창 미리보기">
+          <div class="win-head"><span class="dots"><i></i><i></i><i></i></span><strong>Agent Micro Settings</strong><em>⌘,</em></div>
+          <div class="win-tabs"><button class="on" tabindex="-1">Model</button><button tabindex="-1">Usage</button><button tabindex="-1">Agents</button><button tabindex="-1">Advanced</button></div>
+          <div class="field"><span><small>SESSION MODE</small><strong>Ask · answer and inspect only</strong></span><b>⌄</b></div>
+          <div class="field"><span><small>AUTOMATIC MODEL ROUTING</small><strong>Balanced</strong></span><b class="sw">ON</b></div>
+          <div class="field-2"><div><small>SMALL MODEL</small><strong>gpt-5.6-terra</strong></div><div><small>LARGE MODEL</small><strong>gpt-5.6-sol</strong></div></div>
+          <div class="field-2"><div><small>REASONING</small><strong>medium</strong></div><div><small>APPROVAL</small><strong>on-request</strong></div></div>
+          <div class="field hot"><span><small>PLAN USAGE WARNING</small><strong>Warn before predicted overage</strong></span><b>80%</b></div>
+          <div class="win-foot"><button tabindex="-1">Restore</button><button class="save" tabindex="-1">Save settings</button></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- USAGE -->
+    <section class="sec" id="usage">
+      <div class="wrap">
+        <header class="head reveal">
+          <p class="eyebrow">USAGE &amp; RESET AT A GLANCE</p>
+          <h2 data-en="How much you used.<br /><em>When it resets.</em>">쓴 만큼 확인하고,<br /><em>리셋까지 계획하세요.</em></h2>
+          <p data-en="See session, daily, and monthly tokens together with plan usage, time until reset, and a recommended daily pace.">현재 세션과 오늘, 이번 달 사용량을 한눈에 확인하세요. 다음 리셋까지 남은 시간과 오늘 사용해도 좋은 권장량도 함께 계산해 줍니다.</p>
+        </header>
+
+        <div class="board reveal">
+          <div class="board-top">
+            <div><small data-en="PLAN USAGE">PLAN USAGE</small><strong>37%</strong><span>▰▰▱▱▱</span></div>
+            <div><small data-en="NEXT RESET">NEXT RESET</small><strong>6d 10h</strong><span>Jul 30 · 08:51</span></div>
+            <div><small data-en="RECOMMENDED TODAY">RECOMMENDED TODAY</small><strong>4.8%</strong><span data-en="On pace">페이스 유지 중</span></div>
+          </div>
+          <div class="meter" role="img" aria-label="사용량 37%, 오늘 목표 15%"><i style="width:37%"></i><u style="left:15%"></u><b style="left:15%" data-en="Daily target 15%">오늘 목표 15%</b></div>
+          <div class="board-bot">
+            <div><small data-en="Current session">현재 세션</small><strong>18.4k</strong></div>
+            <div><small data-en="Today">오늘</small><strong>126k</strong></div>
+            <div><small data-en="This month">이번 달</small><strong>1.9M</strong></div>
+            <div><small data-en="Context">컨텍스트</small><strong>42%</strong></div>
+          </div>
+        </div>
+
+        <div class="menubar reveal">
+          <div>
+            <span class="eyebrow">LIVE macOS MENU BAR</span>
+            <h3 data-en="Keep working.<br />Usage stays visible.">앱을 열지 않아도<br />사용량을 바로 확인하세요.</h3>
+            <p data-en="A five-block graph and reset countdown stay visible in the macOS menu bar.">다섯 칸 그래프와 리셋까지 남은 시간이 macOS 메뉴 막대에 늘 표시됩니다.</p>
+          </div>
+          <img src="./assets/agent-micro-menubar.png" alt="37% 사용량과 6일 10시간 리셋 카운트다운이 표시된 실제 Agent Micro 메뉴바" width="137" height="30" />
+        </div>
+      </div>
+    </section>
+
+    <!-- RESOURCES -->
+    <section class="sec dark" id="resources">
+      <div class="wrap">
+        <header class="head reveal">
+          <p class="eyebrow">RESOURCE GUARDRAILS</p>
+          <h2 data-en="Let it run longer.<br /><em>Set the boundaries first.</em>">오래 실행할수록<br /><em>안전 기준이 필요합니다.</em></h2>
+          <p data-en="Agent Micro cannot stop server billing, but local targets and warnings help you catch excessive usage and runaway work early.">사용량을 직접 차단할 수는 없지만, 로컬 목표와 경고를 설정해 과도한 사용이나 끝나지 않는 작업을 일찍 알아챌 수 있습니다.</p>
+        </header>
+        <div class="cards">
+          <article class="rc reveal"><span>RAM</span><strong>2,048 MB</strong><p data-en="Warn when app memory exceeds the threshold">앱 메모리가 기준을 넘으면 경고</p><i style="--fill:58%"></i></article>
+          <article class="rc reveal" data-delay="1"><span>MAX RUNTIME</span><strong>30 min</strong><p data-en="Limit Agent work that keeps running too long">지정한 시간을 넘긴 에이전트 작업 경고</p><i style="--fill:42%"></i></article>
+          <article class="rc reveal" data-delay="2"><span>CONCURRENCY</span><strong>6 Agents</strong><p data-en="Choose how many threads can stay open">동시에 실행할 에이전트 수 설정</p><i style="--fill:68%"></i></article>
+          <article class="rc reveal"><span>TOKEN BUDGET</span><strong>100k</strong><p data-en="Experimental token tracking and reminder intervals">실험적 토큰 추적과 알림 간격</p><i style="--fill:51%"></i></article>
+          <article class="rc reveal" data-delay="1"><span>AUTO COMPACT</span><strong>64k</strong><p data-en="Choose when context should compact automatically">컨텍스트 자동 압축 기준</p><i style="--fill:64%"></i></article>
+          <article class="rc reveal" data-delay="2"><span>TOOL TIMEOUT</span><strong>600 sec</strong><p data-en="Set the maximum wait for each tool call">도구 호출별 최대 대기 시간</p><i style="--fill:36%"></i></article>
+        </div>
+      </div>
+    </section>
+
+    <!-- GIT -->
+    <section class="sec" id="git">
+      <div class="wrap split split-rev">
+        <div class="git-vis reveal">
+          <div class="setup">
+            <div class="setup-head"><span>FIRST RUN SETUP</span><strong>1 / 4</strong></div>
+            <div class="step done"><b>1</b><span><strong data-en="Connect Codex">Codex 연결</strong><small data-en="Signed in with your ChatGPT account">ChatGPT 계정으로 로그인됨</small></span><em>✓</em></div>
+            <div class="step on"><b>2</b><span><strong><span data-en="Connect GitHub">GitHub 연결</span> <em data-en="Optional">선택</em></strong><small data-en="Quick browser sign-in">브라우저에서 간편 로그인</small></span><button tabindex="-1" data-en="Connect">연결</button></div>
+            <div class="step"><b>3</b><span><strong data-en="Choose a project">프로젝트 선택</strong><small data-en="Pick the folder Codex should work in">Codex가 작업할 폴더</small></span><button tabindex="-1" data-en="Choose">선택</button></div>
+            <div class="step"><b>4</b><span><strong data-en="Start your first Agent">첫 Agent 시작</strong><small data-en="Open a ready-to-use session">바로 쓸 수 있는 세션 열기</small></span><button tabindex="-1" data-en="Start">시작</button></div>
+            <p data-en="GitHub is optional. Skip it and local Git and Codex still work as usual.">GitHub는 선택 사항입니다. 건너뛰어도 로컬 Git과 Codex는 그대로 사용할 수 있습니다.</p>
+          </div>
+          <div class="gitp">
+            <div class="gitp-head"><span>main</span><strong>3 changes</strong></div>
+            <ul><li><i>M</i> src/app.mjs <b>Stage</b></li><li><i>M</i> src/styles.css <b>Stage</b></li><li><i>+</i> src/git-setup.js <b>Stage</b></li></ul>
+            <p data-en="✦ Read the changes and generate a commit message">✦ 변경 내용을 읽고 커밋 메시지 자동 생성</p>
+            <button tabindex="-1">Commit</button>
+          </div>
+        </div>
+
+        <div class="reveal" data-delay="1">
+          <p class="eyebrow">LOCAL GIT · OPTIONAL GITHUB</p>
+          <h2 data-en="Local Git, ready now.<br /><em>GitHub when you need it.</em>">로컬 Git은 바로.<br /><em>GitHub는 필요할 때 연결.</em></h2>
+          <p class="sub" data-en="Use local Git immediately, then optionally connect GitHub during first run or later in Settings. Manage changed files, staging, Pull, Push, commits, and generated messages inside the app.">Mac의 로컬 Git은 곧바로 사용하고, GitHub는 첫 실행이나 Settings에서 선택적으로 연결하세요. 작업 중에는 변경 파일 확인부터 스테이징, Pull·Push, 커밋까지 앱 안에서 처리할 수 있습니다.</p>
+          <ol class="steps">
+            <li data-en="Detect an existing GitHub login on first run">첫 실행에서 기존 GitHub 로그인 자동 확인</li>
+            <li data-en="See branch, changed files, and staged state">브랜치와 변경 파일, 스테이징 상태 확인</li>
+            <li data-en="Stage or unstage files individually or all at once">파일별 또는 전체 스테이징과 되돌리기</li>
+            <li data-en="Pull, Push, and generate commit messages">Pull·Push와 커밋 메시지 자동 생성</li>
+            <li data-en="Block dirty, conflicting, or overlapping merges">충돌하거나 겹치는 파일의 병합 방지</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- AGENTS -->
+    <section class="sec sec-alt" id="agents">
+      <div class="wrap">
+        <header class="head reveal">
+          <p class="eyebrow">WHEN ONE AGENT ISN'T ENOUGH</p>
+          <h2 data-en="Up to six when you need them.<br /><em>Without mixing the work.</em>">큰 작업에는 여섯 에이전트를.<br /><em>각자의 작업은 깔끔하게.</em></h2>
+          <p data-en="Multi-agent orchestration is an advanced capability, not the entire product. Agent 1 protects main while Workers run in isolated worktrees.">혼자 처리하기 벅찬 작업은 여러 에이전트에 나눠 맡기세요. 1번 에이전트는 main을 지키고, 나머지는 서로 분리된 작업 공간에서 안전하게 실행됩니다.</p>
+        </header>
+        <div class="agents-grid">
+          <figure class="manager reveal">
+            <img src="./assets/agent-manager.png" alt="여섯 에이전트와 작업별 상태가 표시된 실제 Agent Manager" width="575" height="596" loading="lazy" />
+            <figcaption class="badge"><i></i> <span data-en="LIVE AGENT MANAGER">실제 Agent Manager</span></figcaption>
+          </figure>
+          <div class="caps reveal" data-delay="1">
+            <article><b>01</b><div><strong data-en="Automatic Worker assignment">작업 자동 배정</strong><p data-en="Create a task, branch, and worktree in the next free slot">빈 슬롯에 작업과 브랜치, 작업 공간을 생성</p></div></article>
+            <article><b>02</b><div><strong data-en="Stopped-session recovery">중단된 세션 복구</strong><p data-en="Retry safely once without repeated restarts">실패한 작업은 한 번만 안전하게 다시 시도</p></div></article>
+            <article><b>03</b><div><strong data-en="Dependency merge queue">순서에 맞춘 병합</strong><p data-en="Wait automatically until prerequisite work is complete">앞선 작업이 끝날 때까지 기다린 뒤 병합</p></div></article>
+            <article><b>04</b><div><strong data-en="Per-Agent profiles">에이전트별 설정</strong><p data-en="Choose role, model, rules, tools, and working folder">역할과 모델, 규칙, 도구, 작업 폴더를 지정</p></div></article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- EVERYTHING -->
+    <section class="sec" id="everything">
+      <div class="wrap">
+        <header class="head reveal">
+          <p class="eyebrow">ONE SMALL APP, A LOT OF CONTROL</p>
+          <h2 data-en="Small on the desktop.<br /><em>Big on control.</em>">작은 앱 하나로<br /><em>Codex를 더 편하게 다룹니다.</em></h2>
+        </header>
+        <ul class="all reveal">
+          <li data-en="Model picker">모델 선택</li><li data-en="Automatic model routing">자동 모델 라우팅</li><li data-en="Fast mode">Fast 모드</li><li data-en="Plan mode">Plan 모드</li>
+          <li data-en="Approve · decline">승인·거절</li><li data-en="Conversation fork">대화 포크</li><li data-en="Agents 1–6">Agent 1–6</li><li data-en="Voice input">음성 입력</li>
+          <li data-en="Git integration">Git 연동</li><li data-en="MCP management">MCP 관리</li><li>Skills &amp; Plugins</li><li data-en="Custom roles">커스텀 역할</li>
+          <li data-en="Ask mode">Ask 모드</li><li data-en="Usage · reset">사용량·리셋</li><li data-en="Daily targets">일일 목표</li><li data-en="RAM warnings">RAM 경고</li>
+          <li data-en="Maximum runtime">최대 작업시간</li><li data-en="Token reminders">토큰 알림</li><li data-en="Auto Continue">자동 Continue</li><li data-en="Prevent sleep">절전 방지</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- DOWNLOAD -->
+    <section class="sec dark dl" id="download">
+      <div class="hero-bg" aria-hidden="true"></div>
+      <div class="wrap dl-in">
+        <img class="dl-icon reveal" src="./assets/app-icon.png" alt="" width="96" height="96" />
+        <p class="eyebrow reveal">Agent Micro v1.2.7 · PUBLIC BETA</p>
+        <h2 class="reveal" data-en="Make Codex easier.<br /><em>And more precise.</em>">Codex는 그대로.<br /><em>쓰는 방법은 더 편하게.</em></h2>
+        <p class="sub reveal" data-en="Let the app handle the controls and focus on the work in front of you.">반복되는 조작은 Agent Micro에 맡기고, 지금 해야 할 일에 집중하세요.</p>
+        <div class="reveal">
+          <div class="dl-btns">
+            <a class="btn btn-accent" id="download-button" href="https://github.com/lumpenop/agent-micro/releases/download/v1.2.1/Agent.Micro-1.2.1-arm64.dmg" data-en="Download for macOS <small>Apple silicon</small>">macOS용 다운로드 <small>Apple silicon</small></a>
+            <a class="btn btn-ghost" id="windows-download-button" href="https://github.com/lumpenop/agent-micro/releases/download/v1.2.7/Agent.Micro.Setup.1.2.7.exe" data-en="Download for Windows <small>.exe</small>">Windows용 다운로드 <small>.exe</small></a>
+          </div>
+          <a class="star" href="https://github.com/lumpenop/agent-micro" target="_blank" rel="noreferrer" data-en="★ Star on GitHub">★ GitHub에서 스타</a>
+          <p class="meta" data-en="macOS · Windows · Open source · MIT · Codex CLI">macOS · Windows · 오픈소스 · MIT · Codex CLI</p>
+          <p class="warn" data-en="Public beta. Download <strong>Agent.Micro.Setup.1.2.7.exe</strong>.">공개 베타입니다. Windows는 <strong>Agent.Micro.Setup.1.2.7.exe</strong>를 다운로드하세요.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap foot-in">
+      <a class="brand" href="#top"><img src="./assets/app-icon.png" alt="" width="24" height="24" /><span>Agent Micro</span></a>
+      <p data-en="Complex Codex controls, within reach.">Codex를 더 쉽고 빠르게.</p>
+      <p><a href="https://github.com/lumpenop/agent-micro" target="_blank" rel="noreferrer">GitHub ↗</a> · © <span id="year"></span> Agent Micro</p>
+    </div>
+  </footer>
+
+  <script src="./config.js"></script>
+  <script src="./script.js"></script>
+</body>
 </html>
